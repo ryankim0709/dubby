@@ -102,6 +102,7 @@ const responseEnvelope = {
   recordedAt: v.string(),
   referenceText: v.string(),
   recognizedText: nullable(v.string()),
+  measurement: measurementKindV,
 };
 
 export const evidenceV = v.object({
@@ -137,6 +138,7 @@ export const evidenceV = v.object({
       deltaMs: v.number(),
     }),
   ),
+  measurement: measurementKindV,
   unscorableReason: nullable(unscorableReasonV),
 });
 

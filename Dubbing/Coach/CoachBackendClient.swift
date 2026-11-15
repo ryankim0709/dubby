@@ -48,7 +48,11 @@ nonisolated enum ServiceRequest {
         let authorization = request.value(forHTTPHeaderField: "Authorization") ?? ""
         let secrets = [authorization, authorization.replacing("Bearer ", with: "")]
         let error = CoachError.response(operation: operation, status: http.statusCode, body: String(decoding: data, as: UTF8.self), secrets: secrets)
-        if case .serviceNotConfigured = error { return .failed(error, status: http.statusCode, retryable: false) }
+        // The server already retried a timeout once, and a missing key won't appear by asking again.
+        switch error {
+        case .serviceNotConfigured, .providerTimeout: return .failed(error, status: http.statusCode, retryable: false)
+        default: break
+        }
         return .failed(error, status: http.statusCode, retryable: http.statusCode == 429 || http.statusCode >= 500)
     }
 
@@ -84,7 +88,8 @@ nonisolated protocol CoachTutorService: Sendable {
     func preferences() async throws -> CoachPreferencesRecord
     func savePreferences(_ preferences: CoachPreferences, expectedVersion: Int) async throws -> CoachPreferencesRecord
     func memoryStatus() async throws -> CoachMemoryStatus
-    /// Queues deletion of every coaching memory document; returns how many were scheduled.
+    func memoryItems() async throws -> [MemoryItem]
+    /// Turns coaching memory off and queues deletion of every memory document; returns how many were scheduled.
     func forgetMemory() async throws -> Int
 }
 
@@ -93,6 +98,8 @@ nonisolated protocol CoachTutorService: Sendable {
 nonisolated struct CoachBackendClient: CoachTutorService {
     let baseURL: URL
     let tokens: any CoachAuthTokenProvider
+    /// A failure to ask the backend to simulate; always nil outside QA runs of a debug build.
+    let qaFault: CoachQAFault?
 
     /// Reads the backend URL that the COACH_BACKEND_URL build setting writes into Info.plist.
     static func configured(in bundle: Bundle, tokens: any CoachAuthTokenProvider) throws -> CoachBackendClient {
@@ -101,7 +108,7 @@ nonisolated struct CoachBackendClient: CoachTutorService {
             !value.isEmpty,
             let url = URL(string: value)
         else { throw CoachError.backendNotConfigured }
-        return CoachBackendClient(baseURL: url, tokens: tokens)
+        return CoachBackendClient(baseURL: url, tokens: tokens, qaFault: CoachQAOptions.current.fault)
     }
 
     /// The coach roster is public, so it is the one route sent without a token.
@@ -120,11 +127,11 @@ nonisolated struct CoachBackendClient: CoachTutorService {
         return try await send(request, as: CoachSessionToken.self, operation: operation)
     }
 
-    func reply(characterID: String, language: SpokenLanguage, practice: CoachPracticeContext?, turns: [CoachTurn]) async throws -> CoachReply {
-        struct Body: Encodable { let characterId: String; let languageName: String; let turns: [CoachTurn]; let locale: String; let lineId: String? }
+    func reply(characterID: String, language: SpokenLanguage, turns: [CoachTurn]) async throws -> CoachReply {
+        struct Body: Encodable { let characterId: String; let languageName: String; let locale: String; let audio: Bool; let turns: [CoachTurn] }
         let operation = "Getting the coach's reply"
-        let context = CoachConversation.replyContext(language: language, practice: practice)
-        let body = Body(characterId: characterID, languageName: language.name, turns: turns, locale: context.locale, lineId: context.lineId)
+        // The avatar is rendered from the reply's audio, so the voice is always asked for.
+        let body = Body(characterId: characterID, languageName: language.name, locale: language.identifier, audio: true, turns: turns)
         let request = try ServiceRequest.json(method: "POST", url: baseURL.appending(path: "coach/reply"), body: body, headers: [:])
         let reply = try await send(request, as: CoachReply.self, operation: operation)
         guard !reply.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
@@ -157,6 +164,11 @@ nonisolated struct CoachBackendClient: CoachTutorService {
         try await send(get("tutor/memory/status", locale: nil), as: CoachMemoryStatus.self, operation: "Checking your coaching memory")
     }
 
+    func memoryItems() async throws -> [MemoryItem] {
+        struct Response: Decodable { let items: [MemoryItem] }
+        return try await send(get("tutor/memory", locale: nil), as: Response.self, operation: "Loading your coaching memory").items
+    }
+
     func forgetMemory() async throws -> Int {
         struct Response: Decodable { let scheduled: Int }
         var request = URLRequest(url: baseURL.appending(path: "tutor/memory"))
@@ -177,6 +189,7 @@ nonisolated struct CoachBackendClient: CoachTutorService {
         guard let token = try await tokens.convexAuthToken() else { throw CoachError.signInRequired }
         var authorized = request
         authorized.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        if let qaFault { authorized.setValue(qaFault.rawValue, forHTTPHeaderField: CoachQAFault.header) }
         return try ServiceRequest.decode(type, from: try await ServiceRequest.data(for: authorized, operation: operation), operation: operation)
     }
 }

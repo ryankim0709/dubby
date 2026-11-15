@@ -174,6 +174,8 @@ xcodebuild -project Dubbing.xcodeproj -scheme Dubbing \
   CODE_SIGNING_ALLOWED=NO build test
 ```
 
+There are no automated CI or QA checks for the hackathon. The commands in this section are available for manual use; pull requests merge once their conflicts are resolved.
+
 Typecheck the Convex backend after `npm install`:
 
 ```sh
@@ -182,9 +184,9 @@ npm run typecheck
 
 Compilation performs Swift typechecking. `DubbingTests` uses Swift Testing and covers the coach's LiveAvatar message formats and line splitting, take placement and trim reporting, scene framing limits, voice grouping, the speech-band filter, streaks, the saved-dub library, and a real export against the synthetic fixture. The export test checks that the 1 kHz tone is filtered out under a take while the 80 Hz tone carries on. There is no separate linter or formatter configuration and no Revyl test suite yet.
 
-Recording, playback, interruptions, audio routes, and on-device transcription must also be verified on an actual iPhone; the Simulator cannot transcribe speech on the device. Revyl's cloud simulators provide repeatable UI checks; physical-device audio behavior needs separate verification.
+Recording, playback, interruptions, audio routes, and on-device transcription need an actual iPhone for manual verification; the Simulator cannot verify microphone quality or transcribe speech on the device.
 
-The planned Revyl suite will cover selecting a scene and character, reviewing the script, recording and retrying a line, keeping a take, and exporting and reopening a saved dub. Cloud assessment and tutoring checks will be added with those integrations, using isolated test accounts and synthetic practice data. Each run should identify the tested build and retain the validation result and failure evidence. Follow the [Revyl mobile quickstart](https://docs.revyl.com/devices/quickstart) when configuring the integration; the iOS build must be a simulator `.app` and use a runtime that meets the app's iOS 26.0 minimum.
+Revyl remains available for cloud builds and app previews. Its build configuration is in `.revyl/config.yaml`; no automated Revyl test plans are configured.
 
 ## Talking coach
 
@@ -245,7 +247,7 @@ A planned pronunciation-feedback flow is:
 4. Convex saves the assessment, and the app receives the updated result.
 5. The user retries or accepts the take. The iPhone composes the accepted takes into the scene and can upload the finished video for cloud history or sharing.
 
-Revyl will exercise user flows against development builds and test data, with replayable evidence for failures and pull request checks. Its integration complements the existing Swift tests and physical-device checks.
+Revyl provides development builds and app previews. Automated QA and pull request checks are disabled for the hackathon.
 
 ### Long-term tutoring memory
 

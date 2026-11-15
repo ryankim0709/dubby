@@ -1,0 +1,95 @@
+{
+  "schemaVersion": 1,
+  "sceneId": "tears-of-steel-bridge",
+  "title": "Tears of Steel: The Bridge",
+  "synopsis": "Celia asks Thom to admit he's freaked out by her robot hand. He dodges, then finally owns up to it.",
+  "locale": "en-US",
+  "durationSeconds": 10.0,
+  "video": {
+    "file": "tears-of-steel-bridge-video.mp4"
+  },
+  "poster": {
+    "file": "tears-of-steel-bridge-poster.jpg"
+  },
+  "background": {
+    "file": "tears-of-steel-bridge-background.m4a"
+  },
+  "characters": [
+    {
+      "id": "thom",
+      "displayName": "Thom",
+      "description": "Wants to be awesome in space and is not great at saying sorry.",
+      "dialogue": {
+        "file": "tears-of-steel-bridge-dialogue-thom.m4a"
+      }
+    },
+    {
+      "id": "celia",
+      "displayName": "Celia",
+      "description": "Works in robotics and is done with Thom's excuses.",
+      "dialogue": {
+        "file": "tears-of-steel-bridge-dialogue-celia.m4a"
+      }
+    }
+  ],
+  "lines": [
+    {
+      "id": "tears-of-steel-bridge-line-01",
+      "characterId": "celia",
+      "start": 0.67,
+      "end": 4.69,
+      "text": "Why don't you just admit that you're freaked out by my robot hand?",
+      "referenceVersion": 1
+    },
+    {
+      "id": "tears-of-steel-bridge-line-02",
+      "characterId": "thom",
+      "start": 4.83,
+      "end": 6.13,
+      "text": "I'm not freaked out by— it's...",
+      "referenceVersion": 1
+    },
+    {
+      "id": "tears-of-steel-bridge-line-03",
+      "characterId": "thom",
+      "start": 7.83,
+      "end": 8.67,
+      "text": "Alright! Fine!",
+      "referenceVersion": 1
+    },
+    {
+      "id": "tears-of-steel-bridge-line-04",
+      "characterId": "thom",
+      "start": 8.87,
+      "end": 9.35,
+      "text": "I'm freaked out!",
+      "referenceVersion": 1
+    }
+  ],
+  "provenance": {
+    "work": "Tears of Steel",
+    "creator": "Blender Foundation (Mango Open Movie Project), directed by Ian Hubert",
+    "sourceURL": "https://download.blender.org/demo/movies/ToS/tears_of_steel_720p.mov",
+    "license": "CC-BY-3.0",
+    "licenseURL": "https://creativecommons.org/licenses/by/3.0/",
+    "attribution": "Tears of Steel (CC) Blender Foundation | mango.blender.org. Music by Joram Letwory. Licensed under CC BY 3.0 (https://creativecommons.org/licenses/by/3.0/). This scene is an excerpt of the film, trimmed and re-encoded, with its dialogue and background audio rebuilt from the official 5.1 center channel and music and effects mix.",
+    "excerpt": {
+      "start": 29.75,
+      "end": 39.75
+    },
+    "modifications": [
+      "Trimmed the 720p release (tears_of_steel_720p.mov) to 29.750-39.750 s and re-encoded the video as H.264; the video file carries no audio.",
+      "Dialogue tracks: the official 5.1 center channel (TOS_DVDSURROUND.C.aif), trimmed to the same range, gated per character to that character's line windows with 10 ms fades, silent elsewhere, encoded as dual-mono AAC-LC at 48 kHz.",
+      "Background track: the official music and effects mix without dialogue (TOS_MUSIC+FX_NO_DIALOGUE.aif), trimmed to the same range and encoded as AAC-LC at 48 kHz. The first 5.25 s (source time before 35.0 s) are silenced and the rest fades in over 0.25 s, because the file still carries the fading end of the film's opening music cue until about 35 s; from 35.0 s to the end of the excerpt it is quiet room ambience of about -50 dBFS.",
+      "Poster: a single frame extracted from the trimmed video.",
+      "Line windows were set from speech energy in the center channel. Wording follows the official English subtitles (TOS-en.srt), lightly normalized, and was cross-checked with a speech recognizer, not by ear."
+    ],
+    "dialogueSeparation": {
+      "method": "official-stems",
+      "tool": "Official Blender Foundation release files; no model separation. Sources: TOS_DVDSURROUND.C.aif (sha256 cac2e6fe39fe07d06df72fe4ce2a65ccf73c4cfbc2ba1e424dca1aaee5df53f7), TOS_MUSIC+FX_NO_DIALOGUE.aif (sha256 ba05dc3ae9f869170819ef9f74401e6c01ccc4afa9e8c926a076bea7b29741e0), TOS-en.srt (sha256 ce9578f6fe098a5821045a38884b229160f9e7ba27890448a92f5be330c6e6fe), all under https://download.blender.org/demo/movies/ToS/.",
+      "notes": "Dialogue is the 5.1 center channel, which carries the speech in this scene but is not a certified dry dialogue stem. The film's stereo mix, 5.1 mix and music-and-effects file are separate renders, so background plus dialogue reproduces the film's stereo mix only approximately. The excerpt contains no score: the background keeps only the ambience from 35.0 s on, and measurements of its spectrum and level show no sustained tonal or music energy; the video is silent. The film's composer released the standalone soundtrack as CC BY-ND, which is why the range avoids the music; see docs/demo-scenes.md. Locale en-US is the assessment locale: pronunciation is scored against the reference text, not against the actors, whose accents are not American."
+    },
+    "transcriptSource": "official subtitles",
+    "wordTimingSource": "absent"
+  }
+}

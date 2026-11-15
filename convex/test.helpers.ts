@@ -34,6 +34,17 @@ export const acousticProvenance: EngineProvenance = {
 };
 
 type ScoredOutcome = { response: Extract<AssessmentOutcome["response"], { status: "scored" }>; evidence: AssessmentOutcome["evidence"] };
+export type FixtureOutcome = { response: AssessmentOutcome["response"]; evidence: AssessmentOutcome["evidence"] };
+
+/** Completes a fixture outcome with the provenance the real engine reports, keeping measurement kinds consistent. */
+export function withProvenance(outcome: FixtureOutcome, provenance: EngineProvenance = acousticProvenance): AssessmentOutcome {
+  const { measurement } = provenance;
+  return {
+    response: { ...outcome.response, measurement },
+    evidence: { ...outcome.evidence, measurement },
+    provenance: { evaluator: provenance.provider, measurement, modelVersion: provenance.providerModelVersion, evaluatorConfigVersion: provenance.configVersion },
+  };
+}
 
 const evidenceBase: AssessmentOutcome["evidence"] = {
   provider: { name: "test-double", locale: "en-US", recognitionStatus: "Success", snr: null, completenessScore: null },
@@ -42,6 +53,7 @@ const evidenceBase: AssessmentOutcome["evidence"] = {
   referenceTokenCount: 4,
   counts: { matched: 4, substituted: 0, omitted: 0, inserted: 0 },
   words: { mispronounced: [1], substituted: [], omitted: [], inserted: 0 },
+  measurement: "acoustic",
   timing: { spokenStartMs: 200, spokenEndMs: 2900, spokenDurationMs: 2700, targetDurationMs: 3000, deltaMs: -300 },
   unscorableReason: null,
 };
@@ -69,6 +81,7 @@ export function scoredOutcome(input: AssessAttemptInput): ScoredOutcome {
       recordedAt: input.recordedAt,
       referenceText: input.referenceText,
       recognizedText: input.referenceText,
+      measurement: "acoustic",
       status: "scored",
       scores: { languageOverall: 88, pronunciation: 82, wordAccuracy: 100, fluency: 80, timingFit: 90 },
       unavailableMetrics: [],
@@ -78,7 +91,7 @@ export function scoredOutcome(input: AssessAttemptInput): ScoredOutcome {
   };
 }
 
-export function unscorableOutcome(input: AssessAttemptInput): AssessmentOutcome {
+export function unscorableOutcome(input: AssessAttemptInput): FixtureOutcome {
   const { response } = scoredOutcome(input);
   return {
     response: {
@@ -92,6 +105,7 @@ export function unscorableOutcome(input: AssessAttemptInput): AssessmentOutcome 
       recordedAt: response.recordedAt,
       referenceText: response.referenceText,
       recognizedText: null,
+      measurement: "acoustic",
       status: "unscorable",
       reason: "no_speech",
       scores: null,
@@ -105,16 +119,17 @@ export function unscorableOutcome(input: AssessAttemptInput): AssessmentOutcome 
       counts: { matched: 0, substituted: 0, omitted: 0, inserted: 0 },
       words: { mispronounced: [], substituted: [], omitted: [], inserted: 0 },
       timing: null,
+      measurement: "acoustic",
       unscorableReason: "no_speech",
     },
   };
 }
 
 export function engineDouble(
-  assess: (input: AssessAttemptInput) => AssessmentOutcome | Promise<AssessmentOutcome> = scoredOutcome,
+  assess: (input: AssessAttemptInput) => FixtureOutcome | Promise<FixtureOutcome> = scoredOutcome,
   provenance: EngineProvenance = acousticProvenance,
 ): AssessmentEngine {
-  return { provenance, assess: async (input) => await assess(input) };
+  return { assess: async (input) => withProvenance(await assess(input), provenance) };
 }
 
 export function coachingFixture(overrides: Partial<Coaching> = {}): Coaching {
