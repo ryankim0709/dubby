@@ -60,6 +60,10 @@ private struct SeriesCard: View {
             Text("\(summary.volume.attempts) \(summary.volume.attempts == 1 ? "attempt" : "attempts") on \(summary.volume.lines) \(summary.volume.lines == 1 ? "line" : "lines") over \(summary.volume.practiceDays) \(summary.volume.practiceDays == 1 ? "day" : "days"); \(summary.volume.scorableAttempts) scored.")
                 .dubFont(14, weight: .regular)
                 .foregroundStyle(Palette.textPrimary)
+            // A single point isn't a trend, so the charts appear once there are two to join.
+            if summary.dubScores.count >= 2 {
+                DubScoreChart(points: summary.dubScores)
+            }
             ForEach(summary.skills, id: \.metric) { skill in
                 VStack(alignment: .leading, spacing: 2) {
                     HStack {
@@ -76,6 +80,9 @@ private struct SeriesCard: View {
                     }
                 }
                 .accessibilityElement(children: .combine)
+            }
+            if Set(summary.dailySkills.map(\.date)).count >= 2 {
+                SkillTrendChart(points: summary.dailySkills)
             }
             ForEach(summary.unmeasured, id: \.metric) { item in
                 HStack(alignment: .firstTextBaseline) {
