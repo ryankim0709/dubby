@@ -218,3 +218,55 @@ export const jobViewV = v.object({
   assessmentId: nullable(v.id("assessments")),
   updatedAt: v.number(),
 });
+
+/** What a graded dub take keeps: its line-attempt result plus the unrounded parts the score sheet averages. */
+export const dubLineResultV = v.object({
+  status: v.union(v.literal("scored"), v.literal("unscorable")),
+  reason: v.optional(unscorableReasonV),
+  recognizedText: nullable(v.string()),
+  scores: nullable(scoresV),
+  unavailableMetrics: v.array(unavailableMetricV),
+  wordResults: v.array(wordResultV),
+  coaching: coachingV,
+  wordAccuracyRaw: nullable(v.number()),
+  lineScoreRaw: nullable(v.number()),
+  speakingDurationMs: nullable(v.number()),
+  /** Measured from the uploaded WAV's header, not reported by the client. */
+  recordingDurationMs: v.number(),
+  provenance: provenanceV,
+  completedAt: v.number(),
+});
+
+export const dubTakeStatusV = v.union(v.literal("queued"), v.literal("scored"), v.literal("unscorable"), v.literal("failed"));
+
+/** The dub score sheet as the app reads it (docs/grading-contract.md, "Dub score sheet (dub-v1)"). */
+export const dubScoreSheetV = v.object({
+  sheetVersion: v.literal("dub-v1"),
+  dubId: v.id("dubs"),
+  sceneTitle: v.string(),
+  characterName: v.string(),
+  locale: v.string(),
+  status: v.union(v.literal("scoring"), v.literal("complete")),
+  dubScore: nullable(v.number()),
+  wordAccuracy: nullable(v.number()),
+  timingFit: nullable(v.number()),
+  linesDubbed: v.number(),
+  linesScored: v.number(),
+  linesUnscorable: v.number(),
+  linesFailed: v.number(),
+  lines: v.array(
+    v.object({
+      lineIndex: v.number(),
+      referenceText: v.string(),
+      status: dubTakeStatusV,
+      recognizedText: nullable(v.string()),
+      lineScore: nullable(v.number()),
+      wordAccuracy: nullable(v.number()),
+      timingFit: nullable(v.number()),
+      /** The unscorable reason or the failure code; null for a scored or queued line. */
+      reason: nullable(v.string()),
+      coachingSummary: nullable(v.string()),
+      words: v.array(v.object({ expected: nullable(v.string()), recognized: nullable(v.string()), textStatus: textStatusV })),
+    }),
+  ),
+});

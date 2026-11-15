@@ -71,7 +71,7 @@ describe("password auth", () => {
     configure();
     const t = newBackend();
 
-    expect(await t.action(internal.passwordAuth.seedDemoAccounts, {})).toEqual({ created: ["demo", "demo1"] });
+    expect(await t.action(internal.passwordAuth.seedDemoAccounts, {})).toEqual({ created: ["demo", "demo1", "maya", "theo", "jordan"] });
     expect(await t.action(internal.passwordAuth.seedDemoAccounts, {})).toEqual({ created: [] });
     await t.action(api.passwordAuth.signIn, { username: "demo", password: "demo" });
     await t.action(api.passwordAuth.signIn, { username: "demo1", password: "demo1" });

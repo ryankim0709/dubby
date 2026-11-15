@@ -18,7 +18,7 @@ struct DubTabBar: View {
                 .frame(height: 1)
             HStack(alignment: .bottom) {
                 tabButton(.discover, title: "Discover", systemImage: "house", identifier: "tab-discover")
-                tabButton(.messages, title: "DMs", systemImage: "bubble.left.and.bubble.right", identifier: "tab-messages")
+                tabButton(.messages, title: "Clubs", systemImage: "person.2", identifier: "tab-messages")
                 Button(action: onCreate) {
                     VStack(spacing: 4) {
                         Image(systemName: "plus")

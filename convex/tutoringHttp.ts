@@ -8,6 +8,7 @@ import { ConfigurationError, requiredEnv } from "./lib/env";
 import { createSessionToken, LiveAvatarError, sandboxAvatarId } from "./liveAvatar";
 import { tutoringRefs } from "./tutoringRefs";
 import { composeReply } from "./tutoringReply";
+import { api } from "./_generated/api";
 
 /** Development-only failures a QA run can ask for with the X-QA-Fault header; ignored unless QA_FAULTS_ENABLED is "true". */
 const qaFaults = ["provider_error", "provider_timeout", "missing_key"] as const;
@@ -62,6 +63,12 @@ function logReply(model: string, status: "ok" | "error", code: string, startedAt
 }
 
 const errorBody = (code: string, error: string) => ({ error, code });
+
+async function hasPremium(ctx: ActionCtx): Promise<boolean> {
+  const premium = await ctx.runQuery(api.billing.status, {});
+  // Convex queries are cached; expiry must also be checked at request time before spending credit.
+  return premium.isPremium && (premium.expiresAt === null || premium.expiresAt > Date.now());
+}
 
 /**
  * Voices the checked reply for the avatar. The text is already valid and grounded, so a speech failure doesn't
@@ -162,11 +169,12 @@ export function registerTutoringRoutes(http: HttpRouter): void {
   http.route({
     path: "/coach/session-token",
     method: "POST",
-    handler: authenticated(async (_ctx, request) => {
+    handler: authenticated(async (ctx, request) => {
       const body = await parseBody(request, sessionRequest);
       if (body instanceof Response) return body;
       const character = findCharacter(body.characterId);
       if (character === undefined) return json(404, errorBody("not_found", `No coach named ${body.characterId}`));
+      if (!(await hasPremium(ctx))) return json(403, errorBody("premium_required", "Upgrade to Dubby Premium to talk to a coach"));
       const isSandbox = process.env.LIVEAVATAR_SANDBOX === "true";
       const token = await createSessionToken({
         apiKey: requiredEnv("LIVEAVATAR_API_KEY"),
@@ -185,6 +193,7 @@ export function registerTutoringRoutes(http: HttpRouter): void {
       if (body instanceof Response) return body;
       const character = findCharacter(body.characterId);
       if (character === undefined) return json(404, errorBody("not_found", `No coach named ${body.characterId}`));
+      if (!(await hasPremium(ctx))) return json(403, errorBody("premium_required", "Upgrade to Dubby Premium to talk to a coach"));
       const started = Date.now();
       const fault = requestedFault(request);
       let model = coachModelId();

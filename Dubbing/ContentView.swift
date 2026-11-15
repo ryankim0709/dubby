@@ -24,7 +24,7 @@ struct ContentView: View {
                 case .discover:
                     DiscoverView(clips: clips, streakDays: streakDays, onDub: { launch = .scene($0) }, isSignedIn: account.phase.isSignedIn, onTalkToCoach: { isCoachPresented = true }, onAccount: { isAccountPresented = true }, onRetry: reloadClips)
                 case .messages:
-                    MessagesView()
+                    MessagesView(account: account)
                 case .progress:
                     PracticeProgressView(dubs: dubs, folder: libraryFolder, account: account, onAccount: { isAccountPresented = true }, onRetry: reloadDubs)
                 case .myDubs:
@@ -40,12 +40,12 @@ struct ContentView: View {
             }
         }
         .fullScreenCover(item: $launch, onDismiss: reloadDubs) { launch in
-            DubFlowView(launch: launch, clips: clips, onClose: { self.launch = nil })
+            DubFlowView(launch: launch, clips: clips, account: account, onClose: { self.launch = nil })
         }
         .fullScreenCover(isPresented: $isCoachPresented) {
             // The dub result screen has no coach entry yet. When it gains one it should pass a
             // CoachPracticeContext only once its lines carry backend line ids; ScriptLine.id is a local index today.
-            CoachView(practice: nil, tokens: AccountTokenProvider(account: account), onClose: { isCoachPresented = false })
+            CoachAccessView(account: account, onClose: { isCoachPresented = false })
         }
         .sheet(isPresented: $isAccountPresented) {
             AccountView(account: account, onClose: { isAccountPresented = false })
