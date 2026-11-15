@@ -59,6 +59,8 @@ import type * as tutoringRefs from "../tutoringRefs.js";
 import type * as tutoringReply from "../tutoringReply.js";
 import type * as tutoringTables from "../tutoringTables.js";
 import type * as users from "../users.js";
+import type * as waitlist from "../waitlist.js";
+import type * as whop from "../whop.js";
 
 import type {
   ApiFromModules,
@@ -118,6 +120,8 @@ declare const fullApi: ApiFromModules<{
   tutoringReply: typeof tutoringReply;
   tutoringTables: typeof tutoringTables;
   users: typeof users;
+  waitlist: typeof waitlist;
+  whop: typeof whop;
 }>;
 
 /**

@@ -8,6 +8,19 @@ import { timedWordV } from "./lib/transcription";
 export default defineSchema({
   ...tutoringTables,
 
+  /** Landing-page signups. Emails are stored lowercased, so `by_email` finds repeat signups. */
+  waitlist: defineTable({
+    email: v.string(),
+    plan: v.union(v.literal("free"), v.literal("founding")),
+    language: v.optional(v.string()),
+    source: v.optional(v.string()),
+    /** Set by the Whop payment.succeeded webhook once the founding price is paid. */
+    paidAt: v.optional(v.number()),
+    whopPaymentId: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  }).index("by_email", ["email"]),
+
   users: defineTable({
     tokenIdentifier: v.string(),
     timeZone: v.optional(v.string()),
