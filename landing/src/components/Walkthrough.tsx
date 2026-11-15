@@ -50,35 +50,31 @@ export function Walkthrough(): JSX.Element {
         onKeyDown={onTabKeyDown}
       >
         {steps.map((step: WalkthroughStep, index: number): JSX.Element => (
-          <button
-            key={step.id}
-            ref={(node: HTMLButtonElement | null): void => {
-              tabRefs.current[index] = node;
-            }}
-            className="step"
-            type="button"
-            role="tab"
-            id={`tab-${step.id}`}
-            aria-selected={index === active}
-            aria-controls={`panel-${step.id}`}
-            aria-labelledby={`tab-title-${step.id}`}
-            aria-describedby={`tab-summary-${step.id}`}
-            tabIndex={index === active ? 0 : -1}
-            onClick={(): void => select(index, false)}
-          >
+          <div key={step.id} className="step">
             <span className="step-number" aria-hidden="true">
               {step.number}
             </span>
-            <span>
-              <span className="step-title" id={`tab-title-${step.id}`}>
-                {step.title}
-              </span>
-              <span className="step-summary" id={`tab-summary-${step.id}`} aria-hidden="true">
-                {step.summary}
-              </span>
-            </span>
+            <button
+              ref={(node: HTMLButtonElement | null): void => {
+                tabRefs.current[index] = node;
+              }}
+              className="step-tab"
+              type="button"
+              role="tab"
+              id={`tab-${step.id}`}
+              aria-selected={index === active}
+              aria-controls={`panel-${step.id}`}
+              aria-describedby={`tab-summary-${step.id}`}
+              tabIndex={index === active ? 0 : -1}
+              onClick={(): void => select(index, false)}
+            >
+              {step.title}
+            </button>
             <Arrow />
-          </button>
+            <p className="step-summary" id={`tab-summary-${step.id}`}>
+              {step.summary}
+            </p>
+          </div>
         ))}
       </div>
 
