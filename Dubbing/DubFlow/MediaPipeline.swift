@@ -114,6 +114,8 @@ nonisolated enum MediaPipeline {
 
     /// Renders the section with the user's takes laid over it. Under each take the original audio crossfades to
     /// `dialogueSuppressed` (the same section with the speech band filtered out), so music and effects carry on.
+    /// This is the raw-clip path: an approximation, not dialogue separation. It renders `DubTimeline.filteredClip`,
+    /// the same timeline a preview of this dub plays.
     @concurrent
     static func exportDub(
         source: URL,
@@ -123,65 +125,16 @@ nonisolated enum MediaPipeline {
         suppressionSpans: [TimeSpan],
         to output: URL
     ) async throws {
-        let asset = AVURLAsset(url: source)
-        guard let sourceVideo = try await asset.loadTracks(withMediaType: .video).first else {
-            throw DubFlowError.missingTrack("video")
-        }
-        guard let sourceAudio = try await asset.loadTracks(withMediaType: .audio).first else {
-            throw DubFlowError.missingTrack("audio")
-        }
-
-        let composition = AVMutableComposition()
-        guard
-            let video = composition.addMutableTrack(withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid),
-            let original = composition.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid),
-            let background = composition.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid),
-            let voice = composition.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid)
-        else {
-            throw DubFlowError.exportUnavailable
-        }
-        let sectionRange = CMTimeRange(start: mediaTime(section.start), duration: mediaTime(section.duration))
-        try video.insertTimeRange(sectionRange, of: sourceVideo, at: .zero)
-        video.preferredTransform = try await sourceVideo.load(.preferredTransform)
-        try original.insertTimeRange(sectionRange, of: sourceAudio, at: .zero)
-        let suppressedAsset = AVURLAsset(url: dialogueSuppressed)
-        guard let suppressedTrack = try await suppressedAsset.loadTracks(withMediaType: .audio).first else {
-            throw DubFlowError.missingTrack("audio in \(dialogueSuppressed.lastPathComponent)")
-        }
-        let backgroundLength = min(section.duration, try await suppressedAsset.load(.duration).seconds)
-        try background.insertTimeRange(CMTimeRange(start: .zero, duration: mediaTime(backgroundLength)), of: suppressedTrack, at: .zero)
-
-        for placement in placements {
-            let take = AVURLAsset(url: placement.url)
-            guard let takeTrack = try await take.loadTracks(withMediaType: .audio).first else {
-                throw DubFlowError.missingTrack("audio in \(placement.url.lastPathComponent)")
-            }
-            let length = min(placement.duration, try await take.load(.duration).seconds)
-            try voice.insertTimeRange(CMTimeRange(start: .zero, duration: mediaTime(length)), of: takeTrack, at: mediaTime(placement.start))
-        }
-
-        // Crossfade from the full original to the dialogue-suppressed copy for each span, then back.
-        let originalVolume = AVMutableAudioMixInputParameters(track: original)
-        let backgroundVolume = AVMutableAudioMixInputParameters(track: background)
-        backgroundVolume.setVolume(0, at: .zero)
-        let ramp = 0.08
-        for span in suppressionSpans where span.end - span.start > ramp * 2 {
-            let fadeIn = CMTimeRange(start: mediaTime(span.start), duration: mediaTime(ramp))
-            let fadeOut = CMTimeRange(start: mediaTime(span.end - ramp), duration: mediaTime(ramp))
-            originalVolume.setVolumeRamp(fromStartVolume: 1, toEndVolume: 0, timeRange: fadeIn)
-            originalVolume.setVolumeRamp(fromStartVolume: 0, toEndVolume: 1, timeRange: fadeOut)
-            backgroundVolume.setVolumeRamp(fromStartVolume: 0, toEndVolume: 1, timeRange: fadeIn)
-            backgroundVolume.setVolumeRamp(fromStartVolume: 1, toEndVolume: 0, timeRange: fadeOut)
-        }
-        let mix = AVMutableAudioMix()
-        mix.inputParameters = [originalVolume, backgroundVolume]
-
-        guard let session = AVAssetExportSession(asset: composition, presetName: AVAssetExportPresetHighestQuality) else {
-            throw DubFlowError.exportUnavailable
-        }
-        session.audioMix = mix
-        try prepareOutput(output)
-        try await session.export(to: output, as: .mp4)
+        let timeline = DubTimeline.filteredClip(
+            source: source,
+            section: section,
+            dialogueSuppressed: dialogueSuppressed,
+            placements: placements,
+            suppressionSpans: suppressionSpans,
+            decisions: [],
+            rules: .standard
+        )
+        try await DubRenderer.export(timeline, to: output)
     }
 
     /// Makes sure `url` can be written: its folder exists and any earlier file there is gone.
