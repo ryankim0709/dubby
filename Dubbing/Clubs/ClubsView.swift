@@ -14,7 +14,6 @@ struct ClubsView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
-                Text("Dub Clubs").dubFont(28, weight: .bold).padding(.top, 8)
                 LoadStateContent(state: feed, failureIdentifier: "clubLoadFailed", retry: { refreshID = UUID() }) { feed in
                     VStack(alignment: .leading, spacing: 24) {
                         Label(feed.members.map(\.displayName).joined(separator: " & "), systemImage: "person.2")
@@ -59,7 +58,8 @@ struct ClubsView: View {
             .containerIdentifier("dubClubsScreen")
         }
         .screenBackground().foregroundStyle(Palette.textPrimary).tint(Palette.accentText)
-        .toolbar(.hidden, for: .navigationBar)
+        .navigationTitle("Dub Clubs")
+        .navigationBarTitleDisplayMode(.large)
         .refreshable { await refresh() }
         .task(id: refreshID) {
             guard scenePhase == .active else { return }

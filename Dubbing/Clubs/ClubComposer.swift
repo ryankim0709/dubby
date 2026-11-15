@@ -76,6 +76,7 @@ struct ClubMediaPlayer: View {
     let kind: ClubMediaKind
     @State private var player: AVPlayer
     @State private var failure: String?
+    @State private var isPlaying = false
 
     init(url: URL, kind: ClubMediaKind) {
         self.url = url
@@ -85,11 +86,25 @@ struct ClubMediaPlayer: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            VideoPlayer(player: player)
-                .frame(minHeight: kind == .video ? 200 : 90)
-                .clipShape(RoundedRectangle(cornerRadius: 16))
-                .accessibilityLabel(kind == .video ? "Play club performance" : "Play voice feedback")
+            if kind == .voice {
+                Button {
+                    if isPlaying { player.pause() } else { player.play() }
+                } label: {
+                    Label(isPlaying ? "Pause voice feedback" : "Play voice feedback", systemImage: isPlaying ? "pause.fill" : "play.fill")
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .buttonStyle(SecondaryButtonStyle())
+            } else {
+                VideoPlayer(player: player)
+                    .frame(minHeight: 200)
+                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                    .accessibilityLabel("Play club performance")
+            }
             if let failure { Text(failure).font(.footnote).foregroundStyle(Palette.streak) }
+        }
+        .onReceive(player.publisher(for: \.timeControlStatus)) { isPlaying = $0 == .playing }
+        .onReceive(NotificationCenter.default.publisher(for: AVPlayerItem.didPlayToEndTimeNotification, object: player.currentItem)) { _ in
+            player.seek(to: .zero)
         }
         .onDisappear { player.pause() }
         .task(id: url) {
@@ -125,25 +140,27 @@ struct ClubVoiceFeedback: View {
                 ClubComposer(account: account, draft: draft, onShared: { onShared(); dismiss() })
             } else {
                 NavigationStack {
-                    VStack(alignment: .leading, spacing: 24) {
-                        Text("A helpful tip for \(post.authorName)").font(.title2.weight(.semibold))
-                        Text("Say one thing that worked, then demonstrate one word or phrase they could try again.")
-                            .foregroundStyle(Palette.textSecondary)
-                        Label(phase.isRecording ? "Recording · up to 30 seconds" : "Up to 30 seconds. You'll review it before sending.", systemImage: "waveform")
-                            .foregroundStyle(Palette.accentText)
-                        if let issue { Text(issue).foregroundStyle(Palette.streak) }
-                        Button {
-                            if phase.isRecording { stop() } else { recordTask = Task { await record() } }
-                        } label: {
-                            Label(phase.isRecording ? "Stop recording" : "Record voice feedback", systemImage: phase.isRecording ? "stop.fill" : "mic.fill")
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 24) {
+                            Text("A helpful tip for \(post.authorName)").font(.title2.weight(.semibold))
+                            Text("Say one thing that worked, then demonstrate one word or phrase they could try again.")
+                                .foregroundStyle(Palette.textSecondary)
+                            Label(phase.isRecording ? "Recording · up to 30 seconds" : "Up to 30 seconds. You'll review it before sending.", systemImage: "waveform")
+                                .foregroundStyle(Palette.accentText)
+                            if let issue { Text(issue).foregroundStyle(Palette.streak) }
+                            Button {
+                                if phase.isRecording { stop() } else { recordTask = Task { await record() } }
+                            } label: {
+                                Label(phase.isRecording ? "Stop recording" : "Record voice feedback", systemImage: phase.isRecording ? "stop.fill" : "mic.fill")
+                            }
+                            .buttonStyle(PrimaryButtonStyle(cornerRadius: Radius.control))
+                            .accessibilityIdentifier("clubRecordVoice")
+                            if case .asking = phase { ProgressView("Requesting microphone access…") }
+                            if MicrophoneAccess(AVAudioApplication.shared.recordPermission) == .denied { OpenSettingsButton() }
                         }
-                        .buttonStyle(PrimaryButtonStyle(cornerRadius: Radius.control))
-                        .accessibilityIdentifier("clubRecordVoice")
-                        if case .asking = phase { ProgressView("Requesting microphone access…") }
-                        if MicrophoneAccess(AVAudioApplication.shared.recordPermission) == .denied { OpenSettingsButton() }
-                        Spacer()
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(24)
                     }
-                    .padding(24)
                     .screenBackground()
                     .foregroundStyle(Palette.textPrimary)
                     .navigationTitle("Voice feedback")
