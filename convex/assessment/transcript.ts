@@ -9,7 +9,8 @@ import { AssessmentError, type ResponseEnvelope, RUBRIC_VERSION, SCHEMA_VERSION,
 
 export const TRANSCRIPT_EVALUATOR = "openai-whisper";
 export const TRANSCRIPT_MODEL = "whisper-1";
-export const TRANSCRIPT_CONFIG_VERSION = "whisper-transcript-v1";
+/** v2 joins the fragments Whisper splits hyphenated and elided words into; v1 scored them as errors. */
+export const TRANSCRIPT_CONFIG_VERSION = "whisper-transcript-v2";
 /** Locales whose words are separated by spaces, which word alignment needs. */
 export const TRANSCRIPT_LOCALES: readonly string[] = ["en-US", "es-ES", "fr-FR", "de-DE", "ko-KR"];
 
@@ -53,6 +54,40 @@ function checkInput(input: TranscriptAssessInput): void {
   if (!Number.isInteger(startMs) || !Number.isInteger(endMs) || startMs < 0 || endMs <= startMs) {
     throw bad("targetWindowMs must be integer milliseconds with 0 <= startMs < endMs");
   }
+}
+
+/** Words compare without hyphens and apostrophes, which Whisper's word list drops or splits on. */
+const compareKey = (norm: string) => norm.replace(/['-]/g, "");
+
+/** The longest word Whisper is joined back from: "aujourd'hui" or "peut-être" come in two or three pieces. */
+const MAX_FRAGMENTS = 3;
+
+/**
+ * Joins consecutive transcribed pieces that together spell one of the script's words. Whisper's word list splits
+ * "asseyez-vous" into "asseyez" and "vous", and "c'est" into "c" and "est", which would otherwise score a correctly
+ * spoken word as one swapped word plus one added word.
+ */
+function joinFragments(spoken: readonly SpokenToken[], reference: readonly { norm: string; display: string }[]): SpokenToken[] {
+  const byKey = new Map(reference.map((token) => [compareKey(token.norm), token]));
+  const joined: SpokenToken[] = [];
+  let index = 0;
+  while (index < spoken.length) {
+    let taken = 1;
+    let token = spoken[index]!;
+    for (let count = Math.min(MAX_FRAGMENTS, spoken.length - index); count > 1; count -= 1) {
+      const parts = spoken.slice(index, index + count);
+      const match = byKey.get(parts.map((part) => compareKey(part.norm)).join(""));
+      if (match === undefined) continue;
+      const spans = parts.flatMap((part) => (part.span === null ? [] : [part.span]));
+      const span = spans.length === 0 ? null : { startMs: spans[0]!.startMs, endMs: spans[spans.length - 1]!.endMs };
+      token = { norm: match.norm, display: match.display, span };
+      taken = count;
+      break;
+    }
+    joined.push(token);
+    index += taken;
+  }
+  return joined;
 }
 
 /** Clips a word to the recording; a span that is empty after clipping has no measured timing. */
@@ -124,16 +159,19 @@ export function assessTranscript(input: TranscriptAssessInput, words: readonly T
   const reference = tokenize(input.referenceText);
   if (reference.length === 0) throw new AssessmentError("invalid_reference", "The reference text has no tokens to assess");
 
-  const spoken: SpokenToken[] = words.flatMap((word) => {
-    const span = spanOf(word, input.recordingDurationMs);
-    return tokenize(word.text).map((token) => ({ ...token, span }));
-  });
+  const spoken = joinFragments(
+    words.flatMap((word) => {
+      const span = spanOf(word, input.recordingDurationMs);
+      return tokenize(word.text).map((token) => ({ ...token, span }));
+    }),
+    reference,
+  );
   const recognizedText = words.map((word) => word.text.trim()).join(" ").trim();
   if (spoken.length === 0) return unscorable(input, "no_speech", recognizedText === "" ? null : recognizedText, reference.length);
 
   const alignment = align(
-    reference.map((token) => token.norm),
-    spoken.map((token) => token.norm),
+    reference.map((token) => compareKey(token.norm)),
+    spoken.map((token) => compareKey(token.norm)),
   );
   const wordResults: WordResult[] = [];
   const substituted: number[] = [];
