@@ -84,6 +84,119 @@ func adaptiveGridColumns(spacing: CGFloat, isAccessibilitySize: Bool) -> [GridIt
     return isAccessibilitySize ? [column] : [column, column]
 }
 
+// MARK: - Liquid Glass
+
+/// Shared Liquid Glass controls. Glass is the control layer that floats over content (navigation, toolbars,
+/// floating actions, media controls). Dialogue, video, feedback and lists stay on opaque Palette surfaces so
+/// they stay readable over any scene.
+enum GlassMetrics {
+    /// Neighbouring glass shapes in a `GlassEffectContainer` closer than this blend into one another.
+    static let clusterSpacing: CGFloat = 12
+    /// The smallest hit area a glass control may have.
+    static let minimumTarget: CGFloat = 44
+}
+
+extension View {
+    /// Liquid Glass behind a custom floating control: media transport, a chip over video, a floating bar.
+    /// Under Reduce Transparency it becomes an opaque fill with a hairline edge, so the label keeps its contrast.
+    func dubGlass(in shape: some Shape, tint: Color? = nil, interactive: Bool = false) -> some View {
+        modifier(DubGlassModifier(shape: shape, tint: tint, interactive: interactive))
+    }
+}
+
+private struct DubGlassModifier<GlassShape: Shape>: ViewModifier {
+    let shape: GlassShape
+    let tint: Color?
+    let interactive: Bool
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
+    func body(content: Content) -> some View {
+        if reduceTransparency {
+            content
+                .background(tint ?? Palette.surface, in: shape)
+                .overlay(shape.stroke(Palette.track, lineWidth: 1))
+        } else {
+            content.glassEffect(.regular.tint(tint).interactive(interactive), in: shape)
+        }
+    }
+}
+
+/// A screen's primary action: full-width system prominent glass in the brand accent.
+struct DubPrimaryButtonStyle: PrimitiveButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        Button(role: configuration.role, action: configuration.trigger) {
+            configuration.label
+                .dubFont(16, weight: .semibold)
+                // The dark label on the light accent keeps text contrast above 4.5:1; white would not.
+                .foregroundStyle(isEnabled ? Palette.onAccent : Palette.textSecondary)
+                .frame(maxWidth: .infinity, minHeight: 30)
+        }
+        .buttonStyle(.glassProminent)
+        .tint(Palette.accent)
+        .controlSize(.large)
+    }
+}
+
+/// A secondary action in system glass, sized to its label.
+struct DubSecondaryButtonStyle: PrimitiveButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        Button(role: configuration.role, action: configuration.trigger) {
+            configuration.label
+                .dubFont(14, weight: .medium)
+                .foregroundStyle(Palette.textPrimary)
+                .frame(minHeight: 30)
+        }
+        .buttonStyle(.glass)
+        .controlSize(.large)
+    }
+}
+
+/// A 44-point circular glass control for an icon. Works on Button, NavigationLink and ShareLink.
+struct DubGlassIconButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            // Fixed like system toolbar icons, because the 44-point circle can't grow; Large Content Viewer covers big text.
+            .font(.system(size: 17, weight: .semibold))
+            .foregroundStyle(Palette.textPrimary)
+            .frame(width: GlassMetrics.minimumTarget, height: GlassMetrics.minimumTarget)
+            .dubGlass(in: Circle(), interactive: true)
+            .contentShape(Circle())
+            .opacity(configuration.isPressed ? 0.85 : 1)
+    }
+}
+
+extension PrimitiveButtonStyle where Self == DubPrimaryButtonStyle {
+    static var dubPrimary: DubPrimaryButtonStyle { DubPrimaryButtonStyle() }
+}
+
+extension PrimitiveButtonStyle where Self == DubSecondaryButtonStyle {
+    static var dubSecondary: DubSecondaryButtonStyle { DubSecondaryButtonStyle() }
+}
+
+extension ButtonStyle where Self == DubGlassIconButtonStyle {
+    static var dubGlassIcon: DubGlassIconButtonStyle { DubGlassIconButtonStyle() }
+}
+
+/// Close, back or more as a circular glass button. Identifiers and `.disabled` apply at the call site.
+struct DubGlassIconButton: View {
+    let systemImage: String
+    let label: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+        }
+        .buttonStyle(.dubGlassIcon)
+        .accessibilityLabel(label)
+        .accessibilityShowsLargeContentViewer {
+            Label(label, systemImage: systemImage)
+        }
+    }
+}
+
 struct PrimaryButtonStyle: ButtonStyle {
     let cornerRadius: CGFloat
 
@@ -199,16 +312,9 @@ struct BackHeader<Trailing: View>: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Button {
+            DubGlassIconButton(systemImage: "arrow.left", label: "Back") {
                 dismiss()
-            } label: {
-                Image(systemName: "arrow.left")
-                    .dubFont(16, weight: .medium)
-                    .foregroundStyle(Palette.textPrimary)
-                    .frame(minWidth: 44, minHeight: 44)
-                    .contentShape(Rectangle())
             }
-            .accessibilityLabel("Back")
             Text(title)
                 .dubFont(16, weight: .semibold)
                 .foregroundStyle(Palette.textPrimary)

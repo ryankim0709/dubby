@@ -34,8 +34,9 @@ struct ContentView: View {
                     }, onRetry: reloadDubs)
                 }
             }
-            // Attached to the tab roots only, so pushed screens keep their full-height layout.
-            .safeAreaInset(edge: .bottom, spacing: 0) {
+            // Attached to the tab roots only, so pushed screens keep their full-height layout. A safe-area bar lets
+            // content scroll under the floating glass and gives it the system scroll-edge effect.
+            .safeAreaBar(edge: .bottom, spacing: 0) {
                 DubTabBar(selection: $tab, onCreate: { launch = .chooseScene })
             }
         }

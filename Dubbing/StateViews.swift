@@ -75,7 +75,7 @@ struct OpenSettingsButton: View {
                 openURL(url)
             }
         }
-        .buttonStyle(OutlineCapsuleButtonStyle())
+        .buttonStyle(.dubSecondary)
         .accessibilityIdentifier("openSettings")
     }
 }
@@ -104,7 +104,7 @@ struct IssueCard: View {
                 }
                 if let retry {
                     Button(retryTitle, action: retry)
-                        .buttonStyle(OutlineCapsuleButtonStyle())
+                        .buttonStyle(.dubSecondary)
                         .accessibilityIdentifier(retryIdentifier)
                 }
             }
