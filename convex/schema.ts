@@ -1,9 +1,12 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
+import { tutoringTables } from "./tutoringTables";
 import { assessmentContentFields, jobErrorV, jobStageV, jobStatusV, outcomeV } from "./lib/validators";
 
 /** Tables follow docs/convex-backend.md and contract v1 section 4. Ids are Convex ids; times are epoch milliseconds. */
 export default defineSchema({
+  ...tutoringTables,
+
   users: defineTable({
     tokenIdentifier: v.string(),
     timeZone: v.optional(v.string()),

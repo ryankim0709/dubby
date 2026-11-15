@@ -15,8 +15,10 @@ import { getAssessmentEngine, getCoachingProvider } from "./integrations/provide
 import { getOwned, requireUser } from "./lib/auth";
 import { BACKOFF_BASE_MS, LEASE_MS, MAX_JOB_TRIES, RUBRIC_VERSION, SCHEMA_VERSION } from "./lib/config";
 import { appError } from "./lib/errors";
+import { buildIngestAssessmentArgs } from "./lib/ingest";
 import { logEvent } from "./lib/log";
 import { InvalidOutputError, validateCoaching, validateOutcome } from "./lib/outcome";
+import { tutoringRefs } from "./tutoringRefs";
 import { assessmentBodyFields, assessmentViewV, jobViewV, nullable, outcomeV } from "./lib/validators";
 
 /** How a job try ended. autoRetry spends another try after a backoff; retryable lets the owner retry once tries run out. */
@@ -235,6 +237,13 @@ export const complete = internalMutation({
     const now = Date.now();
     const assessmentId = await ctx.db.insert("assessments", { ownerId: job.ownerId, jobId, completedAt: now, ...assessment });
     await ctx.db.patch(jobId, { status: "succeeded", assessmentId, error: undefined, leaseExpiresAt: undefined, updatedAt: now });
+    const stored = await ctx.db.get("assessments", assessmentId);
+    const attempt = await ctx.db.get("attempts", job.attemptId);
+    const project = attempt === null ? null : await ctx.db.get("projects", attempt.projectId);
+    const owner = await ctx.db.get("users", job.ownerId);
+    if (stored !== null && attempt !== null && project !== null && owner !== null) {
+      await ctx.scheduler.runAfter(0, tutoringRefs.ingestAssessment, buildIngestAssessmentArgs({ assessment: stored, attempt, project, ownerSubject: owner.tokenIdentifier }));
+    }
     logEvent({
       operation: "assessments.job",
       status: "ok",
