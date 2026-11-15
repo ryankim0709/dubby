@@ -125,7 +125,7 @@ actor URLSessionSocketTransport: AvatarSocketTransport {
 actor LiveAvatarSocket {
     private static let logger = Logger(subsystem: "com.ryankim.Dubbing", category: "coach-avatar")
 
-    let events: AsyncStream<LiveAvatarSocketEvent>
+    nonisolated let events: AsyncStream<LiveAvatarSocketEvent>
     private let continuation: AsyncStream<LiveAvatarSocketEvent>.Continuation
     private let transport: any AvatarSocketTransport
     private var receiveTask: Task<Void, Never>?

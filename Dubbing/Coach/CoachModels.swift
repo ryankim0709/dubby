@@ -40,6 +40,7 @@ nonisolated enum CoachError: LocalizedError, Equatable {
     case invalidResponse(operation: String, reason: String)
     case noSpeechHeard
     case avatarDisconnected
+    case avatarBusy
 
     var errorDescription: String? {
         switch self {
@@ -69,6 +70,8 @@ nonisolated enum CoachError: LocalizedError, Equatable {
             "I didn't catch any words. Hold the button and speak a little closer to the mic."
         case .avatarDisconnected:
             "The coach's video call ended. Start the session again to keep talking."
+        case .avatarBusy:
+            "The coach is still speaking."
         }
     }
 
