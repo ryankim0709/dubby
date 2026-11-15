@@ -15,6 +15,7 @@ The proposed assessment response, scoring rubric, and progress-tracking rules ar
 - [Run locally](#run-locally)
 - [Build and test](#build-and-test)
 - [Talking coach](#talking-coach)
+- [Live tutor](#live-tutor)
 - [Planned cloud architecture](#planned-cloud-architecture)
 - [Working on the project](#working-on-the-project)
 
@@ -241,6 +242,19 @@ These steps create accounts and avatars and can cost money, so the project owner
 - No real LiveAvatar session has run with this backend's audio, and the OpenAI and Supermemory calls haven't run with real keys. The app's LITE WebSocket client is still to be built.
 - The coach's audio needs an actual iPhone. The app manages the audio session itself, so the recorder and LiveKit playback can share it. Recording during playback, interruptions, Bluetooth routes, and echo still need testing on a device.
 - The Convex functions typecheck but haven't been deployed or bundled by Convex.
+
+## Live tutor
+
+Once a dub's score sheet is complete, the result screen offers a spoken practice call. An AI tutor works through the lines whose takes missed, swapped or added words, or had no speech: it says each line, the learner repeats it, and the tutor corrects what it hears. Unlike the talking coach, the tutor hears the learner's audio during the call.
+
+1. The app sends `POST /tutor/live-session` with the dub's id. The backend reads the caller's own score sheet, picks up to six lines to fix, writes the tutor's instructions from them, and mints an OpenAI Realtime client secret that carries those instructions, the voice, 24 kHz PCM audio, semantic turn detection and `gpt-transcribe` captions. The secret expires after two minutes; the session it opens lasts until the learner leaves.
+2. The app opens OpenAI's Realtime WebSocket with that secret and streams the microphone to it. The system's voice processing cancels echo, so the learner can talk over the tutor; the app then drops the queued reply and tells the server how much was heard.
+
+The score sheet measures words and timing, not sounds, so the instructions forbid stating scores and limit pronunciation feedback to what the tutor hears in the call. Code: `convex/liveTutor.ts` and `Dubbing/LiveTutor/`.
+
+Setup: `OPENAI_API_KEY` on the Convex deployment, plus the `COACH_BACKEND_URL` build setting. The model defaults to `gpt-realtime-2.1`; set `OPENAI_REALTIME_MODEL` (for example to `gpt-realtime-2.1-mini`) to change it.
+
+Not verified yet: no call has run against OpenAI, and audio, echo cancellation, interruptions and Bluetooth routes need an actual iPhone.
 
 ## Planned cloud architecture
 

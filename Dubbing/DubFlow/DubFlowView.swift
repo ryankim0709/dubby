@@ -17,13 +17,15 @@ enum DubFlowLaunch: Identifiable {
 struct DubFlowView: View {
     let clips: LoadState<[LibraryClip]>
     let scoring: DubScoringModel?
+    let tokens: any CoachAuthTokenProvider
     let onRetry: () -> Void
     let onClose: () -> Void
     @State private var path: [DubFlowStep]
 
-    init(launch: DubFlowLaunch, clips: LoadState<[LibraryClip]>, scoring: DubScoringModel?, onRetry: @escaping () -> Void, onClose: @escaping () -> Void) {
+    init(launch: DubFlowLaunch, clips: LoadState<[LibraryClip]>, scoring: DubScoringModel?, tokens: any CoachAuthTokenProvider, onRetry: @escaping () -> Void, onClose: @escaping () -> Void) {
         self.clips = clips
         self.scoring = scoring
+        self.tokens = tokens
         self.onRetry = onRetry
         self.onClose = onClose
         switch launch {
@@ -46,7 +48,7 @@ struct DubFlowView: View {
                     case .studio(let setup):
                         DubSessionView(setup: setup) { path.append(.result(setup, $0)) }
                     case .result(let setup, let takes):
-                        DubResultView(setup: setup, takes: takes, scoring: scoring, onDone: onClose)
+                        DubResultView(setup: setup, takes: takes, scoring: scoring, tokens: tokens, onDone: onClose)
                     }
                 }
         }

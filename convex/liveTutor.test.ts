@@ -1,0 +1,83 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { api } from "./_generated/api";
+import { type DubScoreSheet, practicePlan } from "./liveTutor";
+import { alice, bob, newBackend, upload } from "./test.helpers";
+
+// Everything here is a synthetic fixture: invented lines and transcripts, and uploads that are never graded.
+
+type SheetLine = DubScoreSheet["lines"][number];
+type Word = SheetLine["words"][number];
+
+const matched = (text: string): Word => ({ expected: text, recognized: text, textStatus: "matched" });
+
+function line(lineIndex: number, referenceText: string, status: SheetLine["status"], words: Word[], reason: string | null): SheetLine {
+  return { lineIndex, referenceText, status, recognizedText: null, lineScore: null, wordAccuracy: null, timingFit: null, reason, coachingSummary: null, words };
+}
+
+const post = (body: object): RequestInit => ({ method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+const clientDubId = "6f1c1e0e-0000-4000-8000-0000000000aa";
+
+describe("live tutor practice plan", () => {
+  it("picks lines with word differences or no speech, in scene order, and keeps word-perfect lines for polishing", () => {
+    const plan = practicePlan([
+      line(3, "Fixture line three.", "unscorable", [], "no_speech"),
+      line(0, "Fixture line one.", "scored", [matched("Fixture"), matched("line"), matched("one")], null),
+      line(1, "Fixture line two.", "scored", [matched("Fixture"), { expected: "line", recognized: "lime", textStatus: "substituted" }, { expected: "two", recognized: null, textStatus: "omitted" }], null),
+      line(2, "Fixture line four.", "failed", [], "provider_unavailable"),
+      line(4, "Fixture line five.", "unscorable", [], "unsupported_locale"),
+    ]);
+    expect(plan.toFix.map((target) => target.lineIndex)).toEqual([1, 3]);
+    expect(plan.toFix[0]?.findings).toEqual([`said "lime" instead of "line"`, `left out "two"`]);
+    expect(plan.wordPerfect).toEqual(["Fixture line one."]);
+  });
+});
+
+describe("POST /tutor/live-session", () => {
+  let fetchSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    // Keeps the submitted dub's grading jobs from running, so it stays mid-scoring.
+    vi.useFakeTimers();
+    vi.stubEnv("OPENAI_API_KEY", "fixture-openai-key-do-not-use");
+    fetchSpy = vi.spyOn(globalThis, "fetch");
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllEnvs();
+    fetchSpy.mockRestore();
+  });
+
+  it("answers 401 without an identity, before reading the body or calling OpenAI", async () => {
+    const response = await newBackend().fetch("/tutor/live-session", post({ clientDubId }));
+    expect(response.status).toBe(401);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("only opens a session for the caller's own dub once it has finished scoring", async () => {
+    const t = newBackend();
+    const a = t.withIdentity(alice);
+    const b = t.withIdentity(bob);
+    await a.mutation(api.users.ensure, {});
+    await b.mutation(api.users.ensure, {});
+    await a.mutation(api.dubs.submit, {
+      clientDubId,
+      sceneTitle: "SYNTHETIC fixture scene",
+      characterName: "Fixture hero",
+      locale: "en-US",
+      timeZone: "America/Los_Angeles",
+      capturedAt: Date.now(),
+      takes: [{ lineIndex: 0, referenceText: "Fixture line one.", startMs: 1000, endMs: 3000, storageId: await upload(t) }],
+    });
+
+    const scoring = await a.fetch("/tutor/live-session", post({ clientDubId }));
+    expect(scoring.status).toBe(409);
+    expect(await scoring.json()).toEqual({ error: expect.any(String), code: "still_scoring" });
+
+    const someoneElse = await b.fetch("/tutor/live-session", post({ clientDubId }));
+    expect(someoneElse.status).toBe(404);
+    expect(await someoneElse.json()).toEqual({ error: expect.any(String), code: "not_found" });
+
+    expect((await a.fetch("/tutor/live-session", post({ clientDubId: "not-a-uuid" }))).status).toBe(400);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+});

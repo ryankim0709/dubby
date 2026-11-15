@@ -102,6 +102,11 @@ actor URLSessionSocketTransport: AvatarSocketTransport {
         task.resume()
     }
 
+    init(url: URL, protocols: [String]) {
+        task = URLSession.shared.webSocketTask(with: url, protocols: protocols)
+        task.resume()
+    }
+
     func send(_ text: String) async throws {
         try await task.send(.string(text))
     }
