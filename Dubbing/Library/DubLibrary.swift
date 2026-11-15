@@ -10,6 +10,37 @@ nonisolated struct SavedDub: Codable, Hashable, Sendable, Identifiable {
     let sceneSeconds: Double
     let createdAt: Date
     let videoFileName: String
+    /// Measured take data. Nil for dubs saved before takes were measured, which the UI reports as not measured.
+    var takeMeasurements: [TakeMeasurement]? = nil
+}
+
+/// Where finished dubs are kept and read back. The shape mirrors the backend's history client functions
+/// (list, complete a project, remove) so cloud history can sit behind it later; today it is local only.
+nonisolated protocol DubHistoryStoring: Sendable {
+    func list() async throws -> [SavedDub]
+    func save(video: URL, as dub: SavedDub) async throws -> [SavedDub]
+    func delete(_ dub: SavedDub) async throws -> [SavedDub]
+    func videoURL(for dub: SavedDub) -> URL
+}
+
+nonisolated struct LocalDubHistory: DubHistoryStoring {
+    let folder: URL
+
+    func list() async throws -> [SavedDub] {
+        try DubLibrary.load(from: folder)
+    }
+
+    func save(video: URL, as dub: SavedDub) async throws -> [SavedDub] {
+        try DubLibrary.save(video: video, as: dub, in: folder)
+    }
+
+    func delete(_ dub: SavedDub) async throws -> [SavedDub] {
+        try DubLibrary.delete(dub, in: folder)
+    }
+
+    func videoURL(for dub: SavedDub) -> URL {
+        DubLibrary.videoURL(for: dub, in: folder)
+    }
 }
 
 /// Saved dubs live in one folder: each video plus a `dubs.json` index, newest first.
@@ -32,6 +63,17 @@ nonisolated enum DubLibrary {
         let dubs = [dub] + (try load(from: folder))
         try encoder.encode(dubs).write(to: indexURL(in: folder), options: .atomic)
         return dubs
+    }
+
+    /// Removes a dub's video and its index entry. Returns the remaining dubs.
+    static func delete(_ dub: SavedDub, in folder: URL) throws -> [SavedDub] {
+        let remaining = try load(from: folder).filter { $0.id != dub.id }
+        try encoder.encode(remaining).write(to: indexURL(in: folder), options: .atomic)
+        let video = videoURL(for: dub, in: folder)
+        if FileManager.default.fileExists(atPath: video.path(percentEncoded: false)) {
+            try FileManager.default.removeItem(at: video)
+        }
+        return remaining
     }
 
     static func videoURL(for dub: SavedDub, in folder: URL) -> URL {

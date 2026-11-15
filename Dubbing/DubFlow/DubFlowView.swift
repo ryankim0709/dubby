@@ -68,7 +68,7 @@ private struct ScenePickerView: View {
                         Image(systemName: "xmark")
                             .dubFont(16, weight: .semibold)
                             .foregroundStyle(Palette.textPrimary)
-                            .frame(width: 36, height: 36)
+                            .frame(width: 44, height: 44)
                             .background(Palette.surface, in: Circle())
                     }
                     .accessibilityLabel("Close")

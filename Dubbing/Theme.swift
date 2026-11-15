@@ -205,6 +205,8 @@ struct BackHeader<Trailing: View>: View {
                 Image(systemName: "arrow.left")
                     .dubFont(16, weight: .medium)
                     .foregroundStyle(Palette.textPrimary)
+                    .frame(minWidth: 44, minHeight: 44)
+                    .contentShape(Rectangle())
             }
             .accessibilityLabel("Back")
             Text(title)

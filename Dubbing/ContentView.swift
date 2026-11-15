@@ -8,6 +8,7 @@ struct ContentView: View {
     @State private var isCoachPresented = false
 
     private let libraryFolder = DubLibrary.defaultFolder
+    private let history = LocalDubHistory(folder: DubLibrary.defaultFolder)
 
     private var streakDays: Int {
         guard case .loaded(let dubs) = dubs else { return 0 }
@@ -19,13 +20,16 @@ struct ContentView: View {
             Group {
                 switch tab {
                 case .discover:
-                    DiscoverView(clips: clips, streakDays: streakDays, onDub: { launch = .scene($0) }, onTalkToCoach: { isCoachPresented = true })
+                    DiscoverView(clips: clips, streakDays: streakDays, onDub: { launch = .scene($0) }, onTalkToCoach: { isCoachPresented = true }, onRetry: reloadClips)
                 case .messages:
                     MessagesView()
                 case .progress:
-                    PracticeProgressView(dubs: dubs, folder: libraryFolder)
+                    PracticeProgressView(dubs: dubs, folder: libraryFolder, onRetry: reloadDubs)
                 case .myDubs:
-                    MyDubsView(dubs: dubs, folder: libraryFolder)
+                    MyDubsView(dubs: dubs, folder: libraryFolder, onDelete: { dub in
+                        _ = try await history.delete(dub)
+                        reloadDubs()
+                    }, onRetry: reloadDubs)
                 }
             }
             // Attached to the tab roots only, so pushed screens keep their full-height layout.
@@ -40,19 +44,32 @@ struct ContentView: View {
             CoachView(onClose: { isCoachPresented = false })
         }
         .task {
-            reloadDubs()
-            do {
-                clips = .loaded(try await MediaLibrary.loadClips(in: .main))
-            } catch {
-                clips = .failed(error.localizedDescription)
-            }
+            await loadDubs()
+            await loadClips()
         }
         .preferredColorScheme(.dark)
     }
 
-    private func reloadDubs() {
+    private func reloadClips() {
+        clips = .loading
+        Task { await loadClips() }
+    }
+
+    private func loadClips() async {
         do {
-            dubs = .loaded(try DubLibrary.load(from: libraryFolder))
+            clips = .loaded(LaunchConfiguration.current.ordering(try await MediaLibrary.loadClips(in: .main)))
+        } catch {
+            clips = .failed("Scenes couldn't be read: \(error.localizedDescription)")
+        }
+    }
+
+    private func reloadDubs() {
+        Task { await loadDubs() }
+    }
+
+    private func loadDubs() async {
+        do {
+            dubs = .loaded(try await history.list())
         } catch {
             dubs = .failed("Saved dubs couldn't be read: \(error.localizedDescription)")
         }
