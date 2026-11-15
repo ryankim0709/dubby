@@ -197,33 +197,6 @@ struct DubGlassIconButton: View {
     }
 }
 
-struct PrimaryButtonStyle: ButtonStyle {
-    let cornerRadius: CGFloat
-
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .dubFont(16, weight: .medium)
-            .foregroundStyle(Palette.onAccent)
-            .frame(maxWidth: .infinity, minHeight: 50)
-            .background(Palette.accent, in: RoundedRectangle(cornerRadius: cornerRadius))
-            .opacity(configuration.isPressed ? 0.8 : 1)
-    }
-}
-
-struct OutlineCapsuleButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        HStack(spacing: 8) {
-            configuration.label
-        }
-        .dubFont(14, weight: .medium)
-        .foregroundStyle(Palette.textPrimary)
-        .padding(.horizontal, 16)
-        .frame(minHeight: 36)
-        .overlay(Capsule().strokeBorder(Palette.track, lineWidth: 1))
-        .opacity(configuration.isPressed ? 0.7 : 1)
-    }
-}
-
 struct WaveformView: View {
     /// Bar heights from 0 to 1.
     let levels: [Float]
