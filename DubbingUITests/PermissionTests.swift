@@ -40,7 +40,7 @@ final class PermissionTests: DubbingUITestCase {
         _ = requireElement("discoverScreen", timeout: 30)
         tap("dubScene-\(DemoScene.sceneID)")
         guard element("transcribeScene").waitForExistence(timeout: 5) else {
-            XCTFail("This build does not request speech recognition at scene setup; see docs/qa/smoke-flow.md step S-20 for where it moved")
+            XCTFail("This build does not request speech recognition at scene setup; see docs/qa/smoke-flow.md steps S-05 and S-32 for where it moved")
             return
         }
         tap("transcribeScene")
