@@ -15,6 +15,20 @@ nonisolated struct ImportedClip: Hashable, Sendable {
     let durationSeconds: Double
     let origin: ClipOrigin
     let workingDirectory: URL
+    let locale: String?
+
+    init(url: URL, title: String, durationSeconds: Double, origin: ClipOrigin, workingDirectory: URL) {
+        self.init(url: url, title: title, durationSeconds: durationSeconds, origin: origin, workingDirectory: workingDirectory, locale: nil)
+    }
+
+    init(url: URL, title: String, durationSeconds: Double, origin: ClipOrigin, workingDirectory: URL, locale: String?) {
+        self.url = url
+        self.title = title
+        self.durationSeconds = durationSeconds
+        self.origin = origin
+        self.workingDirectory = workingDirectory
+        self.locale = locale
+    }
 }
 
 /// The part of the clip being dubbed, in seconds from the clip's start.

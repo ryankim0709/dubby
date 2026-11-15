@@ -11,13 +11,15 @@ struct SectionPickerView: View {
     let onTranscribe: (TranscriptionRequest) -> Void
     @State private var player: SegmentPlayer
     @State private var selection: TimeSpan
-    @State private var language = SpokenLanguage.all[0]
+    @State private var language: SpokenLanguage
     @State private var thumbnails: ThumbnailState = .loading
     @State private var previewTask: Task<Void, Never>?
 
     init(clip: ImportedClip, onTranscribe: @escaping (TranscriptionRequest) -> Void) {
         self.clip = clip
         self.onTranscribe = onTranscribe
+        let code = clip.locale.flatMap { Locale(identifier: $0).language.languageCode?.identifier }
+        _language = State(initialValue: SpokenLanguage.all.first { Locale(identifier: $0.identifier).language.languageCode?.identifier == code } ?? SpokenLanguage.all[0])
         _player = State(initialValue: SegmentPlayer(url: clip.url))
         _selection = State(initialValue: TimeSpan(start: 0, end: min(clip.durationSeconds, SectionEditing.defaultLength)))
     }

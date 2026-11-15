@@ -2,7 +2,7 @@ import { v } from "convex/values";
 import type { Doc } from "./_generated/dataModel";
 import { internalMutation, internalQuery, query } from "./_generated/server";
 import { requireLearner } from "./lib/auth";
-import { lineView } from "./lib/catalog";
+import { latestLines, lineView } from "./lib/catalog";
 import { appError } from "./lib/errors";
 import { logEvent } from "./lib/log";
 import { nullable } from "./lib/validators";
@@ -272,6 +272,11 @@ const catalogEntryV = v.object({
   slug: v.string(),
   title: v.string(),
   durationSeconds: v.number(),
+  details: v.object({
+    locale: v.string(),
+    synopsis: nullable(v.string()),
+    characters: v.array(v.object({ id: v.string(), name: v.string(), lineCount: v.number() })),
+  }),
   video: v.object({ url: v.string(), sha256: v.string(), byteSize: v.number(), contentType: v.string() }),
 });
 
@@ -294,10 +299,16 @@ export const catalog = internalQuery({
         const url = await ctx.storage.getUrl(scene.videoId);
         if (file === null || url === null) throw new Error(`scene ${scene.slug} points at missing file ${scene.videoId}`);
         if (file.contentType === undefined) throw new Error(`scene ${scene.slug} video ${scene.videoId} has no content type`);
+        const characters = await ctx.db.query("characters").withIndex("by_scene", (q) => q.eq("sceneId", scene._id)).collect();
+        const cast = await Promise.all(characters.map(async (character) => {
+          const lines = await latestLines(ctx, character._id);
+          return { id: character.slug, name: character.name, lineCount: lines.length };
+        }));
         return {
           slug: scene.slug,
           title: scene.title,
           durationSeconds: scene.durationSeconds,
+          details: { locale: scene.locale, synopsis: scene.synopsis ?? null, characters: cast },
           video: { url, sha256: file.sha256, byteSize: file.size, contentType: file.contentType },
         };
       }),
