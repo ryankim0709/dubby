@@ -28,9 +28,6 @@ final class SmokeFlowTests: DubbingUITestCase {
         waitForValue("resultPlayer", "ready", timeout: 30)
         capture("export-preview")
 
-        if element("saveDub").exists {
-            tap("saveDub")
-        }
         waitForValue("savedStatus", "saved", timeout: 30)
         capture("saved")
 

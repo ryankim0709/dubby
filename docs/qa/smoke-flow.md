@@ -43,7 +43,7 @@ Column "Sim" = can a simulator exercise it: **Yes**, **Partly** (the app-side st
 | S-15 | Move through every line | `studioNext`, `studioPrevious`, repeat S-09..S-13 | `currentLine` changes; `studioProgress` reaches `N of N`; `finishDub` enabled | screenshot per line | Yes |
 | S-16 | Export | `finishDub`, `exportScreen`, `exportStatus` | Status moves `filteringDialogue` -> `mixing` -> `saving` -> `finished`; no result is shown before `finished` | screenshot per status, log | Yes |
 | S-17 | Preview | `resultPlayer` | `accessibilityValue` = `ready`; playback starts; trim notice `dubTrimNotice` only if a take was cut | screenshot, recording | Yes (plays); No (audio sync by ear) |
-| S-18 | Save | `saveDub` (if explicit) and `savedStatus` | `savedStatus` = `saved`; baseline saves automatically, so the explicit step may not exist | screenshot | Yes |
+| S-18 | Save | `savedStatus` | Saving is automatic; `savedStatus` goes `saving` then `saved`, and a cancelled or failed export never reaches `saved` | screenshot | Yes |
 | S-19 | Share from the result | `shareDub`, system element `ActivityListView`, button "Close" | Share sheet opens with the MP4; Close dismisses it with no destination chosen | screenshot `share-sheet` | Yes (sheet opens); No (destinations) |
 | S-20 | Leave the flow | `doneDub` | Back on Discover | screenshot | Yes |
 | S-21 | Reopen My Dubs | `tab-myDubs`, `myDubsScreen`, `myDubsCount`, `savedDub-<dubID>` | Count = 1, the card shows `N of N` lines | screenshot `my-dubs-one` | Yes |
@@ -68,7 +68,7 @@ Column "Sim" = can a simulator exercise it: **Yes**, **Partly** (the app-side st
 | S-41 | Cancel a retry | `retryTake`, `cancelRecording` | The take kept before the retry is still kept, still plays, `studioProgress` unchanged (swift.mdc rule) | screenshots before and after | Yes |
 | S-42 | Background during recording | home, then return | `studioStatus` = `interrupted`, `studioError` value `recordingInterrupted`, no take kept, and `recordLine` works again | screenshot, log | Yes (backgrounding); No (real calls) |
 | S-43 | Foreground during playback | home, then return while `playingOriginal` | Playback stops cleanly, `studioStatus` = `idle` | screenshot | Yes |
-| S-44 | Cancel an export | `cancelExport` | `exportStatus` = `cancelled`; partial output is deleted; `retryExport` and `exportBack` appear; My Dubs is still empty | screenshots, My Dubs screenshot | Yes (needs a slow export, see `-DUBIT_EXPORT_STEP_DELAY_MS`) |
+| S-44 | Cancel an export | `cancelExport` | `exportStatus` = `cancelled`; partial output is deleted; `retryExport` and `exportBack` (which leaves the whole flow) appear; My Dubs is still empty | screenshots, My Dubs screenshot | Yes (needs a slow export, see `-DUBIT_EXPORT_STEP_DELAY_MS`) |
 | S-45 | Background during export | home, then return | Export ends in `finished`, `failed` with `exportError` and `retryExport`, or `cancelled`, never stuck on a status | screenshot, log | Yes |
 | S-46 | Retry a failed export | `retryExport` | A failure produces no saved dub; the retry produces exactly one | screenshots | Partly (needs an injectable failure; none exists) |
 | S-47 | Audio route change, call, Siri | n/a | Recording stops with the interruption state | n/a | No (see physical checklist) |

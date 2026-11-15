@@ -97,7 +97,7 @@ The baseline has Frame the scene → Transcribe → Script review with speaker c
 | `exportError` | other | Failure text; value: error case | no |
 | `exportBack` | button | Leaves a cancelled or failed export without saving (baseline: "Back" label only) | no |
 | `resultPlayer` | other | The preview AVPlayer surface; `accessibilityValue`: `ready` once the item is playable | no (label only: "Your dubbed scene") |
-| `saveDub` | button | Only if saving becomes an explicit step; if saving stays automatic, say so and expose `savedStatus` instead | no |
+| `saveDub` | button | Not used: saving is automatic and `savedStatus` carries it (confirmed on the native-flow branch) | n/a |
 | `savedStatus` | other | Value: `saving`, `saved`, `failed` | no |
 | `dubTrimNotice` | other | Trim notice on the result | **existing** |
 | `shareDub` | button | ShareLink on the result | **existing** |
