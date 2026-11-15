@@ -7,46 +7,49 @@ nonisolated struct AccountProfile: Equatable, Sendable {
     let displayName: String
 }
 
+/// A username and password as typed. Clerk enforces its own username and password rules and
+/// returns a readable message when they aren't met, so the app only requires both to be non-empty.
+nonisolated struct PasswordCredentials: Equatable, Sendable {
+    let username: String
+    let password: String
+}
+
 nonisolated enum AccountError: LocalizedError, Equatable, Sendable {
-    case cancelled
-    case accountTimedOut
-    case additionalStepsRequired
-    case signOutIncomplete
+    case keychain(OSStatus)
     case backend(String)
 
     var errorDescription: String? {
         switch self {
-        case .cancelled: "Sign in was cancelled."
-        case .accountTimedOut: "Sign-in didn't finish loading. Check your connection and try again."
-        case .additionalStepsRequired: "This account needs another step before it can sign in. Try again."
-        case .signOutIncomplete: "Couldn't finish signing out. Try again."
+        case .keychain(let status): "Couldn't read or update the sign-in saved on this iPhone (Keychain status \(status))."
         case .backend(let message): message
         }
     }
 }
 
-/// The identity provider and the cloud account behind sign-in. The Clerk implementation is the only
-/// production one; tests supply a fake so the state machine runs without the network.
+/// The cloud account behind sign-in. PasswordAccountService is the only production implementation;
+/// tests supply a fake so the state machine runs without the network.
 protocol AccountService {
     /// The learner whose session is already stored on this device, or nil when nobody is signed in.
     /// Connects the cloud client to that session before returning.
     func restoreSession() async throws -> AccountProfile?
-    /// Runs the native Sign in with Apple flow and connects the cloud client to the new session.
-    func signInWithApple() async throws -> AccountProfile
+    /// Signs in to an existing account and connects the cloud client to the new session.
+    func signIn(with credentials: PasswordCredentials) async throws -> AccountProfile
+    /// Creates an account and connects the cloud client to its first session.
+    func signUp(with credentials: PasswordCredentials) async throws -> AccountProfile
     /// Registers the signed-in learner with the backend (idempotent on the server).
     func registerUser() async throws
     func signOut() async throws
     /// The current Convex auth token, or nil when there is no session.
     func authToken() async throws -> String?
-    /// Yields each time the session ends outside this app's own sign-out button (revoked, expired).
-    func sessionEnds() -> AsyncStream<Void>
 }
 
 /// App-wide account state. The UI and the coach read it; nothing shows a signed-in state until the
 /// backend has registered the learner.
 @Observable
 final class AccountModel {
-    enum Step: Equatable { case restore, signIn, registration, signOut }
+    /// `credentials` is a failed username and password attempt; the form shows the message and the
+    /// learner resubmits, because the password isn't kept for a retry.
+    enum Step: Equatable { case restore, credentials, registration, signOut }
 
     struct Failure: Equatable {
         let step: Step
@@ -68,7 +71,7 @@ final class AccountModel {
 
     private(set) var phase: Phase = .signedOut
 
-    /// False when the build has no Clerk or Convex configuration, so signing in isn't possible.
+    /// False when the build has no Convex configuration, so signing in isn't possible.
     var isAvailable: Bool { service != nil }
 
     /// The one Convex client the app shares; nil when the build has no configuration. Cloud wrappers
@@ -83,30 +86,18 @@ final class AccountModel {
         self.convexClient = convexClient
     }
 
-    /// Restores a stored session, then follows the session until the view that owns this task goes away.
+    /// Restores the session saved on this device, if any.
     func start() async {
         guard let service, phase == .signedOut else { return }
         await restore(service)
-        for await _ in service.sessionEnds() {
-            if case .signedIn = phase { phase = .signedOut }
-        }
     }
 
-    func signIn() async {
-        guard let service else { return }
-        switch phase {
-        case .signedOut, .failed: break
-        default: return
-        }
-        phase = .signingIn
-        do {
-            let profile = try await service.signInWithApple()
-            await register(profile, with: service)
-        } catch AccountError.cancelled {
-            phase = .signedOut
-        } catch {
-            phase = .failed(Failure(step: .signIn, message: error.localizedDescription))
-        }
+    func signIn(with credentials: PasswordCredentials) async {
+        await authenticate { try await $0.signIn(with: credentials) }
+    }
+
+    func signUp(with credentials: PasswordCredentials) async {
+        await authenticate { try await $0.signUp(with: credentials) }
     }
 
     func signOut() async {
@@ -126,10 +117,13 @@ final class AccountModel {
         switch failure.step {
         case .restore:
             await restore(service)
-        case .signIn:
-            await signIn()
+        case .credentials:
+            phase = .signedOut
         case .registration:
-            guard let pendingProfile else { return await signIn() }
+            guard let pendingProfile else {
+                phase = .signedOut
+                return
+            }
             await register(pendingProfile, with: service)
         case .signOut:
             await signOut()
@@ -140,6 +134,21 @@ final class AccountModel {
     func currentToken() async throws -> String? {
         guard let service, case .signedIn = phase else { return nil }
         return try await service.authToken()
+    }
+
+    private func authenticate(_ operation: (any AccountService) async throws -> AccountProfile) async {
+        guard let service else { return }
+        switch phase {
+        case .signedOut, .failed: break
+        default: return
+        }
+        phase = .signingIn
+        do {
+            let profile = try await operation(service)
+            await register(profile, with: service)
+        } catch {
+            phase = .failed(Failure(step: .credentials, message: error.localizedDescription))
+        }
     }
 
     private func restore(_ service: any AccountService) async {

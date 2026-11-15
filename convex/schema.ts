@@ -14,6 +14,13 @@ export default defineSchema({
     createdAt: v.number(),
   }).index("by_token_identifier", ["tokenIdentifier"]),
 
+  /** Username and password logins (passwordAuth.ts). A users row links to one through its token's subject, the account id. */
+  passwordAccounts: defineTable({
+    username: v.string(),
+    passwordHash: v.string(),
+    createdAt: v.number(),
+  }).index("by_username", ["username"]),
+
   scenes: defineTable({
     slug: v.string(),
     title: v.string(),

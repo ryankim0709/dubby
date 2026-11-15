@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// The account sheet: signed-out prompt, Sign in with Apple, signed-in state, and failures with a retry.
+/// The account sheet opened from the tabs: the signed-in learner and signing out.
 struct AccountView: View {
     let account: AccountModel
     let onClose: () -> Void
@@ -24,10 +24,7 @@ struct AccountView: View {
                     .accessibilityLabel("Close")
                     .accessibilityIdentifier("accountClose")
                 }
-                content
-                Text("Dubbing, exporting, My Dubs, and your local progress work without an account. Your coach needs one to see your practice.")
-                    .dubFont(14, weight: .regular)
-                    .foregroundStyle(Palette.textSecondary)
+                AccountPanel(account: account)
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 8)
@@ -35,9 +32,44 @@ struct AccountView: View {
         .background(Palette.background)
         .preferredColorScheme(.dark)
     }
+}
 
-    @ViewBuilder
-    private var content: some View {
+/// The full-screen page a signed-out learner sees instead of the tabs.
+struct SignInView: View {
+    let account: AccountModel
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 24) {
+                Text("dub.it")
+                    .dubFont(32, weight: .semibold)
+                    .italic()
+                    .foregroundStyle(Palette.accentText)
+                    .accessibilityAddTraits(.isHeader)
+                AccountPanel(account: account)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 24)
+        }
+        .scrollDismissesKeyboard(.interactively)
+        .background(Palette.background)
+        .preferredColorScheme(.dark)
+        .accessibilityIdentifier("signInPage")
+    }
+}
+
+/// Every account state: the username and password form, progress, the signed-in learner, and failures with a retry.
+private struct AccountPanel: View {
+    private enum CredentialMode: Hashable { case signIn, createAccount }
+
+    let account: AccountModel
+
+    // Held here rather than in the form so typed values survive the busy and failed phases.
+    @State private var mode: CredentialMode = .signIn
+    @State private var username = ""
+    @State private var password = ""
+
+    var body: some View {
         if !account.isAvailable {
             EmptyStateView(
                 systemImage: "person.crop.circle.badge.exclamationmark",
@@ -48,47 +80,91 @@ struct AccountView: View {
         } else {
             switch account.phase {
             case .signedOut:
-                signedOutPrompt
+                signedOutPrompt(errorMessage: nil)
             case .restoring:
                 progress("Checking your account")
             case .signingIn:
                 progress("Signing you in")
             case .signedIn(let profile):
                 signedIn(profile)
+            case .failed(let failure) where failure.step == .credentials:
+                signedOutPrompt(errorMessage: failure.message)
             case .failed(let failure):
                 failed(failure)
             }
         }
     }
 
-    private var signedOutPrompt: some View {
+    private func signedOutPrompt(errorMessage: String?) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             EmptyStateView(
                 systemImage: "person.crop.circle",
-                title: "Sign in to use coaching",
-                message: "Sign in with Apple so your coach can follow your practice across sessions."
+                title: "Welcome to dub.it",
+                message: "Sign in or create an account to start dubbing."
             )
             .accessibilityIdentifier("accountSignedOut")
-            appleButton
+            credentialsForm(errorMessage: errorMessage)
         }
     }
 
-    private var appleButton: some View {
-        Button {
-            Task { await account.signIn() }
-        } label: {
-            HStack(spacing: 8) {
-                Image(systemName: "apple.logo")
-                Text("Sign in with Apple")
+    private var credentials: PasswordCredentials {
+        PasswordCredentials(username: username.trimmingCharacters(in: .whitespacesAndNewlines), password: password)
+    }
+
+    private var canSubmitCredentials: Bool {
+        !credentials.username.isEmpty && !credentials.password.isEmpty
+    }
+
+    private func credentialsForm(errorMessage: String?) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Picker("Account", selection: $mode) {
+                Text("Sign in").tag(CredentialMode.signIn)
+                Text("Create account").tag(CredentialMode.createAccount)
             }
-            .dubFont(17, weight: .semibold)
-            .foregroundStyle(.black)
-            .frame(maxWidth: .infinity, minHeight: 50)
-            .background(.white, in: RoundedRectangle(cornerRadius: 12))
-            .contentShape(Rectangle())
+            .pickerStyle(.segmented)
+            .accessibilityIdentifier("credentialMode")
+
+            TextField("Username", text: $username)
+                .textContentType(.username)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .submitLabel(.next)
+                .modifier(CredentialFieldStyle())
+                .accessibilityIdentifier("usernameField")
+
+            SecureField("Password", text: $password)
+                .textContentType(mode == .createAccount ? .newPassword : .password)
+                .submitLabel(.go)
+                .onSubmit(submitCredentials)
+                .modifier(CredentialFieldStyle())
+                .accessibilityIdentifier("passwordField")
+
+            if let errorMessage {
+                Label(errorMessage, systemImage: "exclamationmark.triangle")
+                    .dubFont(14, weight: .regular)
+                    .foregroundStyle(Palette.textPrimary)
+                    .accessibilityIdentifier("credentialsError")
+            }
+
+            Button(mode == .createAccount ? "Create account" : "Sign in", action: submitCredentials)
+                .buttonStyle(PrimaryButtonStyle(cornerRadius: 12))
+                .disabled(!canSubmitCredentials)
+                .opacity(canSubmitCredentials ? 1 : 0.5)
+                .accessibilityIdentifier("submitCredentials")
         }
-        .accessibilityLabel("Sign in with Apple")
-        .accessibilityIdentifier("signInWithApple")
+    }
+
+    private func submitCredentials() {
+        guard canSubmitCredentials else { return }
+        let credentials = credentials
+        Task {
+            switch mode {
+            case .signIn: await account.signIn(with: credentials)
+            case .createAccount: await account.signUp(with: credentials)
+            }
+            // A failed attempt keeps the password so a typo can be fixed; a session doesn't need it.
+            if account.phase.isSignedIn { password = "" }
+        }
     }
 
     private func progress(_ label: String) -> some View {
@@ -143,9 +219,20 @@ struct AccountView: View {
     private func title(for step: AccountModel.Step) -> String {
         switch step {
         case .restore: "Couldn't check your account"
-        case .signIn: "Couldn't sign you in"
+        case .credentials: "Couldn't sign you in"
         case .registration: "Couldn't set up your account"
         case .signOut: "Couldn't sign you out"
         }
+    }
+}
+
+private struct CredentialFieldStyle: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .dubFont(17, weight: .regular)
+            .foregroundStyle(Palette.textPrimary)
+            .padding(.horizontal, 16)
+            .frame(minHeight: 50)
+            .background(Palette.surface, in: RoundedRectangle(cornerRadius: 12))
     }
 }

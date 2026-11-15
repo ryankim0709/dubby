@@ -1,4 +1,5 @@
 import Foundation
+import Security
 import Testing
 @testable import Dubbing
 
@@ -6,15 +7,19 @@ import Testing
 struct AccountModelTests {
     private final class FakeAccountService: AccountService {
         var restored: AccountProfile?
-        var signInResult: Result<AccountProfile, AccountError> = .success(AccountProfile(displayName: "Sam"))
+        var passwordResult: Result<AccountProfile, AccountError> = .success(AccountProfile(displayName: "sam"))
+        var signedUpUsernames: [String] = []
         var registerFailures = 0
         var registerCalls = 0
         var signOutFails = false
         var token: String? = "convex.jwt"
-        var endedSessions = 0
 
         func restoreSession() async throws -> AccountProfile? { restored }
-        func signInWithApple() async throws -> AccountProfile { try signInResult.get() }
+        func signIn(with credentials: PasswordCredentials) async throws -> AccountProfile { try passwordResult.get() }
+        func signUp(with credentials: PasswordCredentials) async throws -> AccountProfile {
+            signedUpUsernames.append(credentials.username)
+            return try passwordResult.get()
+        }
         func registerUser() async throws {
             registerCalls += 1
             if registerFailures > 0 {
@@ -23,28 +28,22 @@ struct AccountModelTests {
             }
         }
         func signOut() async throws {
-            if signOutFails { throw AccountError.signOutIncomplete }
+            if signOutFails { throw AccountError.keychain(errSecInteractionNotAllowed) }
             token = nil
         }
         func authToken() async throws -> String? { token }
-        func sessionEnds() -> AsyncStream<Void> {
-            let count = endedSessions
-            return AsyncStream { continuation in
-                for _ in 0..<count { continuation.yield() }
-                continuation.finish()
-            }
-        }
     }
 
+    private let demo = PasswordCredentials(username: "demo", password: "demo")
+
     @Test func emptyConfigurationMeansSignedOut() async throws {
-        #expect(AuthConfiguration(clerkPublishableKey: "", convexURL: "https://example.convex.cloud") == nil)
-        #expect(AuthConfiguration(clerkPublishableKey: "pk_test_abc", convexURL: "") == nil)
-        #expect(AuthConfiguration(clerkPublishableKey: "$(CLERK_PUBLISHABLE_KEY)", convexURL: "https://example.convex.cloud") == nil)
-        #expect(AuthConfiguration(clerkPublishableKey: "pk_test_abc", convexURL: "https://example.convex.cloud") != nil)
+        #expect(AuthConfiguration(convexURL: "") == nil)
+        #expect(AuthConfiguration(convexURL: "$(CONVEX_URL)") == nil)
+        #expect(AuthConfiguration(convexURL: "https://example.convex.cloud") != nil)
 
         let account = AccountModel(service: nil)
         await account.start()
-        await account.signIn()
+        await account.signIn(with: demo)
         #expect(!account.isAvailable)
         #expect(account.phase == .signedOut)
         #expect(try await AccountTokenProvider(account: account).convexAuthToken() == nil)
@@ -58,16 +57,41 @@ struct AccountModelTests {
         #expect(account.phase == .signedOut)
         #expect(try await AccountTokenProvider(account: account).convexAuthToken() == nil)
 
-        await account.signIn()
-        #expect(account.phase == .signedIn(AccountProfile(displayName: "Sam")))
+        await account.signIn(with: demo)
+        #expect(account.phase == .signedIn(AccountProfile(displayName: "sam")))
         #expect(service.registerCalls == 1)
         #expect(try await AccountTokenProvider(account: account).convexAuthToken() == "convex.jwt")
+    }
+
+    @Test func signUpRegistersTheLearner() async throws {
+        let service = FakeAccountService()
+        let account = AccountModel(service: service)
+
+        await account.signUp(with: PasswordCredentials(username: "sam", password: "correct horse"))
+        #expect(service.signedUpUsernames == ["sam"])
+        #expect(service.registerCalls == 1)
+        #expect(account.phase == .signedIn(AccountProfile(displayName: "sam")))
+    }
+
+    @Test func rejectedPasswordShowsTheMessageAndAllowsAnotherAttempt() async throws {
+        let service = FakeAccountService()
+        service.passwordResult = .failure(.backend("Wrong username or password"))
+        let account = AccountModel(service: service)
+
+        await account.signIn(with: demo)
+        #expect(account.phase == .failed(.init(step: .credentials, message: "Wrong username or password")))
+        #expect(service.registerCalls == 0)
+        #expect(try await AccountTokenProvider(account: account).convexAuthToken() == nil)
+
+        service.passwordResult = .success(AccountProfile(displayName: "demo"))
+        await account.signIn(with: demo)
+        #expect(account.phase == .signedIn(AccountProfile(displayName: "demo")))
     }
 
     @Test func signOutClearsTheToken() async throws {
         let service = FakeAccountService()
         let account = AccountModel(service: service)
-        await account.signIn()
+        await account.signIn(with: demo)
 
         await account.signOut()
         #expect(account.phase == .signedOut)
@@ -78,31 +102,21 @@ struct AccountModelTests {
         let service = FakeAccountService()
         service.signOutFails = true
         let account = AccountModel(service: service)
-        await account.signIn()
+        await account.signIn(with: demo)
 
         await account.signOut()
-        #expect(account.phase == .failed(.init(step: .signOut, message: AccountError.signOutIncomplete.localizedDescription)))
+        #expect(account.phase == .failed(.init(step: .signOut, message: AccountError.keychain(errSecInteractionNotAllowed).localizedDescription)))
         #expect(try await AccountTokenProvider(account: account).convexAuthToken() == nil)
     }
 
-    @Test func storedSessionRestoresAndEndedSessionSignsOut() async throws {
+    @Test func storedSessionRestores() async throws {
         let service = FakeAccountService()
-        service.restored = AccountProfile(displayName: "Sam")
-        service.endedSessions = 1
+        service.restored = AccountProfile(displayName: "demo")
         let account = AccountModel(service: service)
 
         await account.start()
         #expect(service.registerCalls == 1)
-        #expect(account.phase == .signedOut)
-    }
-
-    @Test func cancelledAppleSheetIsNotAnError() async {
-        let service = FakeAccountService()
-        service.signInResult = .failure(.cancelled)
-        let account = AccountModel(service: service)
-
-        await account.signIn()
-        #expect(account.phase == .signedOut)
+        #expect(account.phase == .signedIn(AccountProfile(displayName: "demo")))
     }
 
     @Test func registrationFailureIsNotSignedInUntilRetrySucceeds() async throws {
@@ -110,12 +124,12 @@ struct AccountModelTests {
         service.registerFailures = 1
         let account = AccountModel(service: service)
 
-        await account.signIn()
+        await account.signIn(with: demo)
         #expect(account.phase == .failed(.init(step: .registration, message: "offline")))
         #expect(try await AccountTokenProvider(account: account).convexAuthToken() == nil)
 
         await account.retry()
-        #expect(account.phase == .signedIn(AccountProfile(displayName: "Sam")))
+        #expect(account.phase == .signedIn(AccountProfile(displayName: "sam")))
         #expect(try await AccountTokenProvider(account: account).convexAuthToken() == "convex.jwt")
     }
 }

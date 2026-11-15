@@ -51,9 +51,6 @@ struct ContentView: View {
             AccountView(account: account, onClose: { isAccountPresented = false })
         }
         .task {
-            await account.start()
-        }
-        .task {
             await loadDubs()
             await loadClips()
         }

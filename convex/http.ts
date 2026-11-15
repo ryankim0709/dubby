@@ -5,8 +5,9 @@ import { z } from "zod";
 import { internal } from "./_generated/api";
 import { httpAction } from "./_generated/server";
 import { SCHEMA_VERSION } from "./lib/config";
+import { ConfigurationError, requiredEnv } from "./lib/env";
+import { PASSWORD_JWKS_PATH, publicJwks } from "./lib/passwordAuth";
 import { logEvent } from "./lib/log";
-import { ConfigurationError } from "./lib/env";
 import { TranscriptionResponseError } from "./lib/transcription";
 import { registerTutoringRoutes } from "./tutoringHttp";
 import { transcribePublishedScene } from "./sceneTranscription";
@@ -44,6 +45,23 @@ http.route({
 });
 
 registerTutoringRoutes(http);
+
+/** Convex fetches this to validate password session tokens (auth.config.ts). */
+http.route({
+  path: PASSWORD_JWKS_PATH,
+  method: "GET",
+  handler: httpActionGeneric(async () => {
+    let privateKey: string;
+    try {
+      privateKey = requiredEnv("PASSWORD_AUTH_PRIVATE_KEY");
+    } catch (error) {
+      if (!(error instanceof ConfigurationError)) throw error;
+      logEvent({ operation: "passwordAuth.jwks", status: "failed", errorCode: "not_configured", httpStatus: 503 });
+      return json(503, { error: "Password sign-in isn't configured on this deployment" });
+    }
+    return json(200, await publicJwks(privateKey));
+  }),
+});
 
 // Public because the app has no sign-in yet; it exposes only what a published scene already shows.
 http.route({

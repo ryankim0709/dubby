@@ -1,9 +1,14 @@
 import type { AuthConfig } from "convex/server";
+import { PASSWORD_JWKS_PATH, PASSWORD_TOKEN_AUDIENCE } from "./lib/passwordAuth";
 
 type Provider = AuthConfig["providers"][number];
 
 /**
- * Providers are added only when their deployment env vars are set, so a deployment with none set
+ * - Username and password: passwordAuth.ts signs session tokens with PASSWORD_AUTH_PRIVATE_KEY, and
+ *   http.ts serves the public key. CONVEX_SITE_URL is built in, so this provider is always listed;
+ *   without the key, sign-in fails and no password token exists to validate.
+ *
+ * Other providers are added only when their deployment env vars are set, so a deployment with none set
  * still pushes cleanly and every authenticated function rejects (no identity is ever produced).
  *
  * - Clerk: CLERK_JWT_ISSUER_DOMAIN, the issuer domain of the Clerk "convex" JWT template.
@@ -22,6 +27,17 @@ function optionalEnv(name: string): string | undefined {
   } catch {
     return undefined;
   }
+}
+
+const siteUrl = optionalEnv("CONVEX_SITE_URL");
+if (siteUrl !== undefined) {
+  providers.push({
+    type: "customJwt",
+    issuer: siteUrl,
+    applicationID: PASSWORD_TOKEN_AUDIENCE,
+    jwks: `${siteUrl}${PASSWORD_JWKS_PATH}`,
+    algorithm: "RS256",
+  });
 }
 
 const clerkDomain = optionalEnv("CLERK_JWT_ISSUER_DOMAIN");
