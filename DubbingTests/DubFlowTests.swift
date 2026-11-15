@@ -60,6 +60,102 @@ struct VoicePrintTests {
     }
 }
 
+struct SceneCastTests {
+    private let cast = SceneCast(
+        characters: [
+            SceneCast.Character(name: "Hero", portraitSeconds: 11, faceCenterX: 0.3),
+            SceneCast.Character(name: nil, portraitSeconds: nil, faceCenterX: nil),
+        ],
+        segments: [
+            SceneCast.Segment(start: 10, end: 12, character: 0),
+            SceneCast.Segment(start: 12.3, end: 13.5, character: 1),
+            SceneCast.Segment(start: 15, end: 16, character: 0),
+        ]
+    )
+
+    @Test func quickRepliesGetTheirOwnLineAndEachLineGoesToItsMainSpeaker() {
+        // Times are from the section start, which is 10 s into the clip.
+        let words = [
+            TranscribedWord(text: "Where", start: 0.1, end: 0.5),
+            TranscribedWord(text: "were", start: 0.55, end: 0.9),
+            TranscribedWord(text: "you", start: 0.95, end: 1.9),
+            // Nearer the next speaker's segment, but said without a pause, so it stays with its line.
+            TranscribedWord(text: "there", start: 1.95, end: 2.45),
+            TranscribedWord(text: "Away", start: 2.65, end: 3.2),
+            TranscribedWord(text: "Again", start: 5.2, end: 5.6),
+        ]
+        let lines = ScriptBuilder.castLines(words: words, cast: cast, sectionStart: 10, pauseThreshold: 0.7, sentencePause: 0, turnPause: 0.15)
+        #expect(lines.map(\.line.text) == ["Where were you there", "Away", "Again"])
+        #expect(lines.map(\.character) == [0, 1, 0])
+
+        let script = ScriptBuilder.castScript(lines: lines, envelopes: [[], [], []], cast: cast)
+        #expect(script.speakers.map(\.name) == ["Hero", "Speaker 2"])
+        #expect(script.lines.map(\.speakerID) == [0, 1, 0])
+    }
+
+    @Test func decodingRejectsACastWhoseSegmentsNameMissingCharacters() throws {
+        let valid = #"{"characters":[{"name":"Hero","portraitSeconds":1.5,"faceCenterX":0.4}],"segments":[{"start":1,"end":2,"character":0}]}"#
+        #expect(try JSONDecoder().decode(SceneCast.self, from: Data(valid.utf8)).characters.first?.name == "Hero")
+        let unknownCharacter = #"{"characters":[{"name":null,"portraitSeconds":null,"faceCenterX":null}],"segments":[{"start":1,"end":2,"character":1}]}"#
+        #expect(throws: DecodingError.self) { try JSONDecoder().decode(SceneCast.self, from: Data(unknownCharacter.utf8)) }
+        let noSegments = #"{"characters":[{"name":null,"portraitSeconds":null,"faceCenterX":null}],"segments":[]}"#
+        #expect(throws: DecodingError.self) { try JSONDecoder().decode(SceneCast.self, from: Data(noSegments.utf8)) }
+    }
+
+    @Test func samplesSmallJPEGFramesAcrossTheClip() async throws {
+        let video = try Synthetic.twoToneVideo()
+        let clip = ImportedClip(url: video, title: "Two tone", durationSeconds: 3, origin: .published, workingDirectory: FileManager.default.temporaryDirectory)
+        let frames = try await SceneCastClient.sampleFrames(from: clip)
+        #expect(frames.count == 2)
+        #expect(frames.allSatisfy { $0.seconds >= 0 && $0.seconds <= 3 })
+        let first = try #require(frames.first)
+        let data = try #require(Data(base64Encoded: first.jpegBase64))
+        let image = try #require(CGImageSourceCreateWithData(data as CFData, nil).flatMap { CGImageSourceCreateImageAtIndex($0, 0, nil) })
+        #expect(image.width == 64)
+    }
+}
+
+struct SpeakerStillTests {
+    @Test func blackBarsAtTheEdgesAreNotPicture() {
+        // A 10×8 frame with two black rows above and below and a dark but visible picture between them.
+        let width = 10, height = 8
+        let luminance = (0..<(width * height)).map { index -> UInt8 in
+            let row = index / width
+            return row < 2 || row >= 6 ? 12 : (index % width == 4 ? 200 : 30)
+        }
+        #expect(SpeakerStill.pictureArea(luminance: luminance, width: width, height: height) == CGRect(x: 0, y: 2, width: 10, height: 4))
+        #expect(SpeakerStill.pictureArea(luminance: Array(repeating: 0, count: 6), width: 3, height: 2) == CGRect(x: 0, y: 0, width: 3, height: 2))
+    }
+
+    @Test func framingStaysInsideThePictureWithTheFaceHigh() {
+        let picture = CGRect(x: 0, y: 140, width: 1_920, height: 800)
+        let face = CGRect(x: 1_700, y: 300, width: 200, height: 240)
+        let crop = SpeakerStill.framing(face: face, centerX: face.midX, picture: picture, aspectRatio: 0.75)
+        #expect(picture.contains(crop))
+        #expect(crop.contains(face))
+        #expect(crop.height == 720)
+        #expect(face.midY - crop.minY < crop.height / 2)
+
+        let noFace = SpeakerStill.framing(face: nil, centerX: 100, picture: picture, aspectRatio: 0.75)
+        #expect(noFace == CGRect(x: 0, y: 140, width: 600, height: 800))
+    }
+
+    @Test func theCastsFacePositionPicksAmongFacesAndNoPositionPicksTheLargest() {
+        let left = CGRect(x: 100, y: 100, width: 300, height: 300)
+        let right = CGRect(x: 1_400, y: 100, width: 200, height: 200)
+        #expect(SpeakerStill.chosenFace([left, right], centerX: 1_450, maximumOffset: 384) == right)
+        #expect(SpeakerStill.chosenFace([left, right], centerX: nil, maximumOffset: 384) == left)
+        #expect(SpeakerStill.chosenFace([left, right], centerX: 900, maximumOffset: 100) == nil)
+    }
+
+    @Test func cropsARealFrameToTheCard() async throws {
+        // The synthetic clip is black with no faces, so the still spans its full height.
+        let still = try await SpeakerStill.portrait(videoURL: try Synthetic.twoToneVideo(), seconds: 1, faceCenterX: nil)
+        #expect(still.height == 64)
+        #expect(still.width == 48)
+    }
+}
+
 struct SpeechBandFilterTests {
     @Test func removesTheSpeechBandAndKeepsBass() throws {
         let sampleRate = 44_100.0

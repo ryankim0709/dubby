@@ -29,7 +29,7 @@ struct SceneCatalogTests {
         let url = try SceneCatalog.cachedFileURL(for: scene(sha256: checksum, byteSize: video.count), folder: folder)
         let hex = SHA256.hash(data: video).map { String(format: "%02x", $0) }.joined()
         #expect(url.path(percentEncoded: false) == "/cache/\(hex)/synthetic-scene.mp4")
-        #expect(LibraryClip(url: url, title: "Synthetic Scene", durationSeconds: 3).sceneID == "synthetic-scene")
+        #expect(LibraryClip(url: url, title: "Synthetic Scene", durationSeconds: 3, origin: .published).sceneID == "synthetic-scene")
         #expect(throws: SceneDownloadError.malformedChecksum(slug: "synthetic-scene", sha256: "not/base64")) {
             try SceneCatalog.cachedFileURL(for: scene(sha256: "not/base64", byteSize: 1), folder: folder)
         }
