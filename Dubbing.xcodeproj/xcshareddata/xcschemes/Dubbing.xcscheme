@@ -39,6 +39,17 @@
                ReferencedContainer = "container:Dubbing.xcodeproj">
             </BuildableReference>
          </TestableReference>
+         <TestableReference
+            skipped = "NO"
+            parallelizable = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "A10000000000000000000075"
+               BuildableName = "DubbingUITests.xctest"
+               BlueprintName = "DubbingUITests"
+               ReferencedContainer = "container:Dubbing.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
       </Testables>
    </TestAction>
    <LaunchAction
