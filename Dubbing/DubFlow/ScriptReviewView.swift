@@ -195,12 +195,11 @@ private struct ScriptEditor: View {
             Button("Dub \(script.speaker(withID: characterID)?.name ?? "this character")'s lines") {
                 onStart(DubSetup(clip: request.clip, section: request.section, script: script, characterID: characterID))
             }
-            .buttonStyle(PrimaryButtonStyle(cornerRadius: 16))
+            .buttonStyle(.dubPrimary)
             .disabled(characterLines.isEmpty)
             .opacity(characterLines.isEmpty ? 0.5 : 1)
             .accessibilityIdentifier("startDubbing")
             .padding(16)
-            .background(Palette.background)
         }
         .onChange(of: speakerCount) { _, count in
             script = ScriptBuilder.buildScript(analysis: analysis, speakerCount: count, names: script.speakers.map(\.name))
@@ -254,6 +253,8 @@ private struct ScriptEditor: View {
                             .padding(.horizontal, 12)
                             .frame(minHeight: 36)
                             .background(Palette.background, in: Capsule())
+                            .frame(minHeight: GlassMetrics.minimumTarget)
+                            .contentShape(Rectangle())
                         }
                         .accessibilityLabel("Rename \(speaker.name)")
                     }
@@ -331,6 +332,8 @@ private struct ScriptLineRow: View {
                     .padding(.horizontal, 10)
                     .frame(minHeight: 24)
                     .background(Palette.speakerColor(line.speakerID), in: Capsule())
+                    .frame(minHeight: GlassMetrics.minimumTarget)
+                    .contentShape(Rectangle())
                 }
                 .accessibilityLabel("Speaker for this line")
                 Spacer()
