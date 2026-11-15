@@ -1,6 +1,6 @@
 # Social dubbing
 
-The native Feed and Inbox use authenticated Convex functions in `convex/social.ts`. The app uses its
+The native Feed and Inbox's **Co-dubs** section use authenticated Convex functions in `convex/social.ts`. The app uses its
 existing password account, Convex live client and HTTP authentication token. No messaging provider,
 address-book upload or additional provider key is required.
 
@@ -29,15 +29,18 @@ twice and spectrally checks that the first performer's voice survives the second
 
 ## Learner flow
 
-1. Open **Friends** from Feed or Inbox and send a request to a Dubby username. The recipient accepts
+Inbox retains the existing Whop **Clubs** section alongside **Co-dubs**. Invitation links select
+**Co-dubs** automatically. Existing scoring, the live tutor and club challenge sharing remain available.
+
+1. Open **Friends** from Feed or **Inbox → Co-dubs** and send a request to a Dubby username. The recipient accepts
    in their own Friends screen. A request alone grants no access to friend-only posts.
 2. Finish a dub and choose **Invite a friend or post to feed**. For a co-dub, keep every line of the
    first character, choose another character, and select an accepted friend or create a private link.
    If you finished early, **Record remaining lines** returns to the studio with your kept takes intact.
    The sheet discloses the video/script upload before sending. A solo performance can instead be
    posted directly to accepted friends.
-3. A named friend's invitation appears in Inbox. A link recipient opens `dubby://invite/<code>` or
-   pastes its code in Inbox after signing in. Links require the installed app; they do not provide an
+3. A named friend's invitation appears in **Inbox → Co-dubs**. A link recipient opens `dubby://invite/<code>` or
+   pastes its code in **Inbox → Co-dubs** after signing in. Links require the installed app; they do not provide an
    App Store fallback or anonymous web player. An open link can be claimed by one learner. A link
    addressed to a specific friend cannot be claimed by another account.
 4. The recipient accepts and records the other role using the supplied script and timing. The studio

@@ -4,6 +4,6 @@ import Testing
 
 struct DubbingTests {
     @Test @MainActor func contentViewBuilds() {
-        _ = ContentView(account: AccountModel(service: nil), pendingCoDubCode: .constant(nil)).body
+        _ = ContentView(account: AccountModel(service: nil), scoring: nil, pendingCoDubCode: .constant(nil)).body
     }
 }

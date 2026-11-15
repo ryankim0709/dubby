@@ -19,14 +19,16 @@ enum DubFlowLaunch: Identifiable {
 struct DubFlowView: View {
     let clips: LoadState<[LibraryClip]>
     let account: AccountModel
+    let scoring: DubScoringModel?
     let completionRoom: CoDubRoom?
     let onRetry: () -> Void
     let onClose: () -> Void
     @State private var path: [DubFlowStep]
 
-    init(launch: DubFlowLaunch, clips: LoadState<[LibraryClip]>, account: AccountModel, onRetry: @escaping () -> Void, onClose: @escaping () -> Void) {
+    init(launch: DubFlowLaunch, clips: LoadState<[LibraryClip]>, account: AccountModel, scoring: DubScoringModel?, onRetry: @escaping () -> Void, onClose: @escaping () -> Void) {
         self.clips = clips
         self.account = account
+        self.scoring = scoring
         self.onRetry = onRetry
         self.onClose = onClose
         switch launch {
@@ -52,9 +54,9 @@ struct DubFlowView: View {
                     case .script(let request):
                         ScriptReviewView(request: request) { path.append(.studio($0)) }
                     case .studio(let setup):
-                        DubSessionView(setup: setup, requiredKeptLines: completionRoom == nil ? 1 : setup.script.lines(spokenBy: setup.characterID).count) { path.append(.result(setup, $0)) }
+                        DubSessionView(setup: setup, initialTakes: [:], requiredKeptLines: completionRoom == nil ? 1 : setup.script.lines(spokenBy: setup.characterID).count) { path.append(.result(setup, $0)) }
                     case .result(let setup, let takes):
-                        DubResultView(setup: setup, takes: takes, account: account, completionRoom: completionRoom, onDone: onClose, onKeepRecording: { path.removeLast() })
+                        DubResultView(setup: setup, takes: takes, account: account, scoring: scoring, completionRoom: completionRoom, onDone: onClose, onKeepRecording: { path.removeLast() })
                     }
                 }
         }

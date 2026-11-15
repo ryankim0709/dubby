@@ -1,7 +1,8 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 import { tutoringTables } from "./tutoringTables";
-import { assessmentContentFields, jobErrorV, jobStageV, jobStatusV, outcomeV } from "./lib/validators";
+import { assessmentContentFields, dubLineResultV, dubTakeStatusV, jobErrorV, jobStageV, jobStatusV, outcomeV } from "./lib/validators";
+import { castCharacterV, castSegmentV } from "./lib/sceneCast";
 import { timedWordV } from "./lib/transcription";
 import { socialTables } from "./socialTables";
 
@@ -30,12 +31,80 @@ export default defineSchema({
     createdAt: v.number(),
   }).index("by_token_identifier", ["tokenIdentifier"]).index("by_username", ["username"]),
 
+  clubMembers: defineTable({
+    ownerId: v.id("users"),
+    whopUserId: v.string(),
+    displayName: v.string(),
+  }).index("by_owner", ["ownerId"]),
+
+  clubUploads: defineTable({
+    ownerId: v.id("users"),
+    requestId: v.string(),
+    fileId: v.string(),
+    kind: v.union(v.literal("video"), v.literal("voice")),
+    byteSize: v.number(),
+    createdAt: v.number(),
+    caption: v.optional(v.string()),
+    replyToMessageId: v.optional(v.union(v.string(), v.null())),
+    messageId: v.optional(v.string()),
+  }).index("by_owner_request", ["ownerId", "requestId"]),
+
+  premiumCheckouts: defineTable({
+    ownerId: v.id("users"),
+    planId: v.string(),
+    createdAt: v.number(),
+  }),
+
+  premiumMemberships: defineTable({
+    ownerId: v.id("users"),
+    checkoutId: v.id("premiumCheckouts"),
+    membershipId: v.string(),
+    active: v.boolean(),
+    expiresAt: v.union(v.number(), v.null()),
+    updatedAt: v.number(),
+  })
+    .index("by_owner", ["ownerId"])
+    .index("by_membership", ["membershipId"]),
+
   /** Username and password logins (passwordAuth.ts). A users row links to one through its token's subject, the account id. */
   passwordAccounts: defineTable({
     username: v.string(),
     passwordHash: v.string(),
     createdAt: v.number(),
   }).index("by_username", ["username"]),
+
+  /** A finished dub sent for scoring (dubs.ts). Keys are derived on the server; see docs/grading-contract.md. */
+  dubs: defineTable({
+    ownerId: v.id("users"),
+    clientDubId: v.string(),
+    sceneKey: v.string(),
+    sceneTitle: v.string(),
+    characterKey: v.string(),
+    characterName: v.string(),
+    locale: v.string(),
+    timeZone: v.string(),
+    capturedAt: v.number(),
+    createdAt: v.number(),
+    status: v.union(v.literal("scoring"), v.literal("complete")),
+    completedAt: v.optional(v.number()),
+  }).index("by_owner_client", ["ownerId", "clientDubId"]),
+
+  /** One recorded line of a dub and its grade. */
+  dubTakes: defineTable({
+    dubId: v.id("dubs"),
+    ownerId: v.id("users"),
+    lineIndex: v.number(),
+    lineKey: v.string(),
+    referenceText: v.string(),
+    windowStartMs: v.number(),
+    windowEndMs: v.number(),
+    storageId: v.id("_storage"),
+    status: dubTakeStatusV,
+    result: v.optional(dubLineResultV),
+    failure: v.optional(v.object({ code: v.string(), message: v.string() })),
+  })
+    .index("by_dub", ["dubId"])
+    .index("by_storage", ["storageId"]),
 
   scenes: defineTable({
     slug: v.string(),
@@ -69,6 +138,17 @@ export default defineSchema({
     leaseExpiresAt: v.number(),
     durationSeconds: v.optional(v.number()),
     words: v.optional(v.array(timedWordV)),
+  }).index("by_video_locale", ["videoId", "locale"]),
+
+  /** Who speaks when in a published video, and each character's name and best frame, shared by every learner. */
+  sceneCasts: defineTable({
+    videoId: v.id("_storage"),
+    locale: v.string(),
+    status: v.union(v.literal("processing"), v.literal("ready"), v.literal("failed")),
+    leaseId: v.string(),
+    leaseExpiresAt: v.number(),
+    characters: v.optional(v.array(castCharacterV)),
+    segments: v.optional(v.array(castSegmentV)),
   }).index("by_video_locale", ["videoId", "locale"]),
 
   /** Immutable: a text or timing change inserts a new row with the next referenceVersion. */

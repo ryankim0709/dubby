@@ -5,9 +5,13 @@ import { z } from "zod";
 import { coachCharacters, findCharacter, publicCharacter, type CoachCharacter } from "./coachCharacters";
 import { coachModelId, coachReply, CoachReplyError, CoachTimeoutError, createCoachClient, pcmSampleRateHz, speakReply, speechModelId } from "./coachReply";
 import { ConfigurationError, requiredEnv } from "./lib/env";
+import { logEvent } from "./lib/log";
+import { createOpenAIClient } from "./lib/openai";
 import { createSessionToken, LiveAvatarError, sandboxAvatarId } from "./liveAvatar";
+import { createTutorSecret, LiveTutorError, practicePlan, realtimeModelId, scoreSheetRef, tutorInstructions } from "./liveTutor";
 import { tutoringRefs } from "./tutoringRefs";
 import { composeReply } from "./tutoringReply";
+import { api } from "./_generated/api";
 
 /** Development-only failures a QA run can ask for with the X-QA-Fault header; ignored unless QA_FAULTS_ENABLED is "true". */
 const qaFaults = ["provider_error", "provider_timeout", "missing_key"] as const;
@@ -47,6 +51,8 @@ const replyRequest = z.object({
 
 const preferencesRequest = z.object({ preferences: z.unknown(), expectedVersion: z.number().int().min(0) });
 
+const liveSessionRequest = z.object({ clientDubId: z.uuid() });
+
 type ActionCtx = GenericActionCtx<GenericDataModel>;
 
 function json(status: number, body: object): Response {
@@ -62,6 +68,12 @@ function logReply(model: string, status: "ok" | "error", code: string, startedAt
 }
 
 const errorBody = (code: string, error: string) => ({ error, code });
+
+async function hasPremium(ctx: ActionCtx): Promise<boolean> {
+  const premium = await ctx.runQuery(api.billing.status, {});
+  // Convex queries are cached; expiry must also be checked at request time before spending credit.
+  return premium.isPremium && (premium.expiresAt === null || premium.expiresAt > Date.now());
+}
 
 /**
  * Voices the checked reply for the avatar. The text is already valid and grounded, so a speech failure doesn't
@@ -120,7 +132,7 @@ function failure(operation: string, error: unknown): Response {
     console.error("coach provider timed out", { operation });
     return json(504, errorBody("provider_timeout", "The coach model didn't answer in time"));
   }
-  if (error instanceof LiveAvatarError || error instanceof CoachReplyError) {
+  if (error instanceof LiveAvatarError || error instanceof CoachReplyError || error instanceof LiveTutorError) {
     console.error("coach provider call failed", { operation, error: error.message });
     return json(502, errorBody("provider_failed", error.message));
   }
@@ -162,11 +174,12 @@ export function registerTutoringRoutes(http: HttpRouter): void {
   http.route({
     path: "/coach/session-token",
     method: "POST",
-    handler: authenticated(async (_ctx, request) => {
+    handler: authenticated(async (ctx, request) => {
       const body = await parseBody(request, sessionRequest);
       if (body instanceof Response) return body;
       const character = findCharacter(body.characterId);
       if (character === undefined) return json(404, errorBody("not_found", `No coach named ${body.characterId}`));
+      if (!(await hasPremium(ctx))) return json(403, errorBody("premium_required", "Upgrade to Dubby Premium to talk to a coach"));
       const isSandbox = process.env.LIVEAVATAR_SANDBOX === "true";
       const token = await createSessionToken({
         apiKey: requiredEnv("LIVEAVATAR_API_KEY"),
@@ -185,6 +198,7 @@ export function registerTutoringRoutes(http: HttpRouter): void {
       if (body instanceof Response) return body;
       const character = findCharacter(body.characterId);
       if (character === undefined) return json(404, errorBody("not_found", `No coach named ${body.characterId}`));
+      if (!(await hasPremium(ctx))) return json(403, errorBody("premium_required", "Upgrade to Dubby Premium to talk to a coach"));
       const started = Date.now();
       const fault = requestedFault(request);
       let model = coachModelId();
@@ -215,6 +229,29 @@ export function registerTutoringRoutes(http: HttpRouter): void {
         logReply(model, "error", (JSON.parse(await failed.clone().text()) as { code: string }).code, started);
         return failed;
       }
+    }),
+  });
+
+  // The tutor works from the stored sheet of the caller's own dub; the app sends only which dub.
+  http.route({
+    path: "/tutor/live-session",
+    method: "POST",
+    handler: authenticated(async (ctx, request) => {
+      const operation = "tutor.liveSession";
+      const body = await parseBody(request, liveSessionRequest);
+      if (body instanceof Response) return body;
+      const sheet = await ctx.runQuery(scoreSheetRef, { clientDubId: body.clientDubId });
+      if (sheet === null) {
+        logEvent({ operation, status: "rejected", errorCode: "not_found", httpStatus: 404 });
+        return json(404, errorBody("not_found", "No dub of yours has that id"));
+      }
+      if (sheet.status !== "complete") {
+        logEvent({ operation, status: "rejected", errorCode: "still_scoring", httpStatus: 409 });
+        return json(409, errorBody("still_scoring", "The dub is still being scored"));
+      }
+      const secret = await createTutorSecret(createOpenAIClient(), realtimeModelId(), tutorInstructions(sheet, practicePlan(sheet.lines)));
+      logEvent({ operation, status: "ok", httpStatus: 200 });
+      return json(200, secret);
     }),
   });
 

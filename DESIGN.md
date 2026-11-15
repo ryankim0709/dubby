@@ -196,7 +196,7 @@ The microphone is a 78 pt red circle, padded by 5 pt and surrounded by a 2 pt re
 
 The reference's globally silent-app rule is not the main app's behavior: scene-detail preview is muted, while explicit section preview, original listening, cue audio, take review, and saved-result playback retain functional audio. Do not apply the prototype silence rule to these actions.
 
-Loading, failure with retry, empty library, empty Shelf, and unavailable social services are represented honestly. Feed and Inbox use real friend, invitation and shared-video data; invitation and result screens retain native sheets, existing buttons and the screening-room palette. Scores and progress must use available measurements; unavailable pronunciation data does not become sample success. Counts and saved items derive from real data. No prototype rankings, cast recognition, social engagement, or sample feedback are established visual-system content.
+Loading, failure with retry, empty library, empty Shelf, and unavailable social services are represented honestly. Feed and Inbox are empty service surfaces. Scores and progress must use available measurements; unavailable pronunciation data does not become sample success. Counts and saved items derive from real local data. No prototype rankings, cast recognition, social engagement, or sample feedback are established visual-system content.
 
 ## Do's and Don'ts
 

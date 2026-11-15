@@ -1,12 +1,20 @@
 import Speech
 import SwiftUI
 
+/// Where the script's speakers come from.
+private enum ScriptSource: Equatable {
+    /// Grouped on the device by voice, and regrouped when the learner changes the number of voices.
+    case voices(LineAnalysis)
+    /// A published scene's cast, worked out on the backend from the whole clip.
+    case cast(Script, SceneCast)
+}
+
 private enum AnalysisPhase: Equatable {
     case extractingAudio
     case preparingModel
     case transcribing
     case groupingVoices
-    case ready(LineAnalysis)
+    case ready(ScriptSource)
     case failed(FlowIssue)
 
     var stateValue: String {
@@ -41,8 +49,8 @@ struct ScriptReviewView: View {
     var body: some View {
         Group {
             switch phase {
-            case .ready(let analysis):
-                ScriptEditor(request: request, analysis: analysis, onStart: onStart)
+            case .ready(let source):
+                ScriptEditor(request: request, source: source, onStart: onStart)
             case .failed(let issue):
                 failure(issue)
             case .extractingAudio, .preparingModel, .transcribing, .groupingVoices:
@@ -126,6 +134,8 @@ struct ScriptReviewView: View {
     private func analyze() async {
         do {
             phase = .extractingAudio
+            // A library scene's cast can take the backend a minute the first time, so it's fetched alongside transcription.
+            async let cast = Self.cast(for: request)
             let audioURL = request.clip.workingDirectory.appending(path: "scene.m4a")
             try await MediaPipeline.exportAudio(from: request.clip.url, section: request.section, to: audioURL)
             phase = .preparingModel
@@ -139,39 +149,69 @@ struct ScriptReviewView: View {
             let words = try await SpeechTranscription.transcribe(audioURL: audioURL, using: transcriber)
             #endif
             try Task.checkCancellation()
-            let lines = ScriptBuilder.segmentLines(words: words, pauseThreshold: 0.7, sentencePause: 0)
-            guard !lines.isEmpty else { throw DubFlowError.noSpeechFound }
+            guard !words.isEmpty else { throw DubFlowError.noSpeechFound }
             phase = .groupingVoices
-            phase = .ready(try await MediaPipeline.analyzeVoices(audioURL: audioURL, lines: lines, barCount: 48))
+            if let cast = try await cast {
+                let lines = ScriptBuilder.castLines(
+                    words: words,
+                    cast: cast,
+                    sectionStart: request.section.start,
+                    pauseThreshold: 0.7,
+                    sentencePause: 0,
+                    turnPause: 0.15
+                )
+                let analysis = try await MediaPipeline.analyzeVoices(audioURL: audioURL, lines: lines.map(\.line), barCount: 48)
+                phase = .ready(.cast(ScriptBuilder.castScript(lines: lines, envelopes: analysis.envelopes, cast: cast), cast))
+            } else {
+                let lines = ScriptBuilder.segmentLines(words: words, pauseThreshold: 0.7, sentencePause: 0)
+                phase = .ready(.voices(try await MediaPipeline.analyzeVoices(audioURL: audioURL, lines: lines, barCount: 48)))
+            }
         } catch is CancellationError {
             return
         } catch {
             phase = .failed(FlowIssue(error: error))
         }
     }
+
+    /// The backend's cast for a published scene; bundled clips have none and are grouped on the device.
+    private static func cast(for request: TranscriptionRequest) async throws -> SceneCast? {
+        switch request.clip.origin {
+        case .bundled: nil
+        case .published: try await SceneCastClient.configured(in: .main).cast(for: request.clip, language: request.language)
+        }
+    }
 }
 
 private struct ScriptEditor: View {
     let request: TranscriptionRequest
-    let analysis: LineAnalysis
+    let source: ScriptSource
     let onStart: (DubSetup) -> Void
     @State private var speakerCount: Int
     @State private var script: Script
-    @State private var characterID = 0
+    @State private var characterID: Int
     @State private var renamingSpeaker: Speaker?
     @State private var draftName = ""
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
-    init(request: TranscriptionRequest, analysis: LineAnalysis, onStart: @escaping (DubSetup) -> Void) {
+    init(request: TranscriptionRequest, source: ScriptSource, onStart: @escaping (DubSetup) -> Void) {
         self.request = request
-        self.analysis = analysis
+        self.source = source
         self.onStart = onStart
         let speakerCount = 2
+        let script = switch source {
+        case .voices(let analysis): ScriptBuilder.buildScript(analysis: analysis, speakerCount: speakerCount, names: [])
+        case .cast(let script, _): script
+        }
         _speakerCount = State(initialValue: speakerCount)
-        _script = State(initialValue: ScriptBuilder.buildScript(analysis: analysis, speakerCount: speakerCount, names: []))
+        _script = State(initialValue: script)
+        _characterID = State(initialValue: script.speakers.first { !script.lines(spokenBy: $0.id).isEmpty }?.id ?? 0)
     }
 
     private var characterLines: [ScriptLine] { script.lines(spokenBy: characterID) }
+
+    /// The speakers with a line in the section. A cast character who speaks only elsewhere in the clip has
+    /// nothing to dub here.
+    private var roles: [Speaker] { script.speakers.filter { !script.lines(spokenBy: $0.id).isEmpty } }
 
     var body: some View {
         ScrollView {
@@ -184,7 +224,7 @@ private struct ScriptEditor: View {
                     .dubFont(15, weight: .regular)
                     .foregroundStyle(Palette.textSecondary)
                 LazyVGrid(columns: adaptiveGridColumns(spacing: 14, isAccessibilitySize: dynamicTypeSize.isAccessibilitySize), spacing: 14) {
-                    ForEach(script.speakers) { speaker in
+                    ForEach(roles) { speaker in
                         characterCard(speaker)
                     }
                 }
@@ -223,8 +263,14 @@ private struct ScriptEditor: View {
             .background(Palette.background)
         }
         .onChange(of: speakerCount) { _, count in
+            guard case .voices(let analysis) = source else { return }
             script = ScriptBuilder.buildScript(analysis: analysis, speakerCount: count, names: script.speakers.map(\.name))
-            characterID = min(characterID, count - 1)
+        }
+        // Regrouping or reassigning lines can leave the chosen role with nothing to dub and no card to show.
+        .onChange(of: script) {
+            if characterLines.isEmpty, let first = roles.first {
+                characterID = first.id
+            }
         }
         .alert("Rename speaker", isPresented: Binding(get: { renamingSpeaker != nil }, set: { if !$0 { renamingSpeaker = nil } })) {
             TextField("Character name", text: $draftName)
@@ -241,17 +287,20 @@ private struct ScriptEditor: View {
 
     private var speakersCard: some View {
         VStack(alignment: .leading, spacing: 12) {
-            AdaptiveStack(rowAlignment: .center, spacing: 8) {
-                Text("Voices in this scene")
-                    .dubFont(16, weight: .medium)
-                    .foregroundStyle(Palette.textPrimary)
-                Spacer()
-                Stepper("\(speakerCount)", value: $speakerCount, in: 1...4)
-                    .dubFont(16, weight: .semibold)
-                    .foregroundStyle(Palette.textPrimary)
-                    .fixedSize()
-                    .accessibilityLabel("Voices in this scene")
-                    .accessibilityValue("\(speakerCount)")
+            // A cast already knows how many characters speak, so only voice grouping has a count to change.
+            if case .voices = source {
+                AdaptiveStack(rowAlignment: .center, spacing: 8) {
+                    Text("Voices in this scene")
+                        .dubFont(16, weight: .medium)
+                        .foregroundStyle(Palette.textPrimary)
+                    Spacer()
+                    Stepper("\(speakerCount)", value: $speakerCount, in: 1...4)
+                        .dubFont(16, weight: .semibold)
+                        .foregroundStyle(Palette.textPrimary)
+                        .fixedSize()
+                        .accessibilityLabel("Voices in this scene")
+                        .accessibilityValue("\(speakerCount)")
+                }
             }
             ScrollView(.horizontal) {
                 HStack(spacing: 8) {
@@ -280,7 +329,7 @@ private struct ScriptEditor: View {
                 }
             }
             .scrollIndicators(.hidden)
-            Text("Voices are grouped by how they sound, so similar voices or loud music can mix them up. Tap a line's name to fix it.")
+            Text(speakerNote)
                 .dubFont(12, weight: .regular)
                 .foregroundStyle(Palette.textSecondary)
         }
@@ -288,16 +337,33 @@ private struct ScriptEditor: View {
         .background(Palette.surface, in: RoundedRectangle(cornerRadius: 16))
     }
 
+    private var speakerNote: String {
+        switch source {
+        case .voices:
+            "Voices are grouped by how they sound, so similar voices or loud music can mix them up. Tap a line's name to fix it."
+        case .cast:
+            "Speakers were worked out from the whole scene's voices and picture, and can still be wrong. Tap a line's name to fix it."
+        }
+    }
+
+    /// The cast's chosen frame of this character, from anywhere in the clip; otherwise the middle of their first line.
+    private func stillMoment(for speaker: Speaker, lines: [ScriptLine]) -> StillMoment {
+        if case .cast(_, let cast) = source, cast.characters.indices.contains(speaker.id),
+           let seconds = cast.characters[speaker.id].portraitSeconds {
+            return StillMoment(seconds: seconds, faceCenterX: cast.characters[speaker.id].faceCenterX)
+        }
+        return StillMoment(seconds: request.section.start + (lines.first.map { $0.start + $0.duration / 2 } ?? 0), faceCenterX: nil)
+    }
+
     private func characterCard(_ speaker: Speaker) -> some View {
         let lines = script.lines(spokenBy: speaker.id)
         let seconds = lines.reduce(0) { $0 + $1.duration }
         let isSelected = speaker.id == characterID
-        let previewTime = request.section.start + (lines.first.map { $0.start + $0.duration / 2 } ?? 0)
         return Button {
             characterID = speaker.id
         } label: {
-            VideoThumbnail(url: request.clip.url, time: previewTime)
-                .aspectRatio(3.0 / 4.0, contentMode: .fit)
+            SpeakerStillView(url: request.clip.url, moment: stillMoment(for: speaker, lines: lines))
+                .aspectRatio(SpeakerStill.aspectRatio, contentMode: .fit)
                 .overlay {
                     LinearGradient(colors: [.clear, .black.opacity(0.9)], startPoint: .center, endPoint: .bottom)
                 }
@@ -306,7 +372,7 @@ private struct ScriptEditor: View {
                         Text(speaker.name.uppercased())
                             .displayFont(34)
                             .foregroundStyle(Palette.textPrimary)
-                        Text("\(lines.count) lines · \(Int(seconds.rounded())) sec")
+                        Text("^[\(lines.count) line](inflect: true) · \(Int(seconds.rounded())) sec")
                             .dubFont(13, weight: .medium)
                             .foregroundStyle(Palette.textPrimary)
                     }
@@ -329,9 +395,50 @@ private struct ScriptEditor: View {
         .buttonStyle(.plain)
         .accessibilityElement(children: .ignore)
         .accessibilityAddTraits(.isButton)
-        .accessibilityLabel("\(speaker.name), \(lines.count) lines, \(Int(seconds.rounded())) seconds")
+        .accessibilityLabel(Text("\(speaker.name), ^[\(lines.count) line](inflect: true), \(Int(seconds.rounded())) seconds"))
         .accessibilityAddTraits(isSelected ? [.isSelected] : [])
         .accessibilityIdentifier("characterCard-\(speaker.id)")
+    }
+}
+
+/// The frame a role card shows, and where the character's face is in it when the cast knows.
+private struct StillMoment: Hashable {
+    let seconds: Double
+    /// A fraction of the frame width; nil picks the largest face.
+    let faceCenterX: Double?
+}
+
+/// A role card's image: the moment's frame cropped around the character's face.
+private struct SpeakerStillView: View {
+    let url: URL
+    let moment: StillMoment
+    @State private var image: CGImage?
+    @State private var failed = false
+
+    var body: some View {
+        Palette.surface
+            .overlay {
+                if let image {
+                    Image(decorative: image, scale: 1)
+                        .resizable()
+                        .scaledToFill()
+                } else if failed {
+                    Image(systemName: "exclamationmark.triangle")
+                        .foregroundStyle(Palette.textSecondary)
+                        .accessibilityLabel("Preview unavailable")
+                }
+            }
+            .clipped()
+            .task(id: moment) {
+                do {
+                    failed = false
+                    image = try await SpeakerStill.portrait(videoURL: url, seconds: moment.seconds, faceCenterX: moment.faceCenterX)
+                } catch is CancellationError {
+                    return
+                } catch {
+                    failed = true
+                }
+            }
     }
 }
 

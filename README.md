@@ -15,6 +15,7 @@ The proposed assessment response, scoring rubric, and progress-tracking rules ar
 - [Run locally](#run-locally)
 - [Build and test](#build-and-test)
 - [Talking coach](#talking-coach)
+- [Live tutor](#live-tutor)
 - [Planned cloud architecture](#planned-cloud-architecture)
 - [Working on the project](#working-on-the-project)
 
@@ -23,19 +24,20 @@ The proposed assessment response, scoring rubric, and progress-tracking rules ar
 The app dubs real scenes end to end on the iPhone, with no sample data. Clips placed in the `Media/` folder are bundled at build time and listed on the Discover tab. From a clip, the dub flow lets you:
 
 1. Frame a scene of up to 30 seconds on a filmstrip timeline.
-2. Transcribe it with word timings, split it into lines at sentence ends and pauses, and group lines into characters by voice. You can rename characters and reassign any line.
+2. Transcribe it with word timings, split it into lines at sentence ends and pauses, and assign lines to characters. A published library scene uses its shared cast, worked out on the backend from the whole clip, so role cards show character names and a frame of each character's face from anywhere in the clip. Bundled clips group lines by voice on the device. You can rename characters and reassign any line.
 3. Dub one character in the studio. Each line's original audio plays as a reference, a 1.5-second cue plays before recording, and the video keeps rolling silently while you record so your take lines up with the actor's mouth.
 4. Export the scene with your takes mixed in, save it to My Dubs, and share it.
 
 Progress shows a streak and totals computed from saved dubs. Feed and Inbox support friends and asynchronous co-dubs: add a friend by username, finish your character's lines, invite them to another role, and watch the combined result. Private invite links can also be claimed by one signed-in learner. Both performers approve before a co-dub appears in their friends' feeds. Setup and privacy boundaries are in [Social dubbing](docs/social-dubbing.md).
 
-When the build has a Convex URL, the app opens on a sign-in page: learners sign in or create an account with a username and password, stored in Convex. The shared demo logins are `demo`/`demo` and `demo1`/`demo1`. Setup is in [docs/convex-backend.md](docs/convex-backend.md).
+When the build has a Convex URL, the app opens on a sign-in page: learners sign in or create an account with a username and password, stored in Convex. The shared demo logins use the username as the password: `demo`, `demo1`, `maya`, `theo`, and `jordan`. `scripts/seed-demo-progress.mjs` gives them weeks of scored dubs to show on the Progress tab. Setup is in [docs/convex-backend.md](docs/convex-backend.md).
 
 Discover also opens a talking coach. You pick a scene character as your teacher and talk to them in the language you're practising; they answer as a talking video face. The coach's code is in place, but it hasn't run end to end yet because it needs provider keys, a Convex deployment, and an avatar per character. See [Talking coach](#talking-coach).
 
 Known limits:
 
-- **Speaker grouping is approximate.** It clusters speech-band MFCC voice fingerprints and got 6 of 8 lines right on the test scene. Users fix the rest by tapping a line's speaker.
+- **On-device speaker grouping is approximate.** For bundled clips it clusters speech-band MFCC voice fingerprints; on the Anakin and Obi-Wan library scene this was close to chance, which is why published scenes use the backend cast instead. Users fix wrong lines by tapping a line's speaker.
+- **Backend speaker labels use `gpt-4o-transcribe-diarize`.** It is OpenAI's only model that labels speakers, it shuts down on February 26, 2027, and OpenAI names no successor. `gpt-6-luna` then maps each voice to a character from the frames and dialogue, names characters only as the title or dialogue gives them, picks each character's frame, and never identifies actors from their faces. On the Anakin and Obi-Wan scene this assigned every line correctly across three 20-second sections.
 - **Dialogue replacement is filtered, not separated.** Clips don't come with separate dialogue and music tracks, so under the user's lines the original audio crossfades to a copy with the speech band (about 420–3,400 Hz) filtered out. Bass and treble of the music and effects carry on, but music in the speech band is lost there. Curated scenes with prepared dialogue and background tracks would remove this limit.
 - **Transcription depends on the device.** On an iPhone, iOS 26 `SpeechTranscriber` is used where Apple reports it supported, then `DictationTranscriber`, then `SFSpeechRecognizer`. Simulator dubbing uses the Convex/OpenAI transcript of the published library video instead, because Apple's speech service can report support but fail to load its model files. Local-only clips still need an iPhone.
 - **Backend script timing uses `whisper-1`.** It provides measured word timestamps, which the studio needs. OpenAI schedules this model to shut down on February 26, 2027; a replacement with word timings is needed before then. See [OpenAI's file transcription guide](https://developers.openai.com/api/docs/guides/speech-to-text).
@@ -114,6 +116,8 @@ Capy helps us build the product, Convex operates its cloud services, Revyl verif
 │   │   ├── SpeechTranscription.swift Speech engine selection and word-timed transcription
 │   │   ├── ScriptBuilder.swift       Line splitting, take placement, and suppression spans
 │   │   ├── VoicePrint.swift          MFCC voice fingerprints and speaker clustering
+│   │   ├── SceneCastClient.swift     A published scene's shared cast, and the frames sampled for it
+│   │   ├── SpeakerStill.swift        Role-card stills cropped around a face inside the letterbox
 │   │   ├── SpeechBandFilter.swift    Speech-band filter for the original audio under takes
 │   │   ├── MediaPipeline.swift       AVFoundation export, audio reading, and the final mix
 │   │   └── MediaPlayback.swift       Segment player, recorder, take player, audio session
@@ -202,6 +206,8 @@ Recording, playback, interruptions, audio routes, and on-device transcription ne
 
 Simulator dubbing requires `COACH_BACKEND_URL` and `OPENAI_API_KEY` on that Convex deployment. `POST /scenes/transcribe` accepts only a published scene's slug, stored-video SHA-256, and matching locale; it never accepts learner recordings or arbitrary URLs. The backend transcribes the stored video once and caches its word timings by video ID and locale. Concurrent requests share a lease, and replacing the stored video creates a new cache entry. The app clips those full-video timings to the selected section and converts them to section-relative seconds. Published videos must be at most 24 MB and 120 seconds for this path.
 
+On the Simulator and on an iPhone, a published scene's speakers come from `POST /scenes/speakers`, which takes the same slug, SHA-256, and locale plus a list of frames. The app asks without frames first; when the backend has no cast stored, it answers `framesNeeded`, and the app sends small JPEG stills sampled about every 1.5 seconds across the whole clip. The backend diarizes the stored video with `gpt-4o-transcribe-diarize`, then gives `gpt-6-luna` the scene title, the speaker-labelled segments, and the frames. It stores the cast (who speaks each segment, plus each character's name, best frame time, and face position) once per video and locale, under the same lease rules as transcripts. Frames come from the requesting app and aren't checked against the video, so the first request decides the stored cast. The app splits its own section lines where the cast's speaker changes and crops each role card from the chosen frame with Vision face detection. If the cast can't be fetched, the script screen shows the error with a retry.
+
 Revyl remains available for cloud builds and app previews. Its build configuration is in `.revyl/config.yaml`; no automated Revyl test plans are configured.
 
 ## Talking coach
@@ -241,6 +247,19 @@ These steps create accounts and avatars and can cost money, so the project owner
 - No real LiveAvatar session has run with this backend's audio, and the OpenAI and Supermemory calls haven't run with real keys. The app's LITE WebSocket client is still to be built.
 - The coach's audio needs an actual iPhone. The app manages the audio session itself, so the recorder and LiveKit playback can share it. Recording during playback, interruptions, Bluetooth routes, and echo still need testing on a device.
 - The Convex functions typecheck but haven't been deployed or bundled by Convex.
+
+## Live tutor
+
+Once a dub's score sheet is complete, the result screen offers a spoken practice call. An AI tutor works through the lines whose takes missed, swapped or added words, or had no speech: it says each line, the learner repeats it, and the tutor corrects what it hears. Unlike the talking coach, the tutor hears the learner's audio during the call.
+
+1. The app sends `POST /tutor/live-session` with the dub's id. The backend reads the caller's own score sheet, picks up to six lines to fix, writes the tutor's instructions from them, and mints an OpenAI Realtime client secret that carries those instructions, the voice, 24 kHz PCM audio, semantic turn detection and `gpt-transcribe` captions. The secret expires after two minutes; the session it opens lasts until the learner leaves.
+2. The app opens OpenAI's Realtime WebSocket with that secret and streams the microphone to it. The system's voice processing cancels echo, so the learner can talk over the tutor; the app then drops the queued reply and tells the server how much was heard.
+
+The score sheet measures words and timing, not sounds, so the instructions forbid stating scores and limit pronunciation feedback to what the tutor hears in the call. Code: `convex/liveTutor.ts` and `Dubbing/LiveTutor/`.
+
+Setup: `OPENAI_API_KEY` on the Convex deployment, plus the `COACH_BACKEND_URL` build setting. The model defaults to `gpt-realtime-2.1`; set `OPENAI_REALTIME_MODEL` (for example to `gpt-realtime-2.1-mini`) to change it.
+
+Not verified yet: no call has run against OpenAI, and audio, echo cancellation, interruptions and Bluetooth routes need an actual iPhone.
 
 ## Planned cloud architecture
 

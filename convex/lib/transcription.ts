@@ -38,24 +38,30 @@ export function timedTranscript(response: OpenAI.Audio.TranscriptionVerbose, loc
 
 /** Whisper is the file-transcription model that supplies the word timestamps the studio needs. */
 export async function transcribeScene(client: OpenAI, file: File, locale: string): Promise<SceneTranscript> {
-  const language = locale.split("-")[0]!;
+  return await withProviderRetries("scenes.transcribe", async () => {
+    const response = await client.audio.transcriptions.create({
+      model: "whisper-1",
+      file,
+      language: locale.split("-")[0]!,
+      response_format: "verbose_json",
+      timestamp_granularities: ["word"],
+    }, { maxRetries: 0, timeout: 30_000 });
+    return timedTranscript(response, locale);
+  });
+}
+
+/** Runs one OpenAI request up to three times, retrying lost connections, 429 and 5xx with backoff. */
+export async function withProviderRetries<T>(operation: string, request: () => Promise<T>): Promise<T> {
   for (let attempt = 1; attempt <= 3; attempt += 1) {
     try {
-      const response = await client.audio.transcriptions.create({
-        model: "whisper-1",
-        file,
-        language,
-        response_format: "verbose_json",
-        timestamp_granularities: ["word"],
-      }, { maxRetries: 0, timeout: 30_000 });
-      return timedTranscript(response, locale);
+      return await request();
     } catch (error) {
       if (!(error instanceof OpenAI.APIError)) throw error;
       const retryable = error instanceof OpenAI.APIConnectionError || error.status === 429 || (error.status !== undefined && error.status >= 500);
-      logEvent({ operation: "scenes.transcribe", status: retryable && attempt < 3 ? "retrying" : "failed", tries: attempt, httpStatus: error.status, retryable });
+      logEvent({ operation, status: retryable && attempt < 3 ? "retrying" : "failed", tries: attempt, httpStatus: error.status, retryable });
       if (!retryable || attempt === 3) throw error;
       await new Promise<void>((resolve) => setTimeout(resolve, 250 * 2 ** (attempt - 1)));
     }
   }
-  throw new Error("Transcription retry loop ended without a result");
+  throw new Error(`${operation} retry loop ended without a result`);
 }

@@ -1,10 +1,19 @@
 import Foundation
 
+/// Where a clip comes from, which decides how its speakers are found.
+nonisolated enum ClipOrigin: Hashable, Sendable {
+    /// Bundled into the app; the device groups its lines by voice.
+    case bundled
+    /// A published library scene; the backend works out its cast from the whole clip.
+    case published
+}
+
 /// The clip being dubbed, plus the folder this dub writes its audio, takes, and exports into.
 nonisolated struct ImportedClip: Hashable, Sendable {
     let url: URL
     let title: String
     let durationSeconds: Double
+    let origin: ClipOrigin
     let workingDirectory: URL
 }
 
@@ -56,6 +65,12 @@ nonisolated struct LineDraft: Hashable, Sendable {
     let text: String
     let start: Double
     let end: Double
+}
+
+/// A section line, timed from the section start, and the cast character who speaks it.
+nonisolated struct CastLine: Hashable, Sendable {
+    let line: LineDraft
+    let character: Int
 }
 
 /// Everything measured from the section audio that speaker grouping needs.
@@ -142,9 +157,10 @@ nonisolated struct DubSetup: Hashable, Sendable {
     let script: Script
     /// The played speaker's id in `script`.
     let characterID: Int
-    let locale: String
     /// Set when the dub is of a curated scene, whose prepared tracks replace the speech-band filter.
     let curated: CuratedSceneSelection?
+    /// The BCP-47 locale the lines are spoken in, which scoring grades against.
+    let locale: String
     let protectedAudioSpans: [TimeSpan]
 
     /// A dub of a raw clip, scripted by transcription.
@@ -168,8 +184,8 @@ nonisolated struct DubSetup: Hashable, Sendable {
         section = ClipSection(start: 0, end: curated.scene.durationSeconds)
         self.script = script
         characterID = curated.speakerID
-        locale = curated.scene.locale
         self.curated = curated
+        locale = curated.scene.locale
         protectedAudioSpans = []
     }
 

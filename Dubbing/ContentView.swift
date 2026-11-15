@@ -4,6 +4,7 @@ import SwiftUI
 
 struct ContentView: View {
     let account: AccountModel
+    let scoring: DubScoringModel?
     @Binding var pendingCoDubCode: String?
     @State private var tab: AppTab = .discover
     @State private var clips: LoadState<[LibraryClip]> = .loading
@@ -17,6 +18,7 @@ struct ContentView: View {
     @State private var selectedRoom: SocialRoomSelection?
     @State private var pendingSocialLaunch: SocialDubLaunch?
     @State private var socialIssue: String?
+    @State private var inboxSection: InboxSection = .clubs
 
     private let libraryFolder = DubLibrary.defaultFolder
     private let history = LocalDubHistory(folder: DubLibrary.defaultFolder)
@@ -38,7 +40,7 @@ struct ContentView: View {
                 Color.clear
             }
             Tab("Inbox", systemImage: "tray.fill", value: AppTab.messages) {
-                NavigationStack { MessagesView(account: account, state: social, onAccount: { isAccountPresented = true }, onRetry: { socialRefresh = UUID() }, onFriends: { isFriendsPresented = true }, onOpenRoom: { selectedRoom = SocialRoomSelection(id: $0) }) }
+                NavigationStack { MessagesView(account: account, scoring: scoring, section: $inboxSection, state: social, onAccount: { isAccountPresented = true }, onRetry: { socialRefresh = UUID() }, onFriends: { isFriendsPresented = true }, onOpenRoom: { selectedRoom = SocialRoomSelection(id: $0) }) }
             }
             Tab("Shelf", systemImage: "books.vertical.fill", value: AppTab.myDubs) {
                 NavigationStack {
@@ -51,12 +53,12 @@ struct ContentView: View {
         }
         .tint(Palette.textPrimary)
         .fullScreenCover(item: $launch, onDismiss: reloadDubs) { launch in
-            DubFlowView(launch: launch, clips: clips, account: account, onRetry: reloadClips, onClose: { self.launch = nil })
+            DubFlowView(launch: launch, clips: clips, account: account, scoring: scoring, onRetry: reloadClips, onClose: { self.launch = nil })
         }
         .fullScreenCover(isPresented: $isCoachPresented) {
             // The dub result screen has no coach entry yet. When it gains one it should pass a
             // CoachPracticeContext only once its lines carry backend line ids; ScriptLine.id is a local index today.
-            CoachView(practice: nil, tokens: AccountTokenProvider(account: account), onClose: { isCoachPresented = false })
+            CoachAccessView(account: account, onClose: { isCoachPresented = false })
         }
         .sheet(isPresented: $isAccountPresented) {
             AccountView(account: account, onClose: { isAccountPresented = false })
@@ -105,6 +107,7 @@ struct ContentView: View {
             let id = try await SocialBackendClient.configured(account: account).redeem(code: code)
             pendingCoDubCode = nil
             tab = .messages
+            inboxSection = .coDubs
             selectedRoom = SocialRoomSelection(id: id)
         } catch is CancellationError { return }
         catch { pendingCoDubCode = nil; socialIssue = error.localizedDescription }
@@ -155,5 +158,5 @@ struct ContentView: View {
 }
 
 #Preview {
-    ContentView(account: AccountModel(service: nil), pendingCoDubCode: .constant(nil))
+    ContentView(account: AccountModel(service: nil), scoring: nil, pendingCoDubCode: .constant(nil))
 }

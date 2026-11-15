@@ -1,10 +1,12 @@
 import Foundation
 
-/// A clip from the project's `Media/` folder, bundled into the app at build time.
+/// A clip from the project's `Media/` folder, bundled into the app at build time, or a published scene
+/// downloaded from the backend.
 nonisolated struct LibraryClip: Hashable, Sendable, Identifiable {
     let url: URL
     let title: String
     let durationSeconds: Double
+    let origin: ClipOrigin
 
     var id: URL { url }
 }
@@ -23,7 +25,8 @@ nonisolated enum MediaLibrary {
             clips.append(LibraryClip(
                 url: url,
                 title: title(forFileName: url.deletingPathExtension().lastPathComponent),
-                durationSeconds: try await MediaPipeline.loadDuration(of: url)
+                durationSeconds: try await MediaPipeline.loadDuration(of: url),
+                origin: .bundled
             ))
         }
         return sortedByTitle(clips)
@@ -53,6 +56,7 @@ extension ImportedClip {
             url: clip.url,
             title: clip.title,
             durationSeconds: clip.durationSeconds,
+            origin: clip.origin,
             workingDirectory: FileManager.default.temporaryDirectory
                 .appending(path: "DubProjects/\(UUID().uuidString)", directoryHint: .isDirectory)
         )

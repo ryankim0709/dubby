@@ -46,10 +46,11 @@ struct DubSessionView: View {
 
     private static let logger = Logger(subsystem: "com.ryankim.Dubbing", category: "studio")
 
-    init(setup: DubSetup, requiredKeptLines: Int, onFinish: @escaping ([Int: RecordedTake]) -> Void) {
+    init(setup: DubSetup, initialTakes: [Int: RecordedTake], requiredKeptLines: Int, onFinish: @escaping ([Int: RecordedTake]) -> Void) {
         self.setup = setup
         self.requiredKeptLines = requiredKeptLines
         self.onFinish = onFinish
+        _takes = State(initialValue: initialTakes)
         _player = State(initialValue: SegmentPlayer(url: setup.clip.url))
     }
 
@@ -159,6 +160,14 @@ struct DubSessionView: View {
         }
         .task {
             refreshMicrophone()
+            if let curated = setup.curated {
+                do {
+                    let timeline = DubTimeline.curated(selection: curated, takes: [:], rules: .standard)
+                    player.player.replaceCurrentItem(with: try await DubRenderer.makePreviewItem(for: timeline))
+                } catch {
+                    issue = FlowIssue(error: error)
+                }
+            }
             await player.seek(to: lineStart)
         }
         .onReceive(NotificationCenter.default.publisher(for: AVAudioSession.interruptionNotification)) { notification in

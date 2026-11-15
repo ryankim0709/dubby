@@ -120,6 +120,12 @@ nonisolated struct CoachBackendClient: CoachTutorService {
         return try ServiceRequest.decode(Response.self, from: data, operation: operation).characters
     }
 
+    func createCheckout() async throws -> WhopCheckout {
+        var request = URLRequest(url: baseURL.appending(path: "billing/checkout"))
+        request.httpMethod = "POST"
+        return try await send(request, as: WhopCheckout.self, operation: "Opening Whop checkout")
+    }
+
     func sessionToken(characterID: String, language: SpokenLanguage) async throws -> CoachSessionToken {
         struct Body: Encodable { let characterId: String; let language: String }
         let operation = "Starting the coach session"
@@ -139,6 +145,19 @@ nonisolated struct CoachBackendClient: CoachTutorService {
             throw CoachError.invalidResponse(operation: operation, reason: "the reply was empty")
         }
         return reply
+    }
+
+    /// Opens a live tutor session about one of the learner's scored dubs. The backend reads the dub's score sheet
+    /// itself; the app sends only which dub.
+    func liveTutorSession(clientDubID: String) async throws -> LiveTutorGrant {
+        struct Body: Encodable { let clientDubId: String }
+        let operation = "Starting your tutor"
+        let request = try ServiceRequest.json(method: "POST", url: baseURL.appending(path: "tutor/live-session"), body: Body(clientDubId: clientDubID), headers: [:])
+        let grant = try await send(request, as: LiveTutorGrant.self, operation: operation)
+        guard !grant.clientSecret.isEmpty, !grant.model.isEmpty else {
+            throw CoachError.invalidResponse(operation: operation, reason: "the session had no key or model")
+        }
+        return grant
     }
 
     func progress(locale: String?) async throws -> CoachProgress {

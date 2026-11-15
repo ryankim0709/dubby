@@ -40,13 +40,19 @@ struct DubResultView: View {
     let setup: DubSetup
     let takes: [Int: RecordedTake]
     let account: AccountModel
+    /// Nil when the build has no backend.
+    let scoring: DubScoringModel?
     let completionRoom: CoDubRoom?
     let onDone: () -> Void
     let onKeepRecording: () -> Void
     @State private var phase: ExportPhase = .filteringDialogue
+    @State private var savedDubID: UUID?
+    @State private var tutor: LiveTutorSession?
+    @State private var tutorUnavailable: String?
     @State private var attempt = 0
     @State private var exportTask: Task<Void, Never>?
     @State private var saveFailed = false
+    @State private var clubDraft: ClubMediaDraft?
     @State private var socialSource: SocialDubSource?
     @State private var isCoDubUploading = false
     @State private var returnsToStudio = false
@@ -135,6 +141,13 @@ struct DubResultView: View {
                     }
                     .buttonStyle(SecondaryButtonStyle())
                     .accessibilityIdentifier("shareDub")
+                    if setup.curated?.scene.id == "tears-of-steel-bridge" {
+                        Button("Share to club") {
+                            clubDraft = ClubMediaDraft(url: video, kind: .video, title: setup.clip.title, replyToMessageId: nil)
+                        }
+                        .buttonStyle(SecondaryButtonStyle())
+                        .accessibilityIdentifier("shareResultToClub")
+                    }
                     Button("Done", action: onDone)
                         .buttonStyle(SecondaryButtonStyle())
                         .accessibilityIdentifier("doneDub")
@@ -165,6 +178,12 @@ struct DubResultView: View {
                 returnsToStudio = true
                 socialSource = nil
             })
+        }
+        .sheet(item: $clubDraft) { draft in ClubComposer(account: account, draft: draft, onShared: {}) }
+        .fullScreenCover(isPresented: Binding(get: { tutor != nil }, set: { if !$0 { tutor = nil } })) {
+            if let tutor {
+                LiveTutorView(session: tutor)
+            }
         }
     }
 
@@ -218,12 +237,13 @@ struct DubResultView: View {
             Text("\(takes.count) of \(setup.script.lines(spokenBy: setup.characterID).count) lines in your voice, saved to your Shelf.")
                 .dubFont(14, weight: .regular)
                 .foregroundStyle(Palette.textSecondary)
-            Label(
+            if setup.curated == nil { Label(
                 "Under your lines the original dialogue is filtered out rather than separated, so music and effects there sound thinner.",
                 systemImage: "waveform.badge.minus"
             )
             .dubFont(12, weight: .regular)
             .foregroundStyle(Palette.textSecondary)
+            }
             if !trimmed.isEmpty {
                 Label(
                     String(
@@ -239,7 +259,35 @@ struct DubResultView: View {
                 .foregroundStyle(Palette.streak)
                 .accessibilityIdentifier("dubTrimNotice")
             }
+            DubScoreCard(state: scoringState, onRetry: retryScoring, onPractise: startTutor)
+            if let tutorUnavailable {
+                Text(tutorUnavailable)
+                    .dubFont(14, weight: .regular)
+                    .foregroundStyle(Palette.streak)
+            }
             TakeSummaryView(measurements: measurements)
+        }
+    }
+
+    private var scoringState: DubScoringModel.State? {
+        guard let scoring else { return .notScored("This build has no backend, so dubs aren't scored.") }
+        return savedDubID.flatMap { scoring.state(for: $0) }
+    }
+
+    private func retryScoring() {
+        guard let savedDubID else { return }
+        scoring?.retry(dubID: savedDubID)
+    }
+
+    /// The tutor reads the same dub the scoring model submitted, keyed by its lowercased id.
+    private func startTutor() {
+        guard let savedDubID else { return }
+        do {
+            let backend = try CoachBackendClient.configured(in: .main, tokens: AccountTokenProvider(account: account))
+            tutorUnavailable = nil
+            tutor = LiveTutorSession(clientDubID: savedDubID.uuidString.lowercased(), backend: backend)
+        } catch {
+            tutorUnavailable = error.localizedDescription
         }
     }
 
@@ -282,6 +330,11 @@ struct DubResultView: View {
         let background = folder.appending(path: "mix-background-\(run).caf")
         let output = folder.appending(path: "dub-\(run).mp4")
         do {
+            if let curated = setup.curated {
+                try await advance(to: .mixing)
+                let timeline = DubTimeline.curated(selection: curated, takes: takes, rules: .standard)
+                _ = try await DubProduction.render(timeline, to: output)
+            } else {
             try await advance(to: .filteringDialogue)
             try await MediaPipeline.exportAudio(from: setup.clip.url, section: section, to: sceneAudio)
             try await MediaPipeline.renderDialogueSuppressed(from: sceneAudio, to: background)
@@ -295,6 +348,7 @@ struct DubResultView: View {
                 suppressionSpans: spans,
                 to: output
             )
+            }
 
             try await advance(to: .measuring)
             var measurements: [TakeMeasurement] = []
@@ -323,6 +377,9 @@ struct DubResultView: View {
                 saveFailed = true
                 throw error
             }
+            savedDubID = id
+            // Converts the takes for upload while they're on disk; sending and scoring continue in the background.
+            await scoring?.submit(dubID: id, setup: setup, takes: takes)
             phase = .finished(
                 video: history.videoURL(for: dub),
                 trimmed: placements.filter { $0.trimmedSeconds > DubTiming.noticeableTrim },

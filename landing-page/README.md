@@ -32,6 +32,12 @@ Open http://localhost:4321. Asset paths start with `/`, so serve this folder as 
 
 Until `waitlistEndpoint` is set, the forms say "Signups aren't open yet" instead of pretending to succeed.
 
+The configured endpoint saves email signups on the Convex development deployment. After a successful save,
+`whopWaitlistUrl` offers optional enrollment in **Dubby Early Access**, a free native Whop waitlist.
+`whopWaitlistSandbox: true` labels that link as a sandbox demo. It opens Whop's hosted signup, where the
+visitor signs in and accepts the terms. An email signup alone never creates a Whop account or waitlist
+entry. Whop tracks native enrollment separately and the seller can approve it in the Whop dashboard.
+
 `source` records `?utm_source=` or `?ref=` from the page URL, so links like `…/?utm_source=hackathon` tell you where signups came from.
 
 ## Take founding payments (Whop)

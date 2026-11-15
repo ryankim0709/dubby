@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { alice, newBackend } from "./test.helpers";
+import { alice, grantCoachPremium, newBackend } from "./test.helpers";
 
 const sessionBody = JSON.stringify({ characterId: "anakin", language: "es" });
 const replyBody = JSON.stringify({ characterId: "anakin", languageName: "Spanish", turns: [{ role: "learner", text: "Hola" }] });
@@ -52,6 +52,7 @@ describe("coach routes", () => {
 
   it("answers 503 without calling a provider when its key is unset", async () => {
     const t = newBackend().withIdentity(alice);
+    await grantCoachPremium(t, alice);
     for (const [path, body] of [["/coach/session-token", sessionBody], ["/coach/reply", replyBody]] as const) {
       const response = await t.fetch(path, post(body));
       expect(response.status).toBe(503);

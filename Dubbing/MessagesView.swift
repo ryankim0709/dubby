@@ -1,6 +1,41 @@
 import SwiftUI
 
+enum InboxSection: String, CaseIterable, Identifiable {
+    case clubs = "Clubs"
+    case coDubs = "Co-dubs"
+
+    var id: Self { self }
+}
+
 struct MessagesView: View {
+    let account: AccountModel
+    let scoring: DubScoringModel?
+    @Binding var section: InboxSection
+    let state: LoadState<SocialSnapshot>
+    let onAccount: () -> Void
+    let onRetry: () -> Void
+    let onFriends: () -> Void
+    let onOpenRoom: (String) -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Picker("Inbox", selection: $section) {
+                ForEach(InboxSection.allCases) { Text($0.rawValue).tag($0) }
+            }
+            .pickerStyle(.segmented)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+            switch section {
+            case .clubs: ClubsView(account: account, scoring: scoring)
+            case .coDubs:
+                CoDubInboxView(account: account, state: state, onAccount: onAccount, onRetry: onRetry, onFriends: onFriends, onOpenRoom: onOpenRoom)
+            }
+        }
+        .screenBackground()
+    }
+}
+
+private struct CoDubInboxView: View {
     let account: AccountModel
     let state: LoadState<SocialSnapshot>
     let onAccount: () -> Void
