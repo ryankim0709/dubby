@@ -190,7 +190,7 @@ def validate_lines(report: Report, manifest: dict, duration: float, character_id
             report.check(word["start"] >= previous_word_end - 1e-9, f"{word_label}: words must be ordered")
             previous_word_end = word["end"]
     report.check(len(character_ids) >= 2, "characters: at least two are required")
-    report.check(any(count >= 3 for count in counts.values()), "lines: at least one character needs three or more lines")
+    report.check(any(2 <= count <= 4 for count in counts.values()), "lines: at least one character (the practice character) needs 2 to 4 lines")
     for character in sorted(character_ids - set(counts)):
         report.warn(f"character {character} has no lines")
     overlaps = sum(

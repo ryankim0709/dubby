@@ -14,9 +14,11 @@ OUT_DIR=${1:-$REPO_ROOT/Dubbing/DemoScenes/$SCENE_ID}
 CACHE=${DEMO_SCENE_CACHE:-${XDG_CACHE_HOME:-$HOME/.cache}/dubit-demo-scenes/$SCENE_ID}
 
 BASE_URL=https://download.blender.org/demo/movies/ToS
-EXCERPT_START=22.5
-EXCERPT_DURATION=23.0
+EXCERPT_START=29.75
+EXCERPT_DURATION=10.0
 GATE_FADE_SECONDS=0.01
+BACKGROUND_SILENT_UNTIL=5.25
+BACKGROUND_FADE_IN=0.25
 
 VIDEO_NAME=tears_of_steel_720p.mov
 VIDEO_URL=$BASE_URL/tears_of_steel_720p.mov
@@ -68,15 +70,15 @@ FF=(ffmpeg -v error -y -fflags +bitexact -flags +bitexact)
 
 echo "build   video"
 "${FF[@]}" -ss "$EXCERPT_START" -i "$CACHE/$VIDEO_NAME" -t "$EXCERPT_DURATION" \
-  -map 0:v:0 -map 0:a:0 \
+  -map 0:v:0 -an \
   -c:v libx264 -preset slow -crf 23 -profile:v high -pix_fmt yuv420p -threads 1 \
-  -af "aresample=48000,apad=whole_dur=$EXCERPT_DURATION,atrim=end=$EXCERPT_DURATION" \
-  -c:a aac -b:a 128k -ac 2 -map_metadata -1 -movflags +faststart \
+  -map_metadata -1 -movflags +faststart \
   "$WORK/$SCENE_ID-video.mp4"
 
 echo "build   background"
 "${FF[@]}" -ss "$EXCERPT_START" -t "$EXCERPT_DURATION" -i "$CACHE/$MUSICFX_NAME" \
-  -af "aresample=48000" -c:a aac -b:a 128k -ar 48000 -ac 2 -map_metadata -1 -movflags +faststart \
+  -af "aresample=48000,aeval='val(0)*clip((t-$BACKGROUND_SILENT_UNTIL)/$BACKGROUND_FADE_IN,0,1)|val(1)*clip((t-$BACKGROUND_SILENT_UNTIL)/$BACKGROUND_FADE_IN,0,1)':c=same" \
+  -c:a aac -b:a 128k -ar 48000 -ac 2 -map_metadata -1 -movflags +faststart \
   "$WORK/$SCENE_ID-background.m4a"
 
 for character in $(python3 -I -c "import json,sys; print(' '.join(c['id'] for c in json.load(open(sys.argv[1]))['characters']))" "$TEMPLATE"); do
@@ -88,7 +90,7 @@ for character in $(python3 -I -c "import json,sys; print(' '.join(c['id'] for c 
 done
 
 echo "build   poster"
-"${FF[@]}" -ss 8.7 -i "$WORK/$SCENE_ID-video.mp4" -frames:v 1 -q:v 3 -map_metadata -1 "$WORK/$SCENE_ID-poster.jpg"
+"${FF[@]}" -ss 2.5 -i "$WORK/$SCENE_ID-video.mp4" -frames:v 1 -q:v 3 -map_metadata -1 "$WORK/$SCENE_ID-poster.jpg"
 
 echo "build   manifest"
 python3 -I "$SCRIPTS/assemble_manifest.py" "$TEMPLATE" "$WORK" "$VIDEO_SHA256" > "$WORK/$SCENE_ID-manifest.json"
