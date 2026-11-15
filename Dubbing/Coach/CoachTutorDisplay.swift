@@ -3,28 +3,36 @@ import Observation
 
 /// What the learner is told about where a piece of feedback came from.
 nonisolated struct FeedbackBasisDisplay: Equatable, Sendable {
+    let basis: FeedbackBasis
     let title: String
     let detail: String
     let systemImage: String
 }
 
 nonisolated extension FeedbackBasis {
+    /// The basis the app will stand behind: an acoustic claim has to point at a recorded result,
+    /// so without one the feedback is shown as having no measured basis.
+    func effective(citedEvidenceCount: Int) -> FeedbackBasis {
+        self == .acoustic && citedEvidenceCount == 0 ? FeedbackBasis.none : self
+    }
+
     /// The label for feedback with this basis, or nil when the feedback has no measured basis to
     /// name. Script agreement is never worded as a pronunciation score, and an acoustic claim with
     /// no cited result is not labelled as measured.
     func display(citedEvidenceCount: Int) -> FeedbackBasisDisplay? {
-        // A measurement claim has to point at a recorded result; without one it is shown as no basis.
-        if self == .acoustic && citedEvidenceCount == 0 { return nil }
+        guard effective(citedEvidenceCount: citedEvidenceCount) != .none else { return nil }
         let evidence = citedEvidenceCount > 0 ? " It cites \(citedEvidenceCount) of your recorded results." : ""
         switch self {
         case .acoustic:
             return FeedbackBasisDisplay(
+                basis: .acoustic,
                 title: "Measured from your voice",
                 detail: "This feedback comes from an acoustic pronunciation measurement of your recording.\(evidence)",
                 systemImage: "waveform"
             )
         case .scriptAgreement:
             return FeedbackBasisDisplay(
+                basis: .scriptAgreement,
                 title: "Compared with the script",
                 detail: "This feedback checks which words you said against the script. It isn't a pronunciation score.\(evidence)",
                 systemImage: "text.alignleft"
@@ -62,7 +70,7 @@ nonisolated extension CoachPreferences {
     /// Adds or removes one line from the lines the coach should not suggest.
     mutating func setAvoiding(lineID: String, isAvoiding: Bool) {
         avoidLineIds.removeAll { $0 == lineID }
-        if isAvoiding { avoidLineIds.append(lineID) }
+        if isAvoiding && canAvoidMoreLines { avoidLineIds.append(lineID) }
     }
 }
 
@@ -76,8 +84,33 @@ nonisolated extension PracticeChallenge {
     }
 }
 
-nonisolated extension SessionMinutes {
-    var title: String { "\(rawValue) minutes" }
+nonisolated extension MemoryItemKind {
+    var title: String {
+        switch self {
+        case .preference: "Preference"
+        case .attemptNote: "Practice note"
+        case .difficulty: "Trouble spot"
+        case .other: "Note"
+        }
+    }
+}
+
+nonisolated extension ProgressSeries {
+    /// Whether this series may show a number for `metric`. Pronunciation and fluency need an
+    /// acoustic measurement, so a transcript-only series never shows them, and a metric the series
+    /// lists as unavailable is never shown as zero.
+    func canShow(_ metric: ScoreMetric) -> Bool {
+        if unavailableMetrics.contains(where: { $0.metric == metric.rawValue }) { return false }
+        switch metric {
+        case .pronunciation, .fluency: return evaluator.measurement == .acoustic && pronunciationBasis == .acoustic
+        case .languageOverall, .wordAccuracy, .timingFit: return true
+        }
+    }
+
+    /// A word's latest measured pronunciation score, or nil unless the series is acoustic.
+    func shownPronunciationScore(for word: DifficultWord) -> Double? {
+        canShow(.pronunciation) && word.pronunciationIssueCount > 0 ? word.latestPronunciationScore : nil
+    }
 }
 
 nonisolated extension NextExercise {
@@ -195,6 +228,21 @@ final class CoachPreferencesModel {
         }
     }
 
+    /// Picks up the memory setting and version after the memory was forgotten, which turns memory off
+    /// on the server, without discarding other edits the learner hasn't saved.
+    func syncMemoryMode() async {
+        guard phase == .editing else { return }
+        do {
+            let record = try await service.preferences()
+            draft.memory = record.preferences.memory
+            version = record.version
+        } catch is CancellationError {
+            return
+        } catch {
+            saveError = error.localizedDescription
+        }
+    }
+
     private func apply(_ record: CoachPreferencesRecord) {
         draft = record.preferences
         version = record.version
@@ -202,11 +250,17 @@ final class CoachPreferencesModel {
     }
 }
 
+/// What the coach remembers: the counts and the notes themselves.
+struct CoachMemorySnapshot: Equatable {
+    let status: CoachMemoryStatus
+    let items: [MemoryItem]
+}
+
 /// The learner's view of their coaching memory, and the one action that erases it.
 @MainActor
 @Observable
 final class CoachMemoryModel {
-    private(set) var status: CoachRemoteState<CoachMemoryStatus> = .loading
+    private(set) var snapshot: CoachRemoteState<CoachMemorySnapshot> = .loading
     private(set) var isForgetting = false
     private(set) var notice: String?
     private(set) var forgetError: String?
@@ -218,9 +272,13 @@ final class CoachMemoryModel {
     }
 
     func load() async {
-        status = await CoachRemoteState.result(of: service.memoryStatus)
+        snapshot = await CoachRemoteState.result {
+            let status = try await service.memoryStatus()
+            return CoachMemorySnapshot(status: status, items: try await service.memoryItems())
+        }
     }
 
+    /// Erases the memory. The backend also turns memory off, so callers refresh the preferences after.
     func forget() async {
         isForgetting = true
         notice = nil
@@ -228,12 +286,12 @@ final class CoachMemoryModel {
         defer { isForgetting = false }
         do {
             let scheduled = try await service.forgetMemory()
-            notice = scheduled == 0 ? "There was nothing to forget." : "Forgetting \(scheduled) coaching notes. This can take a moment."
+            notice = scheduled == 0 ? "There was nothing to forget. Memory is now off." : "Forgetting \(scheduled) coaching notes. Memory is now off; turn it back on in your preferences if you want it."
             await load()
         } catch is CancellationError {
             return
         } catch CoachError.signInRequired {
-            status = .signedOut
+            snapshot = .signedOut
         } catch {
             forgetError = error.localizedDescription
         }

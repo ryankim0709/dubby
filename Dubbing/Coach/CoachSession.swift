@@ -24,8 +24,11 @@ final class CoachSession {
     private(set) var lastReply: CoachReply?
     /// The one exercise on show: the one the call started with, replaced by any newer one a reply carries.
     private(set) var exercise: CoachRemoteState<NextExercise>
+    /// Why the coach's last reply couldn't be fetched, when the learner can try the same turn again.
+    private(set) var replyFailure: CoachError?
+    /// The exact text last sent to the avatar to speak.
+    private(set) var lastSpokenText: String?
 
-    private let practice: CoachPracticeContext?
     private let backend: CoachBackendClient
     private let room = AvatarRoom()
     private let recorder = TakeRecorder()
@@ -38,11 +41,10 @@ final class CoachSession {
     private static let logger = Logger(subsystem: "com.ryankim.Dubbing", category: "coach")
     private static let keepAliveInterval = Duration.seconds(60)
 
-    init(character: CoachCharacter, language: SpokenLanguage, backend: CoachBackendClient, practice: CoachPracticeContext?, exercise: CoachRemoteState<NextExercise>) {
+    init(character: CoachCharacter, language: SpokenLanguage, backend: CoachBackendClient, exercise: CoachRemoteState<NextExercise>) {
         self.character = character
         self.language = language
         self.backend = backend
-        self.practice = practice
         self.exercise = exercise
     }
 
@@ -173,20 +175,55 @@ final class CoachSession {
                 let words = try await SpeechTranscription.transcribe(audioURL: url, using: transcriber)
                 guard let said = CoachConversation.learnerText(from: words) else { throw CoachError.noSpeechHeard }
                 turns.append(CoachTurn(role: .learner, text: said))
-                activity = .thinking
-                let reply = try await backend.reply(characterID: character.id, language: language, practice: practice, turns: turns)
-                turns.append(CoachTurn(role: .coach, text: reply.text))
-                lastReply = reply
-                if let newExercise = reply.exercise { exercise = .loaded(newExercise) }
-                // The avatar says the reply exactly as it is shown.
-                try await room.speak(reply.text)
-                // The avatar's speak_started and speak_ended events move this along from here.
-                activity = .speaking
             } catch is CancellationError {
                 activity = .idle
+                return
             } catch {
                 fail(error)
+                return
             }
+            await requestReply()
+        }
+    }
+
+    /// Sends the same turn again after a failed reply. The learner's words are already in `turns`.
+    func retryReply() {
+        guard replyFailure != nil, activity == .idle else { return }
+        errorMessage = nil
+        turnTask = Task { await requestReply() }
+    }
+
+    /// Asks the backend for the coach's reply to the conversation so far and hands it to the avatar.
+    /// A backend failure is shown as an error the learner can retry; no reply is ever made up.
+    private func requestReply() async {
+        activity = .thinking
+        replyFailure = nil
+        let reply: CoachReply
+        do {
+            reply = try await backend.reply(characterID: character.id, language: language, turns: turns)
+        } catch is CancellationError {
+            activity = .idle
+            return
+        } catch {
+            if let failure = error as? CoachError, failure.isRetryable || failure == .signInRequired {
+                replyFailure = failure
+            }
+            fail(error)
+            return
+        }
+        turns.append(CoachTurn(role: .coach, text: reply.text))
+        lastReply = reply
+        if let newExercise = reply.exercise { exercise = .loaded(newExercise) }
+        do {
+            // The avatar says the reply exactly as it is shown.
+            lastSpokenText = reply.text
+            try await room.speak(reply.text)
+            // The avatar's speak_started and speak_ended events move this along from here.
+            activity = .speaking
+        } catch is CancellationError {
+            activity = .idle
+        } catch {
+            fail(error)
         }
     }
 

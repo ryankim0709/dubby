@@ -34,6 +34,7 @@ nonisolated enum CoachError: LocalizedError, Equatable {
     case notFound(operation: String)
     case versionConflict
     case providerFailed(operation: String, message: String)
+    case providerTimeout(operation: String)
     case serviceNotConfigured(operation: String)
     case requestFailed(operation: String, status: Int, body: String)
     case invalidResponse(operation: String, reason: String)
@@ -56,6 +57,8 @@ nonisolated enum CoachError: LocalizedError, Equatable {
             "Your preferences changed somewhere else."
         case .providerFailed(let operation, let message):
             "\(operation) failed because a coaching service didn't answer: \(message)"
+        case .providerTimeout(let operation):
+            "\(operation) took too long because the coaching service didn't answer in time. Try again."
         case .serviceNotConfigured(let operation):
             "\(operation) isn't available because coaching isn't fully set up on the server yet."
         case .requestFailed(let operation, let status, let body):
@@ -92,8 +95,31 @@ nonisolated enum CoachError: LocalizedError, Equatable {
         case (404, _): return .notFound(operation: operation)
         case (409, "version_conflict"): return .versionConflict
         case (502, _): return .providerFailed(operation: operation, message: detail)
+        case (504, "provider_timeout"): return .providerTimeout(operation: operation)
         case (503, "not_configured"): return .serviceNotConfigured(operation: operation)
         default: return .requestFailed(operation: operation, status: status, body: detail)
+        }
+    }
+
+    /// The backend's error code for this failure, or nil when it didn't come from one.
+    var backendCode: String? {
+        switch self {
+        case .signInRequired: "unauthenticated"
+        case .invalidRequest: "invalid_request"
+        case .notFound: "not_found"
+        case .versionConflict: "version_conflict"
+        case .providerFailed: "provider_failed"
+        case .providerTimeout: "provider_timeout"
+        case .serviceNotConfigured: "not_configured"
+        default: nil
+        }
+    }
+
+    /// Whether trying the same turn again can succeed without the learner changing anything.
+    var isRetryable: Bool {
+        switch self {
+        case .providerFailed, .providerTimeout, .serviceNotConfigured, .offline, .requestFailed: true
+        default: false
         }
     }
 
@@ -109,13 +135,6 @@ nonisolated enum CoachConversation {
     static func learnerText(from words: [TranscribedWord]) -> String? {
         let text = words.map(\.text).joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
         return text.isEmpty ? nil : text
-    }
-
-    /// The locale and line the backend should ground a reply in. The line only applies when the
-    /// learner is practising the language that line belongs to.
-    static func replyContext(language: SpokenLanguage, practice: CoachPracticeContext?) -> (locale: String, lineId: String?) {
-        guard let practice, practice.locale == language.identifier else { return (language.identifier, nil) }
-        return (language.identifier, practice.lineID)
     }
 
     /// LiveAvatar takes a two-letter language for the avatar's voice, such as "es" for es-ES.
