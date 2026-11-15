@@ -84,7 +84,6 @@ The baseline has Frame the scene → Transcribe → Script review with speaker c
 | `studioError` | other | Typed error text; value: error case (`microphoneDenied`, `recordingInterrupted`, `recordingFailed`, ...) | no (text only) |
 | `microphonePermissionBanner` | other | Shown after denial; value `denied` or `restricted` | no |
 | `openSettings` | button | Deep link to the app's Settings page; only on a denied banner | no |
-| `permissionRetry` | button | Re-checks permission and retries the action after the user returns from Settings | no |
 | `fixtureInputBadge` | other | Present only when `-DUBIT_AUDIO_FIXTURE` is active. Label states the input is synthetic | no |
 
 ### Export, preview, save
@@ -113,8 +112,27 @@ The baseline has Frame the scene → Transcribe → Script review with speaker c
 | `myDubsCount` | other | Value: integer | no |
 | `savedDub-<dubID>` | button | Card; value: `<linesDubbed> of <totalLines>` | no |
 | `savedDubPlayer` | other | Playback sheet root | no |
-| `savedDubShare` | button | ShareLink in the playback sheet | no (label "Share dub") |
+| `shareSavedDub` | button | ShareLink in the playback sheet | no (label "Share dub") |
 | `savedDubDone` | button | Closes the sheet | no (label "Done") |
+
+### Already present on mobile/native-flow (4151f2a)
+
+Read from that branch's source; these exist and the tests use them as they are: `openSettings` (Open Settings button inside the permission card), `retry` (the "Try again" button inside an issue card, in the studio and on the export screen), `retryLoad` (Discover and My Dubs load failure), `takeFeedback` (measured take card: length, mic level, and "Pronunciation: Not measured"), `takeSummary` (measured summary on the result and in the saved-dub player), `shareSavedDub` (ShareLink in the saved-dub player). Recovery from a denied microphone is automatic: the studio re-reads the permission when the app returns to the foreground and re-enables `recordLine`, so the contract has no separate permission-retry control. Export on that branch has an extra phase, `measuring`, between `mixing` and `saving`.
+
+### Coach runtime provider (QA/DEBUG only; blocked until a development deployment exists)
+
+Shown only with `-DUBIT_UI_TEST 1`. They expose facts the app already holds, never a secret.
+
+| Identifier | Type | Value / notes |
+| --- | --- | --- |
+| `coachReplyText` | other | The latest coach reply text exactly as received from the backend |
+| `coachReplyProvenance` | other | Value `<provider>/<model>` from the reply envelope, for example `openai/<model id>`; absent when the reply had no model |
+| `coachAvatarSpeech` | other | Value: the exact string last sent to LiveAvatar as `avatar.speak_text` |
+| `coachError` | other | Value: backend error code (`not_configured`, `provider_failed`, `provider_timeout`, `unauthenticated`); no `coachReplyText` exists while it shows |
+| `coachRetry` | button | Re-sends the same turn after a failure |
+| `feedbackBasis` | other | Value `acoustic`, `script_agreement` or `none` for the shown feedback |
+| `pronunciationScore` | other | Must exist only when `feedbackBasis` is `acoustic` and the provenance is acoustic; never for transcript agreement or a model opinion |
+| launch argument `-DUBIT_QA_COACH_FAULT <missing_key\|provider_error\|provider_timeout>` | | Makes the QA/DEBUG client add header `X-QA-Fault` to coach requests; the backend honors it only where `QA_FAULTS_ENABLED` is set on a non-production deployment |
 
 ### System UI (no app identifiers; role plus accessible name)
 

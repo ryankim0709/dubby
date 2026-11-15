@@ -48,14 +48,14 @@ Column "Sim" = can a simulator exercise it: **Yes**, **Partly** (the app-side st
 | S-20 | Leave the flow | `doneDub` | Back on Discover | screenshot | Yes |
 | S-21 | Reopen My Dubs | `tab-myDubs`, `myDubsScreen`, `myDubsCount`, `savedDub-<dubID>` | Count = 1, the card shows `N of N` lines | screenshot `my-dubs-one` | Yes |
 | S-22 | Persistence | terminate and relaunch without `-DUBIT_UI_TEST`, repeat S-21 | The dub is still listed | screenshot | Yes |
-| S-23 | Play and share a saved dub | `savedDub-<dubID>`, `savedDubPlayer`, `savedDubShare`, "Close", `savedDubDone` | Player opens, share sheet opens and closes, sheet closes | screenshot | Yes |
+| S-23 | Play and share a saved dub | `savedDub-<dubID>`, `savedDubPlayer`, `shareSavedDub`, "Close", `savedDubDone` | Player opens, share sheet opens and closes, sheet closes | screenshot | Yes |
 
 ## Permission paths
 
 | Step | Action | Element | Expected result | Evidence | Sim |
 | --- | --- | --- | --- | --- | --- |
 | S-30 | Deny the microphone | `recordLine`, alert button "Don't Allow" | No recording starts, no take, `microphonePermissionBanner` value `denied`, `studioError` value `microphoneDenied` (typed state, not a generic failure) | screenshot `microphone-denied` | Yes |
-| S-31 | Recover through Settings | `openSettings`, Settings switch "Microphone", return, `permissionRetry` | Settings opens on the app's page; after the switch is on and the app returns, the banner clears and recording works | screenshots, log | Yes |
+| S-31 | Recover through Settings | `openSettings`, Settings switch "Microphone", return | Settings opens on the app's page; after the switch is on and the app returns, the banner clears, `recordLine` re-enables without a manual retry, and recording works | screenshots, log | Yes |
 | S-32 | Deny speech recognition (baseline transcription step) | `transcribeScene`, alert button "Don't Allow" | `speechPermissionNotice` value `denied`; no script is produced; a path back to the permission exists | screenshot | Yes |
 | S-33 | Restricted permission (parental/MDM restriction) | n/a | Banner value `restricted`, with no Settings recovery offered | n/a | No (needs a restricted device) |
 | S-34 | Prompt reappearance | Fresh install | The prompt appears once per install; deny is remembered across relaunch | log | Yes |
@@ -74,9 +74,24 @@ Column "Sim" = can a simulator exercise it: **Yes**, **Partly** (the app-side st
 | S-47 | Audio route change, call, Siri | n/a | Recording stops with the interruption state | n/a | No (see physical checklist) |
 | S-48 | Low disk, killed during export | n/a | No half-written dub is listed after relaunch | n/a | Partly (kill during export is testable; low disk is not) |
 
+## Runtime provider and failure paths (prepared, blocked)
+
+Ryan's rule: every AI agent inside the deployed app uses OpenAI only (official SDK, Responses API, no fallback vendor), with `OPENAI_API_KEY` on the Convex backend only. These steps verify it. The static one runs today; the rest need a Convex development deployment with `OPENAI_API_KEY` set, a test identity, and the provenance and fault hooks requested from Tutoring (DUBB-3) and Convex Backend (DUBB-4). They are written, not run.
+
+| Step | Action | Element / signal | Expected result | Evidence | Sim |
+| --- | --- | --- | --- | --- | --- |
+| S-60 | Static provider check | `scripts/qa/e2e/check-runtime-provider.sh` | No Anthropic or other vendor SDK, key name, or model id in `convex/`, `package.json`, `package-lock.json`, `Dubbing/`, `Config/`; the OpenAI SDK is used through the Responses API; no key name or `sk-` literal in app code | script output | Yes (runs on Linux) |
+| S-61 | A coach reply names its provider | send a turn; `coachReplyProvenance`; server log line `coach.reply` | Value starts with `openai/`; the reply envelope's `provenance.provider` is `openai`, `provenance.api` is `responses`; no other vendor appears in the log | screenshot, log line (non-secret fields only) | Yes (needs dev deployment) |
+| S-62 | Backend key missing | deployment without `OPENAI_API_KEY`; `coachError`, `coachRetry` | `coachError` = `not_configured`; no `coachReplyText`, no avatar speech, no template or fallback-vendor text; `coachRetry` is available | screenshot | Yes |
+| S-63 | Provider error | fault `provider_error`; `coachError`, `coachRetry` | `coachError` = `provider_failed`; no invented reply; after the fault is cleared, `coachRetry` produces a reply that passes S-61 | screenshots before and after | Yes |
+| S-64 | Provider timeout | fault `provider_timeout` | `coachError` = `provider_timeout` within the app's request timeout; the call screen is not stuck; `coachRetry` works | screenshot | Yes |
+| S-65 | LiveAvatar speaks only OpenAI text | `coachAvatarSpeech` versus `coachReplyText` | Equal strings for every turn; while `coachError` shows, `coachAvatarSpeech` does not change | screenshot, log | Yes (needs a LiveAvatar sandbox) |
+| S-66 | Feedback is never mislabeled pronunciation | `feedbackBasis`, `pronunciationScore`, `takeFeedback` | With a transcript-only or script-agreement basis there is no `pronunciationScore` and the UI says pronunciation is not measured (native-flow already shows "Not measured"); a number appears only with an acoustic provenance | screenshot | Yes (needs assessment) |
+| S-67 | Secrets stay server-side | script and app bundle search | `OPENAI_API_KEY` and key-shaped strings appear in no app file, test, fixture or log | script output | Yes |
+
 ## Skipped steps and blockers
 
-- **S-90 Coach, sign-in, cloud assessment.** Blocker, owner Convex Backend (DUBB-4): no development deployment, sandbox credentials, or test identity exists (confirmed by DUBB-4 on 2026-11-15; the auth provider is not chosen). These steps are not in the smoke tests. Re-add them when DUBB-4 announces a deployment URL and a test identity.
+- **S-90 Coach, sign-in, cloud assessment, and S-61 to S-66.** Blocker, owner Convex Backend (DUBB-4), plus the OpenAI migration by Tutoring (DUBB-3): no development deployment, sandbox credentials, test identity, or `OPENAI_API_KEY` on a development deployment exists (confirmed by DUBB-4 on 2026-11-15; the auth provider is not chosen). These steps are not in the smoke tests. Re-add them when DUBB-4 announces a deployment URL and a test identity.
 - **Pronunciation score and coaching.** The fixture is synthetic, so any score on a fixture take would be meaningless. The smoke flow never reads or asserts a score; the app must not show one for a fixture take.
 - **Audio content.** The flow asserts that the exported MP4 plays and has the expected duration. It does not prove the intended audio is audible; that is a physical-iPhone check.
 
