@@ -11,7 +11,8 @@ struct SceneCatalogTests {
             slug: "synthetic-scene",
             title: "Synthetic Scene",
             durationSeconds: 3,
-            video: .init(url: URL(string: "https://example.invalid/video")!, sha256: sha256, byteSize: byteSize, contentType: "video/mp4")
+            video: .init(url: URL(string: "https://example.invalid/video")!, sha256: sha256, byteSize: byteSize, contentType: "video/mp4"),
+            details: nil
         )
     }
 
@@ -34,4 +35,33 @@ struct SceneCatalogTests {
             try SceneCatalog.cachedFileURL(for: scene(sha256: "not/base64", byteSize: 1), folder: folder)
         }
     }
+
+    @Test func loadsMultipleBundledVideosWithTheirOwnMetadata() async throws {
+        let fixture = try #require(Bundle.allBundles.first { $0.bundleURL.pathExtension == "xctest" }?.url(forResource: "two-tone-3s", withExtension: "mp4"))
+        let folder = FileManager.default.temporaryDirectory.appending(path: "library-\(UUID().uuidString).bundle", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer {
+            do {
+                try FileManager.default.removeItem(at: folder)
+            } catch {
+                Issue.record(error)
+            }
+        }
+        let info = ["CFBundleIdentifier": "com.dubby.synthetic-library", "CFBundlePackageType": "BNDL"]
+        try PropertyListEncoder().encode(info).write(to: folder.appending(path: "Info.plist"))
+        try FileManager.default.copyItem(at: fixture, to: folder.appending(path: "first.mp4"))
+        try FileManager.default.copyItem(at: fixture, to: folder.appending(path: "second.mp4"))
+        let sources = #"{"clips":[{"filename":"first.mp4","title":"First work — First scene","language":"ko"},{"filename":"second.mp4","title":"Second work — Second scene","language":"ja"}]}"#
+        try Data(sources.utf8).write(to: folder.appending(path: "scene-sources.json"))
+        let bundle = try #require(Bundle(url: folder))
+
+        let clips = try await MediaLibrary.loadClips(in: bundle)
+        #expect(clips.map(\.sceneID) == ["first", "second"])
+        #expect(clips.map(\.sceneTitle) == ["First scene", "Second scene"])
+        #expect(clips.map(\.languageName) == ["Korean", "Japanese"])
+        #expect(clips.allSatisfy { abs($0.durationSeconds - 3) < 0.1 })
+        #expect(ImportedClip(clip: clips[0]).locale == "ko")
+        #expect(ImportedClip(clip: clips[1]).locale == "ja")
+    }
+
 }

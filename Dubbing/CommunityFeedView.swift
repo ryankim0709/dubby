@@ -26,7 +26,7 @@ struct CommunityFeedView: View {
             .padding(24)
             .frame(maxWidth: .infinity)
             .foregroundStyle(Palette.textPrimary)
-            .screenBackground()
+            .background(.black)
             .navigationTitle("Feed")
             .navigationBarTitleDisplayMode(.inline)
         }

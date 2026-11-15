@@ -15,6 +15,7 @@ nonisolated struct RemoteScene: Decodable, Sendable, Equatable {
     let title: String
     let durationSeconds: Double
     let video: Video
+    let details: LibrarySceneDetails?
 }
 
 nonisolated enum SceneDownloadError: LocalizedError, Equatable {
@@ -56,7 +57,7 @@ nonisolated enum SceneCatalog {
         var clips: [LibraryClip] = []
         for scene in scenes {
             let url = try await localFile(for: scene, folder: folder)
-            clips.append(LibraryClip(url: url, title: scene.title, durationSeconds: try await MediaPipeline.loadDuration(of: url)))
+            clips.append(LibraryClip(url: url, title: scene.title, durationSeconds: try await MediaPipeline.loadDuration(of: url), details: scene.details))
         }
         return clips
     }

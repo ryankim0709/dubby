@@ -83,9 +83,12 @@ struct ContentView: View {
             let bundled = try await MediaLibrary.loadClips(in: .main)
             // A clip bundled from Media/ wins over the Convex scene with the same slug, so it isn't downloaded.
             let bundledIDs = Set(bundled.map(\.sceneID))
-            let remote = try await SceneCatalog.fetch(in: .main).filter { !bundledIDs.contains($0.slug) }
-            let downloaded = try await SceneCatalog.loadClips(remote, folder: SceneCatalog.defaultFolder)
-            clips = .loaded(LaunchConfiguration.current.ordering(MediaLibrary.sortedByTitle(bundled + downloaded)))
+            let remote = try await SceneCatalog.fetch(in: .main)
+            let local = bundled.map { clip in
+                LibraryClip(url: clip.url, title: clip.title, durationSeconds: clip.durationSeconds, details: remote.first { $0.slug == clip.sceneID }?.details ?? clip.details)
+            }
+            let downloaded = try await SceneCatalog.loadClips(remote.filter { !bundledIDs.contains($0.slug) }, folder: SceneCatalog.defaultFolder)
+            clips = .loaded(LaunchConfiguration.current.ordering(MediaLibrary.sortedByTitle(local + downloaded)))
         } catch {
             clips = .failed("Scenes couldn't be read: \(error.localizedDescription)")
         }

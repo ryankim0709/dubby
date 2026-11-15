@@ -296,35 +296,44 @@ private struct ScriptEditor: View {
         return Button {
             characterID = speaker.id
         } label: {
-            VideoThumbnail(url: request.clip.url, time: previewTime)
-                .aspectRatio(3.0 / 4.0, contentMode: .fit)
-                .overlay {
-                    LinearGradient(colors: [.clear, .black.opacity(0.9)], startPoint: .center, endPoint: .bottom)
-                }
-                .overlay(alignment: .bottomLeading) {
-                    VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 10) {
+                VideoThumbnail(url: request.clip.url, time: previewTime)
+                    .aspectRatio(3.0 / 4.0, contentMode: .fit)
+                    .overlay {
+                        LinearGradient(colors: [.clear, .black.opacity(0.55)], startPoint: .center, endPoint: .bottom)
+                    }
+                    .overlay(alignment: .bottomLeading) {
                         Text(speaker.name.uppercased())
                             .displayFont(34)
                             .foregroundStyle(Palette.textPrimary)
-                        Text("\(lines.count) lines · \(Int(seconds.rounded())) sec")
-                            .dubFont(13, weight: .medium)
-                            .foregroundStyle(Palette.textPrimary)
+                            .shadow(color: .black.opacity(0.5), radius: 6, y: 2)
+                            .padding(10)
                     }
-                    .padding(14)
-                }
-                .overlay(alignment: .topTrailing) {
-                    if isSelected {
-                        Image(systemName: "checkmark.circle.fill")
-                            .font(.title2)
-                            .foregroundStyle(Palette.onAccent, Palette.accent)
-                            .padding(12)
+                    .overlay(alignment: .topTrailing) {
+                        if isSelected {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.title2)
+                                .foregroundStyle(Palette.onAccent, Palette.accent)
+                                .padding(8)
+                        }
                     }
+                    .clipShape(RoundedRectangle(cornerRadius: Radius.card))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: Radius.card)
+                            .strokeBorder(isSelected ? Palette.accent : .clear, lineWidth: 2.5)
+                    }
+                Text("\(lines.count) lines · \(Int(seconds.rounded()))s of dialogue")
+                    .dubFont(13, weight: .regular)
+                    .foregroundStyle(Palette.textSecondary)
+                if let first = lines.first {
+                    Text("“\(first.text)”")
+                        .dubFont(14, weight: .regular)
+                        .italic()
+                        .foregroundStyle(Palette.textSecondary)
+                        .lineLimit(2)
                 }
-                .clipShape(RoundedRectangle(cornerRadius: Radius.card))
-                .overlay {
-                    RoundedRectangle(cornerRadius: Radius.card)
-                        .strokeBorder(isSelected ? Palette.accent : Palette.hairline, lineWidth: isSelected ? 2 : 1)
-                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .ignore)
