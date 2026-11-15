@@ -299,7 +299,7 @@ export const memoryStatus = queryGeneric({
 
 export type MemoryItem = {
   docId: string;
-  kind: "preference" | "attempt_note" | "difficulty";
+  kind: "preference" | "attempt_note" | "dub_note" | "trend" | "difficulty";
   text: string;
   /** The Convex attempt or assessment IDs this note was derived from; empty for preferences. */
   sourceIds: string[];
@@ -307,7 +307,7 @@ export type MemoryItem = {
   state: "pending" | "done" | "failed";
 };
 
-const itemKind = { preferences: "preference", attempt: "attempt_note", difficulty: "difficulty" } as const;
+const itemKind = { preferences: "preference", attempt: "attempt_note", dub: "dub_note", trend: "trend", difficulty: "difficulty" } as const;
 
 /** What the tutor remembers about the caller, served from Convex's outbox rather than from a Supermemory read. */
 export const memoryItems = queryGeneric({

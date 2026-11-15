@@ -195,6 +195,8 @@ nonisolated struct CoachMemoryStatus: Codable, Hashable, Sendable {
 nonisolated enum MemoryItemKind: String, Hashable, Sendable {
     case preference
     case attemptNote = "attempt_note"
+    case dubNote = "dub_note"
+    case trend
     case difficulty
     case other
 }

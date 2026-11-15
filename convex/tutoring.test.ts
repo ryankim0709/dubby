@@ -398,6 +398,18 @@ describe("memory derivation", () => {
     expect(first.find((doc) => doc.kind === "preferences")!.content).toContain("Order food in Madrid");
   });
 
+  test("remembers each dub and the trend across dubs", async () => {
+    const documents = await deriveMemoryDocuments(history, report, null);
+    const dubs = documents.filter((doc) => doc.kind === "dub");
+    expect(dubs.map((doc) => doc.metadata.sessionId)).toEqual(["s1", "s2"]);
+    expect(dubs[0]!.content).toContain("on 2026-11-10");
+    expect(dubs[0]!.content).toContain("Some takes could not be assessed.");
+    const trends = documents.filter((doc) => doc.kind === "trend");
+    expect(trends).toHaveLength(1);
+    expect(trends[0]!.content).toMatch(/^Progress trend in en-US, judged by an acoustic pronunciation check from 2026-11-10 to 2026-11-1\d: Since the first practice day, /);
+    expect(trends[0]!.content).toMatch(/pronunciation is (improving|declining|steady)/);
+  });
+
   test("the namespace is derived from the subject with a secret and is stable and provider-safe", async () => {
     const a = await learnerNamespace("https://issuer|alice", "secret-1");
     expect(a).toMatch(/^dubit-u-[0-9a-f]{32}$/);
@@ -472,7 +484,10 @@ function fakeSupermemory(): FakeMemory {
       return Response.json({ count: body.ids.length, errors: [] });
     }
     if (method === "POST" && url.pathname.endsWith("/search")) {
-      return Response.json({ results: [...docs.values()].slice(0, 3).map((doc, index) => ({ id: "m" + index, memory: doc.content, metadata: {}, similarity: 0.9, isLatest: true, isInference: false, system: {} })), searchTime: 1 });
+      // Like the live service with fresh notes: nothing has been extracted as a memory yet, so "memories" mode
+      // finds nothing, while hybrid and chunk searches return the stored notes as chunks.
+      if (body.searchMode === "memories") return Response.json({ results: [], searchTime: 1 });
+      return Response.json({ results: [...docs.values()].slice(0, 3).map((doc, index) => ({ id: "c" + index, chunk: doc.content, metadata: {}, similarity: 0.9, isLatest: true, isInference: false, system: {} })), searchTime: 1 });
     }
     return new Response("unexpected", { status: 500 });
   });
@@ -566,7 +581,8 @@ describe("convex tutoring functions", () => {
     await t.mutation(tutoringRefs.ingestDubbingSession, ingestArgs(alice.tokenIdentifier, first));
     await t.mutation(tutoringRefs.ingestDubbingSession, ingestArgs(bob.tokenIdentifier, first));
     const drained = await drain(t);
-    expect(drained).toEqual({ sent: 2, failed: 0 });
+    // Per learner: the attempt note, the dub note, and the trend note.
+    expect(drained).toEqual({ sent: 6, failed: 0 });
     const namespaces = [...memory.documents.keys()];
     expect(namespaces).toHaveLength(2);
     expect(namespaces.every((namespace) => /^dubit-u-[0-9a-f]{32}$/.test(namespace))).toBe(true);
@@ -574,7 +590,7 @@ describe("convex tutoring functions", () => {
     // Nothing is left to send, and a duplicate ingestion queues nothing new.
     await t.mutation(tutoringRefs.ingestDubbingSession, ingestArgs(alice.tokenIdentifier, first));
     expect(await drain(t)).toEqual({ sent: 0, failed: 0 });
-    expect(await t.withIdentity(alice).query(tutoringRefs.memoryStatus, {})).toEqual({ pending: 0, failed: 0, done: 1 });
+    expect(await t.withIdentity(alice).query(tutoringRefs.memoryStatus, {})).toEqual({ pending: 0, failed: 0, done: 3 });
   });
 
   test("a transient memory failure retries with backoff, then succeeds, and a permanent one fails explicitly", async () => {
@@ -582,13 +598,13 @@ describe("convex tutoring functions", () => {
     memory.failures = { status: 400, remaining: 1 };
     const t = convexTest(schema, modules);
     await t.mutation(tutoringRefs.ingestDubbingSession, ingestArgs(alice.tokenIdentifier, first));
-    expect(await drain(t)).toEqual({ sent: 0, failed: 1 });
-    expect(await t.withIdentity(alice).query(tutoringRefs.memoryStatus, {})).toEqual({ pending: 0, failed: 1, done: 0 });
+    expect(await drain(t)).toEqual({ sent: 2, failed: 1 });
+    expect(await t.withIdentity(alice).query(tutoringRefs.memoryStatus, {})).toEqual({ pending: 0, failed: 1, done: 2 });
     // The tutor still answers from Convex evidence while memory is failed.
     expect(await t.withIdentity(alice).query(tutoringRefs.nextExercise, {})).toMatchObject({ kind: expect.any(String) });
     expect(await t.mutation(tutoringRefs.retryFailedMemory, {})).toEqual({ retried: 1 });
     expect(await drain(t)).toEqual({ sent: 1, failed: 0 });
-    expect(await t.withIdentity(alice).query(tutoringRefs.memoryStatus, {})).toEqual({ pending: 0, failed: 0, done: 1 });
+    expect(await t.withIdentity(alice).query(tutoringRefs.memoryStatus, {})).toEqual({ pending: 0, failed: 0, done: 3 });
   });
 
   test("a retryable outage keeps the row pending with a later attempt time", async () => {
@@ -596,7 +612,7 @@ describe("convex tutoring functions", () => {
     memory.failures = { status: 503, remaining: 99 };
     const t = convexTest(schema, modules);
     await t.mutation(tutoringRefs.ingestDubbingSession, ingestArgs(alice.tokenIdentifier, first));
-    expect(await withTimeAdvancing(drain(t))).toEqual({ sent: 0, failed: 1 });
+    expect(await withTimeAdvancing(drain(t))).toEqual({ sent: 0, failed: 3 });
     const rows = await t.run(async (ctx) => ctx.db.query("tutoringMemoryOutbox").collect());
     expect(rows[0]).toMatchObject({ state: "pending", attempts: 1 });
     expect(rows[0]!.nextAttemptAt).toBeGreaterThan(new Date("2026-11-15T12:00:00Z").getTime());
@@ -610,10 +626,11 @@ describe("convex tutoring functions", () => {
     await t.mutation(tutoringRefs.ingestDubbingSession, ingestArgs(alice.tokenIdentifier, second));
     await drain(t);
     const namespace = await learnerNamespace(alice.tokenIdentifier, "test-secret");
-    expect(memory.documents.get(namespace)!.size).toBe(2);
+    // Two attempt notes, two dub notes, and one trend note for the series.
+    expect(memory.documents.get(namespace)!.size).toBe(5);
     await t.mutation(tutoringRefs.removeAttempt, { subject: alice.tokenIdentifier, attemptId: "a1" });
     await drain(t);
-    expect(memory.documents.get(namespace)!.size).toBe(1);
+    expect(memory.documents.get(namespace)!.size).toBe(3);
     await t.withIdentity(alice).mutation(tutoringRefs.forgetMemory, {});
     await drain(t);
     expect(memory.documents.get(namespace)!.size).toBe(0);
@@ -834,7 +851,11 @@ describe("coach and tutor HTTP routes", () => {
     expect((await get(alice, "/tutor/next-exercise")).exercise.kind).toBe("drill_word");
     expect((await get(bob, "/tutor/next-exercise")).exercise.kind).toBe("first_attempt");
     const memory = (await get(alice, "/tutor/memory")).items as { kind: string; sourceIds: string[]; state: string }[];
-    expect(memory).toEqual([expect.objectContaining({ kind: "attempt_note", sourceIds: ["a1", "as1"], state: "pending" })]);
+    expect(memory).toEqual([
+      expect.objectContaining({ kind: "attempt_note", sourceIds: ["a1", "as1"], state: "pending" }),
+      expect.objectContaining({ kind: "dub_note", sourceIds: ["a1"], state: "pending" }),
+      expect.objectContaining({ kind: "trend", sourceIds: [], state: "pending" }),
+    ]);
     expect((await get(bob, "/tutor/memory")).items).toEqual([]);
     const put = (preferences: unknown, expectedVersion: number) =>
       t.withIdentity(alice).fetch("/tutor/preferences", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ preferences, expectedVersion }) });

@@ -1,7 +1,8 @@
 import { Supermemory, SupermemoryError } from "supermemory";
+import type { ScoreMetric } from "./gradingContract";
 import { requiredEnv } from "./lib/env";
 import type { LearnerPreferences } from "./tutoringPreferences";
-import { applicableRecords, isWordDifficulty, normalizeWord, type TutoringReport } from "./tutoringProgress";
+import { applicableRecords, isWordDifficulty, normalizeWord, type SeriesProgress, type TutoringReport } from "./tutoringProgress";
 import type { TutoringRecord } from "./tutoringRecords";
 
 // API shapes follow the installed supermemory 5.1.2 SDK and the v5 reference at
@@ -10,8 +11,9 @@ import type { TutoringRecord } from "./tutoringRecords";
 
 /** Guides Supermemory's memory extraction; the API caps it at 1500 characters. */
 const supportingContext =
-  "Notes about one Dubby learner, who practises a language by dubbing short movie lines. Remember recurring " +
-  "word difficulties, practised lines, and the learner's stated goals and preferences. The notes carry no scores; " +
+  "Notes about one Dubby learner, who practises a language by dubbing short movie lines. Remember each dub they " +
+  "record, how their skills trend over time, recurring word difficulties, practised lines, and the learner's stated " +
+  "goals and preferences. The notes carry no scores; " +
   "do not infer proficiency levels or general grammar ability from repeated movie dialogue.";
 
 /** A word needs this many distinct attempts with an issue before it is written as a recurring difficulty. */
@@ -51,7 +53,7 @@ export type MemoryMetadata = Record<string, string | string[]>;
 export type MemoryDocument = {
   /** Deterministic from the source, so a retry or a re-derivation addresses the same document. */
   id: string;
-  kind: "attempt" | "difficulty" | "preferences";
+  kind: "attempt" | "dub" | "trend" | "difficulty" | "preferences";
   content: string;
   /** When the source happened, for attempt notes. */
   date?: string;
@@ -59,6 +61,22 @@ export type MemoryDocument = {
 };
 
 const quote = (words: readonly string[]) => words.map((word) => `"${word}"`).join(", ");
+
+/** Words of a scored attempt with an issue: script words that were swapped or missed, or acoustic flags. */
+function flaggedWords(record: TutoringRecord, wantScript: boolean): string[] {
+  const { assessment } = record;
+  if (assessment.status === "unscorable") return [];
+  const acoustic = record.evaluator.measurement === "acoustic";
+  return [
+    ...new Set(
+      assessment.wordResults.flatMap((word) => {
+        const isScript = word.textStatus === "substituted" || word.textStatus === "omitted";
+        if (word.expected === null || !isWordDifficulty(word, acoustic) || isScript !== wantScript) return [];
+        return [normalizeWord(word.expected, assessment.locale)];
+      }),
+    ),
+  ];
+}
 
 function attemptDocument(record: TutoringRecord, id: string): MemoryDocument {
   const { assessment } = record;
@@ -68,17 +86,8 @@ function attemptDocument(record: TutoringRecord, id: string): MemoryDocument {
     outcome = `The recording could not be assessed (${assessment.reason.replaceAll("_", " ")}).`;
   } else {
     const acoustic = record.evaluator.measurement === "acoustic";
-    const flagged = (wantScript: boolean) => [
-      ...new Set(
-        assessment.wordResults.flatMap((word) => {
-          const isScript = word.textStatus === "substituted" || word.textStatus === "omitted";
-          if (word.expected === null || !isWordDifficulty(word, acoustic) || isScript !== wantScript) return [];
-          return [normalizeWord(word.expected, assessment.locale)];
-        }),
-      ),
-    ];
-    const script = flagged(true);
-    const pronunciation = flagged(false);
+    const script = flaggedWords(record, true);
+    const pronunciation = flaggedWords(record, false);
     const parts = [
       ...(script.length === 0 ? [] : [`Words that differed from the script: ${quote(script)}.`]),
       ...(pronunciation.length === 0 ? [] : [`Words flagged by an acoustic pronunciation check: ${quote(pronunciation)}.`]),
@@ -102,9 +111,66 @@ function attemptDocument(record: TutoringRecord, id: string): MemoryDocument {
   };
 }
 
+/** One dubbing session as a whole: which lines it covered and which script words went wrong across it. */
+function dubDocument(id: string, records: readonly TutoringRecord[]): MemoryDocument {
+  const ordered = [...records].sort(
+    (a, b) => a.assessment.recordedAt.localeCompare(b.assessment.recordedAt) || a.assessment.attemptId.localeCompare(b.assessment.attemptId),
+  );
+  const first = ordered[0]!;
+  const { locale } = first.assessment;
+  const lines = [...new Set(ordered.map((record) => record.assessment.referenceText))];
+  const scored = ordered.filter((record) => record.assessment.status === "scored");
+  const differed = [...new Set(scored.flatMap((record) => flaggedWords(record, true)))];
+  const outcome =
+    scored.length === 0
+      ? "None of its takes could be assessed."
+      : [
+          differed.length === 0 ? "Every assessed line matched the script." : `Words that differed from the script across the dub: ${quote(differed)}.`,
+          ...(scored.length < ordered.length ? ["Some takes could not be assessed."] : []),
+        ].join(" ");
+  return {
+    id,
+    kind: "dub",
+    content: `Dub session: on ${first.assessment.recordedAt.slice(0, 10)} the learner dubbed a scene in ${locale}, recording the lines ${quote(lines)}. ${outcome}`,
+    date: first.assessment.recordedAt,
+    metadata: { kind: "dub", locale, sessionId: first.sessionId, attemptIds: ordered.map((record) => record.assessment.attemptId) },
+  };
+}
+
+const skillNames: Record<ScoreMetric, string> = {
+  languageOverall: "the overall language score",
+  pronunciation: "pronunciation",
+  wordAccuracy: "saying the script's words",
+  fluency: "fluency",
+  timingFit: "fitting each line's timing",
+};
+
+/** How one series' skills and words have moved from the first practice day to the latest, in words. */
+function trendDocument(id: string, series: SeriesProgress): MemoryDocument {
+  const basis = series.pronunciationBasis === "acoustic" ? "an acoustic pronunciation check" : "script agreement";
+  const span = series.daily.length === 0 ? "" : ` from ${series.daily[0]!.date} to ${series.daily[series.daily.length - 1]!.date}`;
+  const directions = series.skills.flatMap((skill) =>
+    skill.direction === "improving" || skill.direction === "declining" || skill.direction === "steady" ? [`${skillNames[skill.metric]} is ${skill.direction}`] : [],
+  );
+  const improved = series.words.filter((word) => word.status === "improved").map((word) => word.word);
+  const persistent = series.words.filter((word) => word.status === "persistent_weakness").map((word) => word.word);
+  const parts = [
+    directions.length === 0 ? "There isn't practice on enough different days to see a trend yet." : `Since the first practice day, ${directions.join("; ")}.`,
+    ...(improved.length === 0 ? [] : [`Words the learner now gets right: ${quote(improved.slice(0, 5))}.`]),
+    ...(persistent.length === 0 ? [] : [`Words still giving trouble: ${quote(persistent.slice(0, 5))}.`]),
+  ];
+  return {
+    id,
+    kind: "trend",
+    content: `Progress trend in ${series.locale}, judged by ${basis}${span}: ${parts.join(" ")}`,
+    metadata: { kind: "trend", locale: series.locale, evaluator: series.evaluator.provider },
+  };
+}
+
 /**
- * The memory documents that should exist for a learner right now, one per source. Content is plain
- * qualitative text with no scores, and metadata names the Convex records that back it.
+ * The memory documents that should exist for a learner right now, one per source: each attempt, each dub,
+ * one trend per progress series, recurring difficulties, and preferences. Content is plain qualitative
+ * text with no scores, and metadata names the Convex records that back it.
  */
 export async function deriveMemoryDocuments(
   records: readonly TutoringRecord[],
@@ -112,9 +178,19 @@ export async function deriveMemoryDocuments(
   preferences: LearnerPreferences | null,
 ): Promise<MemoryDocument[]> {
   const documents: MemoryDocument[] = [];
-  for (const record of applicableRecords(records)) {
+  const applicable = applicableRecords(records);
+  for (const record of applicable) {
     const id = `attempt-${(await sha256Hex(record.assessment.attemptId)).slice(0, 40)}`;
     documents.push(attemptDocument(record, id));
+  }
+  const sessions = new Map<string, TutoringRecord[]>();
+  for (const record of applicable) sessions.set(record.sessionId, [...(sessions.get(record.sessionId) ?? []), record]);
+  for (const sessionId of [...sessions.keys()].sort()) {
+    documents.push(dubDocument(`dub-${(await sha256Hex(sessionId)).slice(0, 40)}`, sessions.get(sessionId)!));
+  }
+  for (const series of report.series) {
+    const key = [series.locale, series.rubricVersion, series.evaluator.provider, series.evaluator.configVersion].join("|");
+    documents.push(trendDocument(`trend-${(await sha256Hex(key)).slice(0, 40)}`, series));
   }
   for (const series of report.series) {
     for (const word of series.words) {
@@ -208,8 +284,13 @@ export class SupermemoryStore implements TutoringMemoryStore {
 
   async search(namespace: string, query: string, limit: number): Promise<string[]> {
     try {
-      const response = await this.client.search(namespace, { query, searchMode: "memories", limit, threshold: 0.4 });
-      return response.results.flatMap((result) => (result.memory === undefined ? [] : [result.memory]));
+      // Hybrid also returns the notes as written: memories extracted from them can lag behind, and live
+      // searches in "memories" mode found nothing for notes that were stored and matched as chunks.
+      const response = await this.client.search(namespace, { query, searchMode: "hybrid", limit, threshold: 0.4 });
+      return [...new Set(response.results.flatMap((result) => {
+        const text = result.memory ?? result.chunk;
+        return text === undefined ? [] : [text];
+      }))];
     } catch (error) {
       return wrap("search", error);
     }
