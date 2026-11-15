@@ -26,7 +26,7 @@ struct ContentView: View {
                 case .messages:
                     MessagesView()
                 case .progress:
-                    PracticeProgressView(dubs: dubs, folder: libraryFolder, onRetry: reloadDubs)
+                    PracticeProgressView(dubs: dubs, folder: libraryFolder, account: account, onAccount: { isAccountPresented = true }, onRetry: reloadDubs)
                 case .myDubs:
                     MyDubsView(dubs: dubs, folder: libraryFolder, onDelete: { dub in
                         _ = try await history.delete(dub)
