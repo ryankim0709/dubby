@@ -39,6 +39,11 @@ spending route then rejects, because no auth provider exists to produce an ident
 | `PASSWORD_AUTH_PRIVATE_KEY` | Username and password sign-in: signs session tokens and backs the public key route. Unset: sign-in fails and `/.well-known/jwks.json` answers 503. Replacing it signs everyone out. | yes |
 | `CLERK_JWT_ISSUER_DOMAIN` | Signing in with Clerk. Unset means no Clerk provider. | no |
 | `OPENAI_API_KEY` | The only LLM key. Used by runtime LLM workloads through `convex/lib/openai.ts`. Unset: routes that need it answer 503. | yes |
+| `WHOP_API_KEY` | Server-side Whop key with Read plans, Read checkout configurations, and Create checkout configurations permissions. | yes |
+| `WHOP_PLAN_ID` | The Premium variant (`plan_…`): USD, recurring, 30 days, $4.99 renewal, $0 initial fee, no trial. Checkout validates these settings before creating a link. | no |
+| `WHOP_COACH_WEBHOOK_SECRET` | Signing secret for `POST /webhooks/whop`, exactly as Whop issues it, including its prefix. | yes |
+| `WHOP_WEBHOOK_SECRET` | Separate signing secret for the landing page's founding-plan endpoint, `POST /whop/webhook`. | yes |
+| `WHOP_SANDBOX` | Set to `true` for sandbox keys and test cards. Otherwise the Whop client uses production. | no |
 | `ANTHROPIC_API_KEY` | Read only by the not-yet-migrated coach reply until Tutoring's change lands, then retired. | yes |
 | `LIVEAVATAR_API_KEY`, `LIVEAVATAR_AVATAR_ID_*`, `LIVEAVATAR_VOICE_ID_*`, `LIVEAVATAR_SANDBOX` | The talking coach (`POST /coach/session-token`). | key: yes |
 | `AZURE_SPEECH_KEY` | Azure pronunciation assessment, the assessment engine. Unset (or without a region or endpoint): jobs fail with `engine_not_configured`. | yes |
@@ -52,6 +57,43 @@ throws when the file reads an unset variable, which fails the push (the CLI repo
 unset variable only disables its provider. Probing with `"NAME" in process.env` does not work: it is
 always false there. This was checked on a fresh local deployment with no variables set, and again
 with only some set.
+
+## Whop Premium
+
+The talking coach requires Premium; dubbing and pronunciation assessment retain their existing access.
+The iOS paywall opens Whop in a Safari sheet. `billing.status` is a live query scoped to the signed-in
+learner, so an accepted membership event unlocks the coach without a redirect or a local purchase flag.
+The server also checks the entitlement and its expiration before both `/coach/session-token` and
+`/coach/reply` spend provider credit.
+
+1. Create a **sandbox** Whop product and a $4.99 recurring pricing option with a 1-month (30-day)
+   period, no initial fee, and no trial. Set its variant ID as `WHOP_PLAN_ID`.
+2. Create a company API key with the three permissions above. Set `WHOP_API_KEY` and
+   `WHOP_SANDBOX=true` on the intended Convex development deployment. Never bundle the key in iOS.
+3. Create a webhook for `https://<deployment>.convex.site/webhooks/whop`, using API version
+   **2026-11-13-1**, matching the installed SDK and request header. Subscribe to
+   `membership.activated`, `membership.deactivated`, and `membership.updated`. Set its secret as
+   `WHOP_COACH_WEBHOOK_SECRET`. These membership events, rather than `payment.succeeded`, control
+   subscription access, including renewals, expiration, and membership deactivation.
+4. Deploy `convex/` from this branch to that development deployment. Build iOS with `CONVEX_URL`
+   and `COACH_BACKEND_URL` pointing at the same deployment's `.convex.cloud` and `.convex.site` URLs.
+5. Sign in, open the coach, and choose **Upgrade with Whop**. Use Whop's sandbox test card
+   `4242 4242 4242 4242`, a future expiration, and any valid test CVC. Sandbox Apple Pay is unavailable.
+   Close Safari after checkout if necessary; the unlock depends on the webhook and live query.
+   Cancel at period end to retain the remaining paid period, or deactivate the membership to verify
+   that the gate closes. A canceled checkout never grants access.
+
+`POST /billing/checkout` and `billing.createCheckout` accept no learner ID, price, or plan from the
+phone. The backend creates an owned `premiumCheckouts` record and copies its unguessable reference
+into Whop metadata. The verified webhook must match that checkout's plan before it can update
+`premiumMemberships`. Membership IDs are unique; older events cannot overwrite newer state and
+deactivation wins equal timestamps. The webhook makes no provider calls and acknowledges only after
+the database transaction commits, avoiding provider latency in Whop's five-second acknowledgement window.
+
+The SDK's `unwrapWebhook` verifies the raw body, signature, and timestamp using portable JavaScript;
+it runs in the default Convex runtime. `convex/billing.test.ts` exercises real signed synthetic events,
+tampering, duplicate delivery, learner isolation, expiration, and the paid API gate without charging a
+card. A live Whop-to-Convex checkout still needs the deployment and credentials above.
 
 ## Identity and ownership
 

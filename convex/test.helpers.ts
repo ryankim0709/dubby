@@ -148,6 +148,17 @@ export function newBackend() {
 }
 export type Backend = ReturnType<typeof newBackend>;
 
+/** A synthetic paid membership for tests that exercise provider behavior behind the coach gate. */
+export async function grantCoachPremium(t: Pick<Backend, "withIdentity" | "mutation">, identity: typeof alice): Promise<void> {
+  const learner = t.withIdentity(identity);
+  await learner.mutation(api.users.ensure, {});
+  const checkoutId = await learner.mutation(internal.billing.beginCheckout, { planId: "plan_fixture_premium" });
+  await t.mutation(internal.billing.markPremium, {
+    checkoutId, planId: "plan_fixture_premium", membershipId: "mem_fixture_premium",
+    active: true, expiresAt: Date.now() + 30 * 86400000, updatedAt: Date.now(),
+  });
+}
+
 export const fixtureLineIds = ["fixture-line-01", "fixture-line-02", "fixture-line-03"] as const;
 
 const manifestBase = () => ({

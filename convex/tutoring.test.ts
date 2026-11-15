@@ -13,6 +13,8 @@ import { dubbingSessionResults, recordsForSession, type TutoringRecord } from ".
 import { tutoringRefs } from "./tutoringRefs";
 import { buildEvidencePack, composeReply, replyProblems, templateReply, type EvidencePack } from "./tutoringReply";
 import { tutoringTables } from "./tutoringTables";
+import appSchema from "./schema";
+import { grantCoachPremium } from "./test.helpers";
 
 // Synthetic, contract-shaped grading results. Every fixture passes the contract schema before use.
 
@@ -754,7 +756,8 @@ describe("coach and tutor HTTP routes", () => {
   });
 
   async function seededTutor() {
-    const t = convexTest(schema, modules);
+    const t = convexTest(appSchema, modules);
+    await grantCoachPremium(t, alice);
     await t.mutation(tutoringRefs.ingestDubbingSession, ingestArgs(alice.tokenIdentifier, seeded));
     return t;
   }
