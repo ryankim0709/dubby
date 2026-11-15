@@ -65,9 +65,14 @@ nonisolated enum AssessmentAudioEncoder {
         while !finished {
             var convertError: NSError?
             let status = converter.convert(to: output, error: &convertError) { _, inputStatus in
+                // Reading at the end of the file throws instead of returning zero frames, so stop before asking.
+                let remaining = file.length - file.framePosition
+                if remaining <= 0 {
+                    inputStatus.pointee = .endOfStream
+                    return nil
+                }
                 do {
-                    input.frameLength = 0
-                    try file.read(into: input)
+                    try file.read(into: input, frameCount: AVAudioFrameCount(min(Int64(input.frameCapacity), remaining)))
                 } catch {
                     readFailure = error.localizedDescription
                     inputStatus.pointee = .endOfStream
