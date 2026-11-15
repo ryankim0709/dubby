@@ -57,7 +57,7 @@ nonisolated enum SceneCatalog {
         var clips: [LibraryClip] = []
         for scene in scenes {
             let url = try await localFile(for: scene, folder: folder)
-            clips.append(LibraryClip(url: url, title: scene.title, durationSeconds: try await MediaPipeline.loadDuration(of: url), details: scene.details))
+            clips.append(LibraryClip(url: url, title: scene.title, durationSeconds: try await MediaPipeline.loadDuration(of: url), origin: .published, details: scene.details))
         }
         return clips
     }

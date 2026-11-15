@@ -1,21 +1,31 @@
 import Foundation
 
+/// Where a clip comes from, which decides how its speakers are found.
+nonisolated enum ClipOrigin: Hashable, Sendable {
+    /// Bundled into the app; the device groups its lines by voice.
+    case bundled
+    /// A published library scene; the backend works out its cast from the whole clip.
+    case published
+}
+
 /// The clip being dubbed, plus the folder this dub writes its audio, takes, and exports into.
 nonisolated struct ImportedClip: Hashable, Sendable {
     let url: URL
     let title: String
     let durationSeconds: Double
+    let origin: ClipOrigin
     let workingDirectory: URL
     let locale: String?
 
-    init(url: URL, title: String, durationSeconds: Double, workingDirectory: URL) {
-        self.init(url: url, title: title, durationSeconds: durationSeconds, workingDirectory: workingDirectory, locale: nil)
+    init(url: URL, title: String, durationSeconds: Double, origin: ClipOrigin, workingDirectory: URL) {
+        self.init(url: url, title: title, durationSeconds: durationSeconds, origin: origin, workingDirectory: workingDirectory, locale: nil)
     }
 
-    init(url: URL, title: String, durationSeconds: Double, workingDirectory: URL, locale: String?) {
+    init(url: URL, title: String, durationSeconds: Double, origin: ClipOrigin, workingDirectory: URL, locale: String?) {
         self.url = url
         self.title = title
         self.durationSeconds = durationSeconds
+        self.origin = origin
         self.workingDirectory = workingDirectory
         self.locale = locale
     }
@@ -69,6 +79,12 @@ nonisolated struct LineDraft: Hashable, Sendable {
     let text: String
     let start: Double
     let end: Double
+}
+
+/// A section line, timed from the section start, and the cast character who speaks it.
+nonisolated struct CastLine: Hashable, Sendable {
+    let line: LineDraft
+    let character: Int
 }
 
 /// Everything measured from the section audio that speaker grouping needs.

@@ -301,7 +301,8 @@ nonisolated enum CuratedSceneLoader {
         guard let sampleRate = format.audioStreamBasicDescription?.mSampleRate, sampleRate == audioSampleRate else {
             throw SceneValidationError.unsupportedMedia(file: file, reason: "the audio isn't 48 kHz")
         }
-        let duration = try await asset.load(.duration).seconds
+        // AAC container estimates omit priming; validate the track's actual presentation range.
+        let duration = try await track.load(.timeRange).end.seconds
         guard abs(duration - videoDuration) <= durationTolerance else {
             throw SceneValidationError.durationMismatch(file: file, expected: videoDuration, actual: duration)
         }

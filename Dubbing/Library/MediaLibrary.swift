@@ -1,22 +1,25 @@
 import Foundation
 
-/// A clip from the project's `Media/` folder, bundled into the app at build time.
+/// A clip from the project's `Media/` folder, bundled into the app at build time, or a published scene
+/// downloaded from the backend.
 nonisolated struct LibraryClip: Hashable, Sendable, Identifiable {
     let url: URL
     let title: String
     let durationSeconds: Double
+    let origin: ClipOrigin
     let details: LibrarySceneDetails?
 
     var id: URL { url }
 
-    init(url: URL, title: String, durationSeconds: Double) {
-        self.init(url: url, title: title, durationSeconds: durationSeconds, details: nil)
+    init(url: URL, title: String, durationSeconds: Double, origin: ClipOrigin) {
+        self.init(url: url, title: title, durationSeconds: durationSeconds, origin: origin, details: nil)
     }
 
-    init(url: URL, title: String, durationSeconds: Double, details: LibrarySceneDetails?) {
+    init(url: URL, title: String, durationSeconds: Double, origin: ClipOrigin, details: LibrarySceneDetails?) {
         self.url = url
         self.title = title
         self.durationSeconds = durationSeconds
+        self.origin = origin
         self.details = details
     }
 
@@ -69,6 +72,7 @@ nonisolated enum MediaLibrary {
                 url: url,
                 title: source?.title ?? title(forFileName: url.deletingPathExtension().lastPathComponent),
                 durationSeconds: try await MediaPipeline.loadDuration(of: url),
+                origin: .bundled,
                 details: source.map { LibrarySceneDetails(locale: $0.language, synopsis: nil, characters: []) }
             ))
         }
@@ -99,6 +103,7 @@ extension ImportedClip {
             url: clip.url,
             title: clip.title,
             durationSeconds: clip.durationSeconds,
+            origin: clip.origin,
             workingDirectory: FileManager.default.temporaryDirectory
                 .appending(path: "DubProjects/\(UUID().uuidString)", directoryHint: .isDirectory),
             locale: clip.details?.locale

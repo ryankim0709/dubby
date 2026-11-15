@@ -3,7 +3,7 @@ import SwiftUI
 struct ContentView: View {
     let account: AccountModel
     let scoring: DubScoringModel?
-    @State private var tab: AppTab = .discover
+    @State private var tab: AppTab = LaunchConfiguration.current.opensClubs ? .messages : .discover
     @State private var clips: LoadState<[LibraryClip]> = .loading
     @State private var dubs: LoadState<[SavedDub]> = .loading
     @State private var launch: DubFlowLaunch?
@@ -85,7 +85,7 @@ struct ContentView: View {
             let bundledIDs = Set(bundled.map(\.sceneID))
             let remote = try await SceneCatalog.fetch(in: .main)
             let local = bundled.map { clip in
-                LibraryClip(url: clip.url, title: clip.title, durationSeconds: clip.durationSeconds, details: remote.first { $0.slug == clip.sceneID }?.details ?? clip.details)
+                LibraryClip(url: clip.url, title: clip.title, durationSeconds: clip.durationSeconds, origin: clip.origin, details: remote.first { $0.slug == clip.sceneID }?.details ?? clip.details)
             }
             let downloaded = try await SceneCatalog.loadClips(remote.filter { !bundledIDs.contains($0.slug) }, folder: SceneCatalog.defaultFolder)
             clips = .loaded(LaunchConfiguration.current.ordering(MediaLibrary.sortedByTitle(local + downloaded)))

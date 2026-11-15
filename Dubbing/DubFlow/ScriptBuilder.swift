@@ -48,6 +48,61 @@ nonisolated enum ScriptBuilder {
         return Script(lines: lines, speakers: speakers)
     }
 
+    /// Splits section words into lines like `segmentLines`, and also where a word after a pause of `turnPause`
+    /// or more belongs to someone other than the line's main speaker so far, so a quick reply gets its own line.
+    /// Each line goes to whoever speaks most of it, which absorbs a word whose timing straddles a speaker change.
+    static func castLines(
+        words: [TranscribedWord],
+        cast: SceneCast,
+        sectionStart: Double,
+        pauseThreshold: Double,
+        sentencePause: Double,
+        turnPause: Double
+    ) -> [CastLine] {
+        let sorted = words.sorted { $0.start < $1.start }
+        let speakers = sorted.map { cast.character(at: sectionStart + ($0.start + $0.end) / 2) }
+        func mainSpeaker(of group: [Int]) -> Int? {
+            let spoken = Dictionary(group.map { (speakers[$0], sorted[$0].end - sorted[$0].start) }, uniquingKeysWith: +)
+            // Ties go to the lower id, so the result doesn't depend on dictionary order.
+            return spoken.max { ($0.value, -$0.key) < ($1.value, -$1.key) }?.key
+        }
+        var groups: [[Int]] = []
+        for index in sorted.indices {
+            if let group = groups.last, let previousIndex = group.last {
+                let previous = sorted[previousIndex]
+                let gap = sorted[index].start - previous.end
+                let endsSentence = previous.text.last.map { ".?!".contains($0) } ?? false
+                let changesSpeaker = gap >= turnPause && speakers[index] != mainSpeaker(of: group)
+                if !(gap >= pauseThreshold || (endsSentence && gap >= sentencePause) || changesSpeaker) {
+                    groups[groups.count - 1].append(index)
+                    continue
+                }
+            }
+            groups.append([index])
+        }
+        return groups.compactMap { group in
+            guard let line = draft(from: group.map { sorted[$0] }), let character = mainSpeaker(of: group) else { return nil }
+            return CastLine(line: line, character: character)
+        }
+    }
+
+    /// The editable script for cast lines. Every cast character is a speaker, named when the backend could tell.
+    static func castScript(lines: [CastLine], envelopes: [[Float]], cast: SceneCast) -> Script {
+        Script(
+            lines: lines.indices.map { index in
+                ScriptLine(
+                    id: index,
+                    text: lines[index].line.text,
+                    start: lines[index].line.start,
+                    end: lines[index].line.end,
+                    speakerID: lines[index].character,
+                    envelope: envelopes[index]
+                )
+            },
+            speakers: cast.characters.indices.map { Speaker(id: $0, name: cast.characters[$0].name ?? "Speaker \($0 + 1)") }
+        )
+    }
+
     /// Loudness bars normalized to the loudest bar.
     static func envelope(samples: [Float], barCount: Int) -> [Float] {
         guard barCount > 0, samples.count >= barCount else { return Array(repeating: 0, count: max(barCount, 0)) }
