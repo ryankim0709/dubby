@@ -32,12 +32,41 @@ export const evaluatorProvenance = z.object({
 });
 export type EvaluatorProvenance = z.infer<typeof evaluatorProvenance>;
 
+const sheetScore = z.number().min(0).max(100).nullable();
+
+/** One line's exact values on the dub score sheet (docs/grading-contract.md, "Dub score sheet"), unrounded. */
+export const sheetLine = z.object({
+  version: z.literal("dub-v1"),
+  lineScore: sheetScore,
+  wordAccuracy: sheetScore,
+  timingFit: sheetScore,
+});
+
+/** The dub a session came from: what the learner dubbed and its completed score card. */
+export const dubContext = z.object({
+  sheetVersion: z.literal("dub-v1"),
+  sceneTitle: z.string().min(1).max(200),
+  characterName: z.string().min(1).max(200),
+  scoreCard: z.object({
+    dubScore: sheetScore,
+    wordAccuracy: sheetScore,
+    timingFit: sheetScore,
+    linesDubbed: z.number().int().min(0),
+    linesScored: z.number().int().min(0),
+    linesUnscorable: z.number().int().min(0),
+    linesFailed: z.number().int().min(0),
+  }),
+});
+export type DubContext = z.infer<typeof dubContext>;
+
 /** One graded attempt plus the backend-validated recording facts the contract's progress rules need. */
 export const sessionAssessment = z.object({
   assessment: gradingResult,
   /** Measured speech in the original recording, silence excluded. */
   speakingDurationMs: z.number().int().min(0),
   recordingDurationMs: z.number().int().positive(),
+  /** Present when the session came from the dub score sheet. */
+  sheet: sheetLine.optional(),
 });
 export type SessionAssessment = z.infer<typeof sessionAssessment>;
 
@@ -53,6 +82,8 @@ export const dubbingSessionResults = z.object({
   timeZone: ianaTimeZone,
   evaluator: evaluatorProvenance,
   assessments: z.array(sessionAssessment).min(1),
+  /** Present when the session came from the dub score sheet. */
+  dub: dubContext.optional(),
 });
 export type DubbingSessionResults = z.infer<typeof dubbingSessionResults>;
 
@@ -70,6 +101,9 @@ export const tutoringRecord = z
     /** Server time when tutoring stored the assessment. */
     ingestedAt: z.iso.datetime({ offset: true }),
     assessment: gradingResult,
+    /** The dub and score card the attempt belongs to, when it came from the dub score sheet. */
+    dub: dubContext.optional(),
+    sheet: sheetLine.optional(),
   })
   .superRefine((record, ctx) => {
     for (const message of wordSpanIssues(record.assessment, record.recordingDurationMs)) {
@@ -111,6 +145,8 @@ export function recordsForSession(
       recordingDurationMs: item.recordingDurationMs,
       ingestedAt,
       assessment: item.assessment,
+      ...(session.dub === undefined ? {} : { dub: session.dub }),
+      ...(item.sheet === undefined ? {} : { sheet: item.sheet }),
     }),
   );
   const issues = parsed.flatMap((result, index) =>

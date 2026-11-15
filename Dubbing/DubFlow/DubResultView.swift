@@ -39,8 +39,11 @@ private enum ExportPhase: Equatable {
 struct DubResultView: View {
     let setup: DubSetup
     let takes: [Int: RecordedTake]
+    /// Nil when the build has no backend.
+    let scoring: DubScoringModel?
     let onDone: () -> Void
     @State private var phase: ExportPhase = .filteringDialogue
+    @State private var savedDubID: UUID?
     @State private var attempt = 0
     @State private var exportTask: Task<Void, Never>?
     @State private var saveFailed = false
@@ -210,8 +213,19 @@ struct DubResultView: View {
                 .foregroundStyle(Palette.streak)
                 .accessibilityIdentifier("dubTrimNotice")
             }
+            DubScoreCard(state: scoringState, onRetry: retryScoring)
             TakeSummaryView(measurements: measurements)
         }
+    }
+
+    private var scoringState: DubScoringModel.State? {
+        guard let scoring else { return .notScored("This build has no backend, so dubs aren't scored.") }
+        return savedDubID.flatMap { scoring.state(for: $0) }
+    }
+
+    private func retryScoring() {
+        guard let savedDubID else { return }
+        scoring?.retry(dubID: savedDubID)
     }
 
     private func startExport() {
@@ -294,6 +308,9 @@ struct DubResultView: View {
                 saveFailed = true
                 throw error
             }
+            savedDubID = id
+            // Converts the takes for upload while they're on disk; sending and scoring continue in the background.
+            await scoring?.submit(dubID: id, setup: setup, takes: takes)
             phase = .finished(
                 video: history.videoURL(for: dub),
                 trimmed: placements.filter { $0.trimmedSeconds > DubTiming.noticeableTrim },

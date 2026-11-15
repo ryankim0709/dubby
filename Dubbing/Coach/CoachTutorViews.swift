@@ -276,7 +276,7 @@ struct CoachPreferencesView: View {
         } header: {
             Text("What your coach remembers")
         } footer: {
-            Text("Short practice notes and your goal, so your coach can pick up where you left off. Scores and recordings aren't kept here.")
+            Text("Your dubs, their scores, and your goal, so your coach can pick up where you left off. Recordings aren't kept here.")
         }
         .listRowBackground(Palette.surface)
     }
