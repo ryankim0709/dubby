@@ -64,14 +64,7 @@ private struct ScenePickerView: View {
                         .dubFont(24, weight: .semibold)
                         .foregroundStyle(Palette.textPrimary)
                     Spacer()
-                    Button(action: onClose) {
-                        Image(systemName: "xmark")
-                            .dubFont(16, weight: .semibold)
-                            .foregroundStyle(Palette.textPrimary)
-                            .frame(width: 44, height: 44)
-                            .background(Palette.surface, in: Circle())
-                    }
-                    .accessibilityLabel("Close")
+                    DubGlassIconButton(systemImage: "xmark", label: "Close", action: onClose)
                 }
                 .padding(.top, 8)
                 Text("Choose a scene. Next you'll frame up to 30 seconds and pick a character.")

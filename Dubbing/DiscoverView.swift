@@ -42,7 +42,7 @@ struct LoadStateContent<Value, Content: View>: View {
                     .accessibilityIdentifier(failureIdentifier ?? "loadFailed")
                 if let retry {
                     Button("Try again", action: retry)
-                        .buttonStyle(OutlineCapsuleButtonStyle())
+                        .buttonStyle(.dubSecondary)
                         .accessibilityIdentifier("retryLoad")
                 }
             }
@@ -76,21 +76,18 @@ struct DiscoverView: View {
                             .foregroundStyle(Palette.streak)
                             .accessibilityLabel("\(streakDays)-day streak")
                     }
-                    Button(action: onAccount) {
-                        Image(systemName: isSignedIn ? "person.crop.circle.fill" : "person.crop.circle")
-                            .dubFont(22, weight: .regular)
-                            .foregroundStyle(Palette.textPrimary)
-                            .frame(minWidth: 44, minHeight: 44)
-                            .contentShape(Rectangle())
-                    }
-                    .accessibilityLabel(isSignedIn ? "Account, signed in" : "Account, signed out")
+                    DubGlassIconButton(
+                        systemImage: isSignedIn ? "person.crop.circle.fill" : "person.crop.circle",
+                        label: isSignedIn ? "Account, signed in" : "Account, signed out",
+                        action: onAccount
+                    )
                     .accessibilityIdentifier("openAccount")
                 }
                 .padding(.top, 8)
                 Button(action: onTalkToCoach) {
                     Label("Talk to a coach", systemImage: "person.wave.2")
                 }
-                .buttonStyle(OutlineCapsuleButtonStyle())
+                .buttonStyle(.dubSecondary)
                 .accessibilityIdentifier("talkToCoach")
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Scenes")
@@ -143,7 +140,7 @@ struct SceneCard: View {
                         .foregroundStyle(.white)
                         .padding(.horizontal, 8)
                         .frame(minHeight: 22)
-                        .background(.black.opacity(0.6), in: Capsule())
+                        .dubGlass(in: Capsule())
                         .padding(8)
                 }
             VStack(alignment: .leading, spacing: 12) {
@@ -151,7 +148,7 @@ struct SceneCard: View {
                     .dubFont(18, weight: .semibold)
                     .foregroundStyle(Palette.textPrimary)
                 Button("Dub this scene", action: onDub)
-                    .buttonStyle(PrimaryButtonStyle(cornerRadius: 12))
+                    .buttonStyle(.dubPrimary)
                     .accessibilityIdentifier("dubScene-\(clip.sceneID)")
             }
             .padding(12)
