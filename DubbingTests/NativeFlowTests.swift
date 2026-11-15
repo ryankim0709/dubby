@@ -178,7 +178,7 @@ struct LaunchConfigurationTests {
 
     @Test func readsOnlyTheDocumentedArguments() {
         let configuration = LaunchConfiguration(arguments: [
-            "Dubbing", "-DUBIT_UI_TEST", "1", "-DUBIT_DEMO_SCENE", "demo", "-DUBIT_EXPORT_STEP_DELAY_MS", "250", "-Other", "x",
+            "Dubbing", "-DUBBY_UI_TEST", "1", "-DUBBY_DEMO_SCENE", "demo", "-DUBBY_EXPORT_STEP_DELAY_MS", "250", "-Other", "x",
         ])
         #expect(configuration.isUITest)
         #expect(configuration.demoSceneID == "demo")
@@ -186,7 +186,7 @@ struct LaunchConfigurationTests {
     }
 
     @Test func ignoresMissingOrInvalidValues() {
-        let configuration = LaunchConfiguration(arguments: ["-DUBIT_UI_TEST", "0", "-DUBIT_EXPORT_STEP_DELAY_MS", "soon", "-DUBIT_DEMO_SCENE"])
+        let configuration = LaunchConfiguration(arguments: ["-DUBBY_UI_TEST", "0", "-DUBBY_EXPORT_STEP_DELAY_MS", "soon", "-DUBBY_DEMO_SCENE"])
         #expect(!configuration.isUITest)
         #expect(configuration.demoSceneID == nil)
         #expect(configuration.exportStepDelayMilliseconds == nil)
@@ -195,9 +195,9 @@ struct LaunchConfigurationTests {
 
     @Test func listsTheDemoSceneFirstAndLeavesOtherOrderAlone() {
         let clips = [clip("alpha"), clip("demo"), clip("omega")]
-        let ordered = LaunchConfiguration(arguments: ["-DUBIT_DEMO_SCENE", "demo"]).ordering(clips)
+        let ordered = LaunchConfiguration(arguments: ["-DUBBY_DEMO_SCENE", "demo"]).ordering(clips)
         #expect(ordered.map(\.sceneID) == ["demo", "alpha", "omega"])
-        #expect(LaunchConfiguration(arguments: ["-DUBIT_DEMO_SCENE", "missing"]).ordering(clips) == clips)
+        #expect(LaunchConfiguration(arguments: ["-DUBBY_DEMO_SCENE", "missing"]).ordering(clips) == clips)
         #expect(LaunchConfiguration.inactive.ordering(clips) == clips)
     }
 

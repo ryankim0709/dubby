@@ -1,6 +1,6 @@
 # Demo scenes
 
-DubIt ships curated scenes in `Dubbing/DemoScenes/<sceneId>/`. Each scene is a short excerpt with a manifest, a video, a background track, one dialogue track per character and a poster, all described by Scene Manifest v1. `Media/` stays a git-ignored folder for personal clips; nothing in `Dubbing/DemoScenes/` is personal or private.
+Dubby ships curated scenes in `Dubbing/DemoScenes/<sceneId>/`. Each scene is a short excerpt with a manifest, a video, a background track, one dialogue track per character and a poster, all described by Scene Manifest v1. `Media/` stays a git-ignored folder for personal clips; nothing in `Dubbing/DemoScenes/` is personal or private.
 
 ## The current scene: tears-of-steel-bridge
 
@@ -74,11 +74,11 @@ scripts/demo-scenes/prepare-tears-of-steel-bridge.sh   # rebuild every file from
 python3 -I scripts/demo-scenes/validate_scene.py        # validate every scene under Dubbing/DemoScenes
 ```
 
-The prepare script needs curl, ffmpeg (libx264 and the native AAC encoder), ffprobe and python3. It downloads about 690 MB into `~/.cache/dubit-demo-scenes/tears-of-steel-bridge` (override with `DEMO_SCENE_CACHE`), verifies each file's sha256, builds everything in a temporary directory, validates it and only then replaces the scene folder (an optional argument chooses another output folder). Two runs on one machine (ffmpeg 6.1.1) produced byte-identical files, and a rebuild matches the committed files; a different ffmpeg or x264 build may change bytes, in which case the manifest checksums change with them and the validator is the check that matters.
+The prepare script needs curl, ffmpeg (libx264 and the native AAC encoder), ffprobe and python3. It downloads about 690 MB into `~/.cache/dubby-demo-scenes/tears-of-steel-bridge` (override with `DEMO_SCENE_CACHE`), verifies each file's sha256, builds everything in a temporary directory, validates it and only then replaces the scene folder (an optional argument chooses another output folder). Two runs on one machine (ffmpeg 6.1.1) produced byte-identical files, and a rebuild matches the committed files; a different ffmpeg or x264 build may change bytes, in which case the manifest checksums change with them and the validator is the check that matters.
 
 The validator uses only the Python standard library and ffprobe. It enforces every Scene Manifest v1 rule: schema version, kebab-case ids, file names with the scene prefix, existence and sha256 of every file, H.264 at most 1280x720 and 30 fps in a faststart MP4 of 10 to 30 s, AAC-LC 48 kHz .m4a tracks that start at 0 and match the video duration within 20 ms, total size at most 10 MB, finite sorted line times inside the duration, resolvable characters, no overlap within a character and rare overlap between characters, optional word ranges and order, at least two characters with a practice character that has 2 to 4 lines, and complete provenance (https URLs, 64-hex source checksum, no NonCommercial or NoDerivatives license, valid separation, transcript and word-timing source values, excerpt length equal to the duration).
 
-`measure_scene.py` is an optional quality check (needs numpy and ffmpeg): `python3 scripts/demo-scenes/measure_scene.py Dubbing/DemoScenes/tears-of-steel-bridge ~/.cache/dubit-demo-scenes/tears-of-steel-bridge`. It exits 1 if any background block crosses the score thresholds.
+`measure_scene.py` is an optional quality check (needs numpy and ffmpeg): `python3 scripts/demo-scenes/measure_scene.py Dubbing/DemoScenes/tears-of-steel-bridge ~/.cache/dubby-demo-scenes/tears-of-steel-bridge`. It exits 1 if any background block crosses the score thresholds.
 
 ## Adding another scene
 

@@ -3,13 +3,13 @@ import os
 import UIKit
 
 /// Launch arguments for UI tests and QA runs. They are read only in DEBUG builds and builds that define
-/// DUBIT_QA; any other build ignores them.
+/// DUBBY_QA; any other build ignores them.
 nonisolated struct LaunchConfiguration: Equatable, Sendable {
-    /// `-DUBIT_UI_TEST 1`: start from a clean state with animations off.
+    /// `-DUBBY_UI_TEST 1`: start from a clean state with animations off.
     let isUITest: Bool
-    /// `-DUBIT_DEMO_SCENE <sceneID>`: the scene listed first.
+    /// `-DUBBY_DEMO_SCENE <sceneID>`: the scene listed first.
     let demoSceneID: String?
-    /// `-DUBIT_EXPORT_STEP_DELAY_MS <n>`: a pause before each export phase, so cancelling and backgrounding can be exercised.
+    /// `-DUBBY_EXPORT_STEP_DELAY_MS <n>`: a pause before each export phase, so cancelling and backgrounding can be exercised.
     let exportStepDelayMilliseconds: Int?
 
     static let inactive = LaunchConfiguration(arguments: [])
@@ -19,13 +19,13 @@ nonisolated struct LaunchConfiguration: Equatable, Sendable {
             guard let index = arguments.firstIndex(of: key), arguments.indices.contains(index + 1) else { return nil }
             return arguments[index + 1]
         }
-        isUITest = value(of: "-DUBIT_UI_TEST") == "1"
-        demoSceneID = value(of: "-DUBIT_DEMO_SCENE")
-        exportStepDelayMilliseconds = value(of: "-DUBIT_EXPORT_STEP_DELAY_MS").flatMap { Int($0) }.flatMap { $0 > 0 ? $0 : nil }
+        isUITest = value(of: "-DUBBY_UI_TEST") == "1"
+        demoSceneID = value(of: "-DUBBY_DEMO_SCENE")
+        exportStepDelayMilliseconds = value(of: "-DUBBY_EXPORT_STEP_DELAY_MS").flatMap { Int($0) }.flatMap { $0 > 0 ? $0 : nil }
     }
 
     static var current: LaunchConfiguration {
-        #if DEBUG || DUBIT_QA
+        #if DEBUG || DUBBY_QA
         LaunchConfiguration(arguments: ProcessInfo.processInfo.arguments)
         #else
         .inactive

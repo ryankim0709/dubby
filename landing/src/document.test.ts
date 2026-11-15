@@ -9,12 +9,12 @@ const meta = (selector: string): string | null =>
 describe('index.html metadata', (): void => {
   test('describes the page for search and sharing', (): void => {
     expect(doc.documentElement.lang).toBe('en');
-    expect(doc.title).toContain('DubIt');
+    expect(doc.title).toContain('Dubby');
     expect(meta('meta[name="description"]')).toMatch(/in development/i);
-    expect(meta('meta[property="og:title"]')).toContain('DubIt');
+    expect(meta('meta[property="og:title"]')).toContain('Dubby');
     expect(meta('meta[property="og:description"]')).toBeTruthy();
     expect(meta('meta[property="og:type"]')).toBe('website');
-    expect(meta('meta[property="og:site_name"]')).toBe('DubIt');
+    expect(meta('meta[property="og:site_name"]')).toBe('Dubby');
     expect(meta('meta[name="twitter:card"]')).toBe('summary');
     expect(meta('meta[name="viewport"]')).toContain('width=device-width');
   });

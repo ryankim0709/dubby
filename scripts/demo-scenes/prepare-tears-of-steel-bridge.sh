@@ -3,7 +3,7 @@
 #
 # Usage: scripts/demo-scenes/prepare-tears-of-steel-bridge.sh [OUTPUT_DIR]
 # Needs: bash, curl, ffmpeg (libx264 and the native aac encoder), ffprobe, python3, sha256sum or shasum.
-# Downloads about 690 MB once into $DEMO_SCENE_CACHE (default ~/.cache/dubit-demo-scenes/tears-of-steel-bridge).
+# Downloads about 690 MB once into $DEMO_SCENE_CACHE (default ~/.cache/dubby-demo-scenes/tears-of-steel-bridge).
 set -euo pipefail
 
 SCENE_ID=tears-of-steel-bridge
@@ -11,7 +11,7 @@ REPO_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 SCRIPTS=$REPO_ROOT/scripts/demo-scenes
 TEMPLATE=$SCRIPTS/$SCENE_ID.template.json
 OUT_DIR=${1:-$REPO_ROOT/Dubbing/DemoScenes/$SCENE_ID}
-CACHE=${DEMO_SCENE_CACHE:-${XDG_CACHE_HOME:-$HOME/.cache}/dubit-demo-scenes/$SCENE_ID}
+CACHE=${DEMO_SCENE_CACHE:-${XDG_CACHE_HOME:-$HOME/.cache}/dubby-demo-scenes/$SCENE_ID}
 
 BASE_URL=https://download.blender.org/demo/movies/ToS
 EXCERPT_START=29.75

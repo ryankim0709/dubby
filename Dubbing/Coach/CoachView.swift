@@ -82,7 +82,7 @@ struct CoachView: View {
                             }
                         }
                     }
-                    Text("What you say is transcribed on this iPhone. The text goes through DubIt's servers to OpenAI, which writes your coach's reply, and LiveAvatar by HeyGen turns that reply into the coach's voice and video.")
+                    Text("What you say is transcribed on this iPhone. The text goes through Dubby's servers to OpenAI, which writes your coach's reply, and LiveAvatar by HeyGen turns that reply into the coach's voice and video.")
                         .dubFont(12, weight: .regular)
                         .foregroundStyle(Palette.placeholder)
                 }
@@ -261,12 +261,12 @@ struct CoachSessionView: View {
         }
         .onChange(of: scenePhase) { _, phase in
             if phase != .active {
-                session.interrupt(because: "DubIt left the screen")
+                session.interrupt(because: "Dubby left the screen")
             }
         }
     }
 
-    /// Runtime facts for UI tests, present only in a debug launch with `-DUBIT_UI_TEST 1`.
+    /// Runtime facts for UI tests, present only in a debug launch with `-DUBBY_UI_TEST 1`.
     @ViewBuilder
     private var qaState: some View {
         if CoachQAOptions.current.isUITest {

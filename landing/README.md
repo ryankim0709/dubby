@@ -1,6 +1,6 @@
-# DubIt landing site
+# Dubby landing site
 
-The marketing page for DubIt, a native iPhone app in development that teaches languages by dubbing short scenes. It is a standalone React + TypeScript + Vite app. Nothing on the page records audio, plays media, or talks to a backend.
+The marketing page for Dubby, a native iPhone app in development that teaches languages by dubbing short scenes. It is a standalone React + TypeScript + Vite app. Nothing on the page records audio, plays media, or talks to a backend.
 
 ## What the page says
 
@@ -94,8 +94,8 @@ Open http://127.0.0.1:5173. Compose syncs source edits and rebuilds when depende
 Build and run the production image from the repository root:
 
 ```sh
-docker build -t dubit-landing ./landing
-docker run --rm -p 127.0.0.1:8080:8080 dubit-landing
+docker build -t dubby-landing ./landing
+docker run --rm -p 127.0.0.1:8080:8080 dubby-landing
 ```
 
 Open http://127.0.0.1:8080. The final image serves static files with unprivileged Nginx and contains no Node.js runtime or development dependencies.

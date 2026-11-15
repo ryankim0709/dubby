@@ -12,9 +12,9 @@ nonisolated enum CoachQAFault: String, Hashable, Sendable {
 /// QA switches read from launch arguments. They exist only in DEBUG builds: a release build
 /// compiles to "nothing enabled", so it never sends the fault header or shows the QA state carriers.
 nonisolated struct CoachQAOptions: Equatable, Sendable {
-    /// `-DUBIT_UI_TEST 1`: expose the coach's runtime facts to UI tests.
+    /// `-DUBBY_UI_TEST 1`: expose the coach's runtime facts to UI tests.
     let isUITest: Bool
-    /// `-DUBIT_QA_COACH_FAULT <missing_key|provider_error|provider_timeout>`.
+    /// `-DUBBY_QA_COACH_FAULT <missing_key|provider_error|provider_timeout>`.
     let fault: CoachQAFault?
 
     static let disabled = CoachQAOptions(isUITest: false, fault: nil)
@@ -27,7 +27,7 @@ nonisolated struct CoachQAOptions: Equatable, Sendable {
     static let current: CoachQAOptions = {
         #if DEBUG
         let defaults = UserDefaults.standard
-        return parse(uiTest: defaults.bool(forKey: "DUBIT_UI_TEST"), fault: defaults.string(forKey: "DUBIT_QA_COACH_FAULT"))
+        return parse(uiTest: defaults.bool(forKey: "DUBBY_UI_TEST"), fault: defaults.string(forKey: "DUBBY_QA_COACH_FAULT"))
         #else
         return .disabled
         #endif

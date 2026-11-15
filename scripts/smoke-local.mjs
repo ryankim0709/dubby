@@ -48,7 +48,7 @@ const bob = client("smoke-bob");
 const bearer = (subject) => ({ Authorization: "Bearer " + mintToken(subject) });
 
 const health = await fetch(siteUrl + "/health");
-check("GET /health is public", health.status === 200 && (await health.json()).service === "dubit-backend");
+check("GET /health is public", health.status === 200 && (await health.json()).service === "dubby-backend");
 const characters = await fetch(siteUrl + "/coach/characters");
 check("GET /coach/characters is public", characters.status === 200);
 

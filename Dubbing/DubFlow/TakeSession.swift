@@ -10,17 +10,17 @@ nonisolated enum TakeInputSource: Hashable, Sendable {
     /// A bundled synthetic or licensed file played in at real time (DEBUG and QA builds only). Never assessed.
     case fixture(name: String)
 
-    static let launchArgument = "-DUBIT_AUDIO_FIXTURE"
+    static let launchArgument = "-DUBBY_AUDIO_FIXTURE"
 
     /// True when no person spoke this take.
     var isSynthetic: Bool {
         if case .fixture = self { true } else { false }
     }
 
-    /// The input this process records from: the fixture named by `-DUBIT_AUDIO_FIXTURE` in DEBUG builds and builds
-    /// defining `DUBIT_QA`, otherwise the microphone. Release builds ignore the argument.
+    /// The input this process records from: the fixture named by `-DUBBY_AUDIO_FIXTURE` in DEBUG builds and builds
+    /// defining `DUBBY_QA`, otherwise the microphone. Release builds ignore the argument.
     static var configured: TakeInputSource {
-        #if DEBUG || DUBIT_QA
+        #if DEBUG || DUBBY_QA
         parse(arguments: ProcessInfo.processInfo.arguments)
         #else
         .microphone
@@ -97,14 +97,14 @@ nonisolated enum StudioInterruption: Hashable, Sendable {
     case audioSessionInterrupted
     /// The audio route the recording used went away, for example headphones unplugged or AirPods disconnected.
     case audioRouteLost
-    /// DubIt left the foreground.
+    /// Dubby left the foreground.
     case appBackgrounded
 
     var reason: String {
         switch self {
         case .audioSessionInterrupted: "a call or another app took over the audio"
         case .audioRouteLost: "your headphones were disconnected"
-        case .appBackgrounded: "DubIt left the screen"
+        case .appBackgrounded: "Dubby left the screen"
         }
     }
 

@@ -1,6 +1,6 @@
-# DubIt
+# Dubby
 
-DubIt is a native iOS app in development for learning languages by dubbing short scenes. The intended experience lets users choose a character, practice timed dialogue, receive pronunciation coaching, and save or share their performance.
+Dubby is a native iOS app in development for learning languages by dubbing short scenes. The intended experience lets users choose a character, practice timed dialogue, receive pronunciation coaching, and save or share their performance.
 
 This README is the entry point for the project's structure, chosen tools, local development, and planned architecture. Detailed MVP priorities live in the [product rules](.cursor/rules/product.mdc).
 

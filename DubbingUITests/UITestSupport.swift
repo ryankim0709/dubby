@@ -1,7 +1,7 @@
 import XCTest
 
 enum DemoScene {
-    static let sceneID = ProcessInfo.processInfo.environment["DUBIT_QA_SCENE_ID"] ?? "demo"
+    static let sceneID = ProcessInfo.processInfo.environment["DUBBY_QA_SCENE_ID"] ?? "demo"
     static let audioFixture = "qa-speech-fixture"
 }
 
@@ -28,9 +28,9 @@ class DubbingUITestCase: XCTestCase {
         continueAfterFailure = false
         app = XCUIApplication()
         app.launchArguments = [
-            "-DUBIT_UI_TEST", "1",
-            "-DUBIT_DEMO_SCENE", DemoScene.sceneID,
-            "-DUBIT_AUDIO_FIXTURE", DemoScene.audioFixture,
+            "-DUBBY_UI_TEST", "1",
+            "-DUBBY_DEMO_SCENE", DemoScene.sceneID,
+            "-DUBBY_AUDIO_FIXTURE", DemoScene.audioFixture,
         ]
     }
 

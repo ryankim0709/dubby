@@ -76,8 +76,8 @@ struct StudioInterruptionTests {
     }
 
     @Test func readsTheFixtureLaunchArgument() {
-        #expect(TakeInputSource.parse(arguments: ["Dubbing", "-DUBIT_AUDIO_FIXTURE", "qa-speech-fixture"]) == .fixture(name: "qa-speech-fixture"))
-        #expect(TakeInputSource.parse(arguments: ["Dubbing", "-DUBIT_AUDIO_FIXTURE"]) == .microphone)
+        #expect(TakeInputSource.parse(arguments: ["Dubbing", "-DUBBY_AUDIO_FIXTURE", "qa-speech-fixture"]) == .fixture(name: "qa-speech-fixture"))
+        #expect(TakeInputSource.parse(arguments: ["Dubbing", "-DUBBY_AUDIO_FIXTURE"]) == .microphone)
         #expect(TakeInputSource.parse(arguments: ["Dubbing"]) == .microphone)
         #expect(TakeInputSource.fixture(name: "x").isSynthetic)
         #expect(!TakeInputSource.microphone.isSynthetic)

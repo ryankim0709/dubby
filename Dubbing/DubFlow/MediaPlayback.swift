@@ -53,7 +53,7 @@ final class SegmentPlayer {
 }
 
 /// Records one take to an AAC file, from the microphone or, in DEBUG and QA builds launched with
-/// `-DUBIT_AUDIO_FIXTURE <name>`, from a bundled audio file played in at real time through the same path.
+/// `-DUBBY_AUDIO_FIXTURE <name>`, from a bundled audio file played in at real time through the same path.
 /// The caller requests microphone permission either way, so a denial fails the same way with a fixture.
 @MainActor
 final class TakeRecorder {
@@ -68,7 +68,7 @@ final class TakeRecorder {
         fixtureURL = nil
     }
 
-    /// Records from an audio file at real time, as `-DUBIT_AUDIO_FIXTURE` does with a bundled one.
+    /// Records from an audio file at real time, as `-DUBBY_AUDIO_FIXTURE` does with a bundled one.
     init(fixtureNamed name: String, url: URL) {
         inputSource = .fixture(name: name)
         fixtureURL = url

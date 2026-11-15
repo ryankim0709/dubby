@@ -12,7 +12,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const keyDir = join(root, ".convex", "dev-auth");
 const privateKeyPath = join(keyDir, "private.pem");
 export const issuer = "https://dev-only-test-issuer.invalid";
-export const audience = "dubit-dev-only-test";
+export const audience = "dubby-dev-only-test";
 const keyId = "dev-only-test-key";
 
 function ensureKeys() {

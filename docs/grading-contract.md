@@ -217,4 +217,4 @@ Validate required response fields, enum values, score bounds, null reasons, refe
 
 The contract does not select an assessment vendor or implement Swift models, Convex tables, endpoints, coaching prompts, or daily-summary queries. Those are follow-on implementation work. The existing saved-dub records and practice totals do not implement this grading contract.
 
-For an example of a speech service exposing acoustic and word-level measurements, see [Microsoft's pronunciation assessment documentation](https://learn.microsoft.com/en-us/azure/ai-services/speech-service/how-to-pronunciation-assessment). Its provider-specific scoring formula is separate from the proposed DubIt rubric above.
+For an example of a speech service exposing acoustic and word-level measurements, see [Microsoft's pronunciation assessment documentation](https://learn.microsoft.com/en-us/azure/ai-services/speech-service/how-to-pronunciation-assessment). Its provider-specific scoring formula is separate from the proposed Dubby rubric above.

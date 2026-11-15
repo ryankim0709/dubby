@@ -250,7 +250,7 @@ nonisolated enum DubFlowError: LocalizedError, Equatable {
         case .microphoneDenied:
             "Microphone access is off. Turn it on in Settings to record your lines."
         case .speechRecognitionDenied:
-            "Speech recognition is off. Turn it on in Settings so DubIt can transcribe your scene."
+            "Speech recognition is off. Turn it on in Settings so Dubby can transcribe your scene."
         case .recordingFailed(let file):
             "Recording couldn't start for \(file)."
         case .recordingInterrupted(let reason):

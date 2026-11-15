@@ -20,7 +20,7 @@ export const steps = [
     title: 'Find your scene.',
     summary: 'Pick a short scene from a small, curated library and step into a character.',
     detail:
-      'The library is small on purpose: short scenes with their characters and timed dialogue prepared ahead of time. DubIt is built around that library, not a search through arbitrary films.',
+      'The library is small on purpose: short scenes with their characters and timed dialogue prepared ahead of time. Dubby is built around that library, not a search through arbitrary films.',
   },
   {
     id: 'lines',

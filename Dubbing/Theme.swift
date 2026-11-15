@@ -1,7 +1,7 @@
 import SwiftUI
 import UIKit
 
-/// Color tokens taken from the dub.it mockups.
+/// Color tokens taken from the Dubby mockups.
 enum Palette {
     static let background = Color(hex: 0x100D19)
     static let surface = Color(hex: 0x252131)

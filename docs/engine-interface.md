@@ -22,7 +22,7 @@ nonisolated struct CuratedSceneCatalog: Sendable {
     func scene(withID id: CuratedScene.ID) -> CuratedScene?
 }
 nonisolated struct CuratedScene: Hashable, Sendable, Identifiable {
-    let id: String            // manifest sceneId, what -DUBIT_DEMO_SCENE names
+    let id: String            // manifest sceneId, what -DUBBY_DEMO_SCENE names
     let title, synopsis: String
     let locale: String        // BCP-47, e.g. "en-US"
     let durationSeconds: Double
@@ -115,7 +115,7 @@ Rules, stated once:
 ```swift
 nonisolated enum TakeInputSource: Hashable, Sendable {
     case microphone
-    case fixture(name: String)                 // -DUBIT_AUDIO_FIXTURE <name>, DEBUG or DUBIT_QA builds only
+    case fixture(name: String)                 // -DUBBY_AUDIO_FIXTURE <name>, DEBUG or DUBBY_QA builds only
     var isSynthetic: Bool
     static var configured: TakeInputSource     // what this process records from
 }

@@ -94,7 +94,7 @@ nonisolated enum SceneValidationError: LocalizedError, Equatable, Sendable {
         case .duplicateIdentifier(let id):
             "The id \"\(id)\" is used more than once."
         case .unsupportedLocale(let locale):
-            "The scene's language \(locale) isn't one DubIt supports."
+            "The scene's language \(locale) isn't one Dubby supports."
         case .invalidSceneDuration(let seconds):
             "The scene duration \(seconds) s isn't a usable length."
         case .invalidLineTiming(let lineID, let start, let end):

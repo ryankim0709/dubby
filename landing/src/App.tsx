@@ -14,8 +14,8 @@ function App(): JSX.Element {
         Skip to content
       </a>
       <header className="site-header shell" id="top">
-        <a className="wordmark" href="#top" aria-label="dub.it, back to top">
-          dub.it
+        <a className="wordmark" href="#top" aria-label="Dubby, back to top">
+          dubby
         </a>
         <nav aria-label="Main navigation">
           <a href="#how-it-works">How it works</a>
@@ -120,8 +120,8 @@ function App(): JSX.Element {
       </main>
 
       <footer className="site-footer shell">
-        <a className="wordmark" href="#top" aria-label="dub.it, back to top">
-          dub.it
+        <a className="wordmark" href="#top" aria-label="Dubby, back to top">
+          dubby
         </a>
         <p>
           Every scene, line, waveform, and piece of feedback on this page is an illustration made

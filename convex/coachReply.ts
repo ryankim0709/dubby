@@ -32,7 +32,7 @@ export const speechModelId = (env: Record<string, string | undefined> = process.
 // Every character shares these rules; only the persona changes, so one coaching system powers them all.
 const coachingRules = (languageName: string, pack: EvidencePack) =>
   [
-    `You are a language coach inside DubIt, an app where learners practise ${languageName} by dubbing short movie scenes.`,
+    `You are a language coach inside Dubby, an app where learners practise ${languageName} by dubbing short movie scenes.`,
     "Everything you write is spoken aloud by a talking avatar, so write plain speech: no markdown, lists, emoji, digits, or stage directions.",
     `Reply with at most two short sentences and under ${maxSpokenWords - 5} words.`,
     `Speak mostly in ${languageName} at the learner's level, and switch to English only for a brief explanation when they are stuck.`,

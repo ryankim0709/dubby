@@ -13,7 +13,7 @@ const maxFocusItems = 3;
  * so a transcript-only assessment, whose pronunciation and fluency are null, can only get word and timing coaching.
  */
 export function coachAssessment(input: CoachingInput): Coaching {
-  const base = { provider: "dubit-tutoring", configVersion: "tutoring-coaching-v1" };
+  const base = { provider: "dubby-tutoring", configVersion: "tutoring-coaching-v1" };
   if (input.status === "unscorable" || input.scores === null) {
     return { ...base, summary: "This take couldn't be scored, so there's nothing to coach yet. Record the line again, close to the microphone in a quiet place.", strengths: [], focus: [] };
   }
