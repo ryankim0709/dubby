@@ -34,11 +34,13 @@ nonisolated enum CoachError: LocalizedError, Equatable {
     case notFound(operation: String)
     case versionConflict
     case providerFailed(operation: String, message: String)
+    case providerTimeout(operation: String)
     case serviceNotConfigured(operation: String)
     case requestFailed(operation: String, status: Int, body: String)
     case invalidResponse(operation: String, reason: String)
     case noSpeechHeard
     case avatarDisconnected
+    case avatarBusy
 
     var errorDescription: String? {
         switch self {
@@ -56,6 +58,8 @@ nonisolated enum CoachError: LocalizedError, Equatable {
             "Your preferences changed somewhere else."
         case .providerFailed(let operation, let message):
             "\(operation) failed because a coaching service didn't answer: \(message)"
+        case .providerTimeout(let operation):
+            "\(operation) took too long because the coaching service didn't answer in time. Try again."
         case .serviceNotConfigured(let operation):
             "\(operation) isn't available because coaching isn't fully set up on the server yet."
         case .requestFailed(let operation, let status, let body):
@@ -66,6 +70,8 @@ nonisolated enum CoachError: LocalizedError, Equatable {
             "I didn't catch any words. Hold the button and speak a little closer to the mic."
         case .avatarDisconnected:
             "The coach's video call ended. Start the session again to keep talking."
+        case .avatarBusy:
+            "The coach is still speaking."
         }
     }
 
@@ -92,8 +98,31 @@ nonisolated enum CoachError: LocalizedError, Equatable {
         case (404, _): return .notFound(operation: operation)
         case (409, "version_conflict"): return .versionConflict
         case (502, _): return .providerFailed(operation: operation, message: detail)
+        case (504, "provider_timeout"): return .providerTimeout(operation: operation)
         case (503, "not_configured"): return .serviceNotConfigured(operation: operation)
         default: return .requestFailed(operation: operation, status: status, body: detail)
+        }
+    }
+
+    /// The backend's error code for this failure, or nil when it didn't come from one.
+    var backendCode: String? {
+        switch self {
+        case .signInRequired: "unauthenticated"
+        case .invalidRequest: "invalid_request"
+        case .notFound: "not_found"
+        case .versionConflict: "version_conflict"
+        case .providerFailed: "provider_failed"
+        case .providerTimeout: "provider_timeout"
+        case .serviceNotConfigured: "not_configured"
+        default: nil
+        }
+    }
+
+    /// Whether trying the same turn again can succeed without the learner changing anything.
+    var isRetryable: Bool {
+        switch self {
+        case .providerFailed, .providerTimeout, .serviceNotConfigured, .offline, .requestFailed: true
+        default: false
         }
     }
 
@@ -111,11 +140,13 @@ nonisolated enum CoachConversation {
         return text.isEmpty ? nil : text
     }
 
-    /// The locale and line the backend should ground a reply in. The line only applies when the
-    /// learner is practising the language that line belongs to.
-    static func replyContext(language: SpokenLanguage, practice: CoachPracticeContext?) -> (locale: String, lineId: String?) {
-        guard let practice, practice.locale == language.identifier else { return (language.identifier, nil) }
-        return (language.identifier, practice.lineID)
+    /// What to tell the learner when a reply came without a voice. The text is still the coach's reply.
+    static func voiceUnavailableMessage(for error: ReplyAudioError?) -> String {
+        switch error?.code {
+        case "provider_timeout": "The coach's voice took too long, so this reply is text only."
+        case "provider_failed": "The coach's voice didn't work this time, so this reply is text only."
+        default: "The coach's voice isn't available for this reply, so it is shown as text."
+        }
     }
 
     /// LiveAvatar takes a two-letter language for the avatar's voice, such as "es" for es-ES.

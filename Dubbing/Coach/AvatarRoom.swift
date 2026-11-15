@@ -4,8 +4,6 @@ import LiveKit
 /// What the LiveKit room reports, handed from LiveKit's threads to the main actor.
 nonisolated enum AvatarRoomUpdate: Sendable {
     case videoTrack(RemoteVideoTrack?)
-    case event(LiveAvatarEvent)
-    case unreadableEvent(String)
     case disconnected(String?)
 }
 
@@ -19,27 +17,15 @@ nonisolated private final class AvatarRoomDelegate: NSObject, RoomDelegate {
         super.init()
     }
 
+    /// The learner publishes nothing to this room, so the only video in it is the avatar's.
     func room(_ room: Room, participant: RemoteParticipant, didSubscribeTrack publication: RemoteTrackPublication) {
-        guard participant.identity?.stringValue == LiveAvatarEvent.avatarParticipantIdentity,
-              let track = publication.track as? RemoteVideoTrack else { return }
+        guard let track = publication.track as? RemoteVideoTrack else { return }
         continuation.yield(.videoTrack(track))
     }
 
     func room(_ room: Room, participant: RemoteParticipant, didUnsubscribeTrack publication: RemoteTrackPublication) {
-        guard participant.identity?.stringValue == LiveAvatarEvent.avatarParticipantIdentity,
-              publication.kind == .video else { return }
+        guard publication.kind == .video else { return }
         continuation.yield(.videoTrack(nil))
-    }
-
-    func room(_ room: Room, participant: RemoteParticipant?, didReceiveData data: Data, forTopic topic: String, encryptionType: EncryptionType) {
-        guard topic == LiveAvatarEvent.topic else { return }
-        do {
-            if let event = try LiveAvatarEvent.decode(data) {
-                continuation.yield(.event(event))
-            }
-        } catch {
-            continuation.yield(.unreadableEvent(error.localizedDescription))
-        }
     }
 
     func room(_ room: Room, didDisconnectWithError error: LiveKitError?) {
@@ -48,7 +34,8 @@ nonisolated private final class AvatarRoomDelegate: NSObject, RoomDelegate {
     }
 }
 
-/// The LiveKit room that carries the avatar's video and audio, and our speak commands to it.
+/// The LiveKit room that carries the avatar's video and audio. The app only listens: it publishes
+/// no microphone and sends no data, because the coach's voice goes to LiveAvatar over its socket.
 @MainActor
 final class AvatarRoom {
     private let delegate = AvatarRoomDelegate()
@@ -60,8 +47,6 @@ final class AvatarRoom {
         room = Room(delegate: delegate)
     }
 
-    /// Joins as a listener only: the learner's mic is never published, so the avatar hears nothing
-    /// and only says what `speak` sends.
     func connect(to connection: LiveAvatarConnection) async throws {
         // The coach records the learner with AVAudioRecorder while the avatar plays, so the app owns
         // the audio session instead of letting LiveKit switch categories underneath the recorder.
@@ -70,19 +55,7 @@ final class AvatarRoom {
         try await room.connect(url: connection.livekitURL, token: connection.livekitClientToken)
     }
 
-    func speak(_ text: String) async throws {
-        try await publish(try LiveAvatarCommand.speakText(text, eventID: UUID()))
-    }
-
-    func interrupt() async throws {
-        try await publish(try LiveAvatarCommand.interrupt())
-    }
-
     func disconnect() async {
         await room.disconnect()
-    }
-
-    private func publish(_ data: Data) async throws {
-        try await room.localParticipant.publish(data: data, options: DataPublishOptions(topic: LiveAvatarCommand.topic, reliable: true))
     }
 }

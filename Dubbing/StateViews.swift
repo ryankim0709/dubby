@@ -136,10 +136,17 @@ struct MeasurementRow: View {
     }
 }
 
+/// What a shown piece of feedback rests on. Only an acoustic speech measurement may carry a pronunciation score.
+nonisolated enum TakeFeedbackBasis: String, Sendable {
+    case acoustic
+    case scriptAgreement = "script_agreement"
+    case none
+}
+
 extension TakeMeasurement {
     /// Take length and mic level are the only things measured, and neither says anything about pronunciation,
     /// so there is no pronunciation score to show and none exists in the UI.
-    var feedbackBasis: FeedbackBasis { .none }
+    var feedbackBasis: TakeFeedbackBasis { .none }
 
     var lengthDescription: String {
         let length = String(format: "%.1f s take, %.1f s line", takeSeconds, lineSeconds)
@@ -208,6 +215,6 @@ struct TakeSummaryView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Palette.surface, in: RoundedRectangle(cornerRadius: 16))
         .accessibilityIdentifier("takeSummary")
-        .overlay { StateCarriers(items: [StateCarrier(identifier: "feedbackBasis", value: FeedbackBasis.none.rawValue)]) }
+        .overlay { StateCarriers(items: [StateCarrier(identifier: "feedbackBasis", value: TakeFeedbackBasis.none.rawValue)]) }
     }
 }

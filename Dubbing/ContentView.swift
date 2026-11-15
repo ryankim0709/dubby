@@ -1,11 +1,13 @@
 import SwiftUI
 
 struct ContentView: View {
+    @Environment(AccountModel.self) private var account
     @State private var tab: AppTab = .discover
     @State private var clips: LoadState<[LibraryClip]> = .loading
     @State private var dubs: LoadState<[SavedDub]> = .loading
     @State private var launch: DubFlowLaunch?
     @State private var isCoachPresented = false
+    @State private var isAccountPresented = false
 
     private let libraryFolder = DubLibrary.defaultFolder
     private let history = LocalDubHistory(folder: DubLibrary.defaultFolder)
@@ -20,7 +22,7 @@ struct ContentView: View {
             Group {
                 switch tab {
                 case .discover:
-                    DiscoverView(clips: clips, streakDays: streakDays, onDub: { launch = .scene($0) }, onTalkToCoach: { isCoachPresented = true }, onRetry: reloadClips)
+                    DiscoverView(clips: clips, streakDays: streakDays, onDub: { launch = .scene($0) }, isSignedIn: account.phase.isSignedIn, onTalkToCoach: { isCoachPresented = true }, onAccount: { isAccountPresented = true }, onRetry: reloadClips)
                 case .messages:
                     MessagesView()
                 case .progress:
@@ -41,7 +43,15 @@ struct ContentView: View {
             DubFlowView(launch: launch, clips: clips, onClose: { self.launch = nil })
         }
         .fullScreenCover(isPresented: $isCoachPresented) {
-            CoachView(onClose: { isCoachPresented = false })
+            // The dub result screen has no coach entry yet. When it gains one it should pass a
+            // CoachPracticeContext only once its lines carry backend line ids; ScriptLine.id is a local index today.
+            CoachView(practice: nil, tokens: AccountTokenProvider(account: account), onClose: { isCoachPresented = false })
+        }
+        .sheet(isPresented: $isAccountPresented) {
+            AccountView(account: account, onClose: { isAccountPresented = false })
+        }
+        .task {
+            await account.start()
         }
         .task {
             await loadDubs()
@@ -83,4 +93,5 @@ struct ContentView: View {
 
 #Preview {
     ContentView()
+        .environment(AccountModel(service: nil))
 }
