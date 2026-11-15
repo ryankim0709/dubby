@@ -32,6 +32,17 @@ nonisolated enum MediaPipeline {
         return images
     }
 
+    @concurrent
+    static func thumbnail(for url: URL, at seconds: Double, maximumSize: CGSize) async throws -> CGImage {
+        let generator = AVAssetImageGenerator(asset: AVURLAsset(url: url))
+        generator.appliesPreferredTrackTransform = true
+        generator.maximumSize = maximumSize
+        // Role stills need the dialogue frame, rather than an earlier keyframe that may be black.
+        generator.requestedTimeToleranceBefore = .zero
+        generator.requestedTimeToleranceAfter = .zero
+        return try await generator.image(at: mediaTime(seconds)).image
+    }
+
     /// Writes the section's audio to an M4A file for transcription and voice analysis.
     @concurrent
     static func exportAudio(from source: URL, section: ClipSection, to output: URL) async throws {

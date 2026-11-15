@@ -57,6 +57,10 @@ struct CoachView: View {
                         .accessibilityLabel("Your coaching preferences and memory")
                         .accessibilityIdentifier("coachPreferences")
                     }
+                    Text("Your scene partner")
+                        .dubFont(32, weight: .bold)
+                        .foregroundStyle(Palette.textPrimary)
+                        .accessibilityAddTraits(.isHeader)
                     Text("Pick who teaches you. They'll listen to what you say and coach you out loud.")
                         .dubFont(14, weight: .regular)
                         .foregroundStyle(Palette.textSecondary)
@@ -86,11 +90,11 @@ struct CoachView: View {
                         .dubFont(12, weight: .regular)
                         .foregroundStyle(Palette.placeholder)
                 }
-                .padding(.horizontal, 16)
+                .padding(.horizontal, 20)
                 .padding(.vertical, 8)
             }
             .scrollIndicators(.hidden)
-            .background(Palette.background)
+            .screenBackground()
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(for: CoachRoute.self) { route in
                 destination(for: route)
@@ -230,14 +234,14 @@ struct CoachSessionView: View {
                         .accessibilityValue(session.replyFailure?.backendCode ?? "")
                     if session.replyFailure != nil {
                         Button("Try again", action: session.retryReply)
-                            .buttonStyle(OutlineCapsuleButtonStyle())
+                            .buttonStyle(SecondaryButtonStyle())
                             .accessibilityIdentifier("coachRetry")
                     }
                     if session.needsMicrophoneAccess {
                         Button("Open Settings") {
                             if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
                         }
-                        .buttonStyle(OutlineCapsuleButtonStyle())
+                        .buttonStyle(SecondaryButtonStyle())
                     }
                 }
             }

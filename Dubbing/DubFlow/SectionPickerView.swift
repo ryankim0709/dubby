@@ -25,10 +25,17 @@ struct SectionPickerView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                BackHeader(title: "Frame the scene") { EmptyView() }
-                    .padding(.top, 8)
+                Text("Find your moment")
+                    .dubFont(32, weight: .bold)
+                    .foregroundStyle(Palette.textPrimary)
+                    .accessibilityAddTraits(.isHeader)
                 PlayerSurface(player: player.player)
                     .aspectRatio(16 / 9, contentMode: .fit)
+                    .overlay {
+                        if !player.isPlaying {
+                            VideoThumbnail(url: clip.url, time: (selection.start + selection.end) / 2)
+                        }
+                    }
                     .clipShape(RoundedRectangle(cornerRadius: 16))
                     .accessibilityLabel("Clip preview")
                 Text("Drag the handles to frame up to \(Int(SectionEditing.maximumLength)) seconds of dialogue.")
@@ -77,11 +84,11 @@ struct SectionPickerView: View {
                         Image(systemName: player.isPlaying ? "stop.fill" : "play.fill")
                         Text(player.isPlaying ? "Stop" : "Preview scene")
                     }
-                    .buttonStyle(OutlineCapsuleButtonStyle())
+                    .buttonStyle(SecondaryButtonStyle())
                     Spacer()
                 }
             }
-            .padding(.horizontal, 16)
+            .padding(.horizontal, 20)
             .padding(.bottom, 16)
             .containerIdentifier("sectionScreen")
         }
@@ -101,8 +108,9 @@ struct SectionPickerView: View {
             .padding(16)
             .background(Palette.background)
         }
-        .background(Palette.background)
-        .toolbar(.hidden, for: .navigationBar)
+        .screenBackground()
+        .navigationTitle("Frame the scene")
+        .navigationBarTitleDisplayMode(.inline)
         .task {
             await player.seek(to: selection.start)
             do {

@@ -62,7 +62,7 @@ struct DubResultView: View {
                             .dubFont(16, weight: .medium)
                             .foregroundStyle(Palette.textPrimary)
                         Button("Cancel export", action: cancelExport)
-                            .buttonStyle(OutlineCapsuleButtonStyle())
+                            .buttonStyle(SecondaryButtonStyle())
                             .accessibilityIdentifier("cancelExport")
                     }
                     .frame(maxWidth: .infinity)
@@ -111,7 +111,7 @@ struct DubResultView: View {
             .containerIdentifier("exportScreen")
         }
         .scrollIndicators(.hidden)
-        .background(Palette.background)
+        .screenBackground()
         .toolbar(.hidden, for: .navigationBar)
         // Pinned so sharing and finishing stay reachable beside the measurements.
         .safeAreaInset(edge: .bottom, spacing: 0) {
@@ -123,7 +123,7 @@ struct DubResultView: View {
                     .buttonStyle(PrimaryButtonStyle(cornerRadius: 16))
                     .accessibilityIdentifier("shareDub")
                     Button("Done", action: onDone)
-                        .buttonStyle(OutlineCapsuleButtonStyle())
+                        .buttonStyle(SecondaryButtonStyle())
                         .accessibilityIdentifier("doneDub")
                 }
                 .padding(16)
@@ -176,13 +176,17 @@ struct DubResultView: View {
 
     private func finished(video: URL, trimmed: [TakePlacement], measurements: [TakeMeasurement]) -> some View {
         VStack(alignment: .leading, spacing: 16) {
+            Text("That’s a wrap")
+                .dubFont(34, weight: .bold)
+                .foregroundStyle(Palette.textPrimary)
+                .accessibilityAddTraits(.isHeader)
             ResultPlayer(url: video)
                 .aspectRatio(16 / 9, contentMode: .fit)
                 .clipShape(RoundedRectangle(cornerRadius: 16))
             Text("You're the main character.")
-                .dubFont(20, weight: .semibold)
+                .dubFont(22, weight: .bold)
                 .foregroundStyle(Palette.textPrimary)
-            Text("\(takes.count) of \(setup.script.lines(spokenBy: setup.characterID).count) lines in your voice, saved to My Dubs.")
+            Text("\(takes.count) of \(setup.script.lines(spokenBy: setup.characterID).count) lines in your voice, saved to your Shelf.")
                 .dubFont(14, weight: .regular)
                 .foregroundStyle(Palette.textSecondary)
             Label(
