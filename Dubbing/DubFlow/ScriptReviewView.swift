@@ -1,3 +1,4 @@
+import Speech
 import SwiftUI
 
 private enum AnalysisPhase: Equatable {
@@ -7,6 +8,17 @@ private enum AnalysisPhase: Equatable {
     case groupingVoices
     case ready(LineAnalysis)
     case failed(FlowIssue)
+
+    var stateValue: String {
+        switch self {
+        case .extractingAudio: "extractingAudio"
+        case .preparingModel: "preparingModel"
+        case .transcribing: "transcribing"
+        case .groupingVoices: "groupingVoices"
+        case .ready: "ready"
+        case .failed: "failed"
+        }
+    }
 
     var stepIndex: Int {
         switch self {
@@ -39,6 +51,7 @@ struct ScriptReviewView: View {
         }
         .background(Palette.background)
         .toolbar(.hidden, for: .navigationBar)
+        .overlay { StateCarriers(items: [StateCarrier(identifier: "transcribeProgress", value: phase.stateValue)]) }
         .task(id: attempt) { await analyze() }
     }
 
@@ -84,11 +97,23 @@ struct ScriptReviewView: View {
         .accessibilityElement(children: .combine)
     }
 
+    private var speechPermissionValue: String {
+        SFSpeechRecognizer.authorizationStatus() == .restricted ? "restricted" : "denied"
+    }
+
     private func failure(_ issue: FlowIssue) -> some View {
         VStack(alignment: .leading, spacing: 16) {
             BackHeader(title: "Building your script") { EmptyView() }
                 .padding(.top, 8)
-            IssueCard(title: "The script couldn't be built", issue: issue, retry: { attempt += 1 })
+            IssueCard(
+                title: issue.opensSettings ? "Speech recognition is off" : "The script couldn't be built",
+                issue: issue,
+                identifier: issue.opensSettings ? "speechPermissionNotice" : "transcribeError",
+                value: issue.opensSettings ? speechPermissionValue : issue.code,
+                retryTitle: "Try again",
+                retryIdentifier: "transcribeRetry",
+                retry: { attempt += 1 }
+            )
             Spacer()
         }
         .padding(.horizontal, 16)
@@ -159,18 +184,24 @@ private struct ScriptEditor: View {
                         characterCard(speaker)
                     }
                 }
-                Button("Dub \(script.speaker(withID: characterID)?.name ?? "this character")'s lines") {
-                    onStart(DubSetup(clip: request.clip, section: request.section, script: script, characterID: characterID))
-                }
-                .buttonStyle(PrimaryButtonStyle(cornerRadius: 16))
-                .disabled(characterLines.isEmpty)
-                .opacity(characterLines.isEmpty ? 0.5 : 1)
-                .accessibilityIdentifier("startDubbing")
             }
             .padding(.horizontal, 16)
             .padding(.bottom, 16)
+            .containerIdentifier("scriptScreen")
         }
         .scrollIndicators(.hidden)
+        // Pinned so the primary action stays on screen beside a long script.
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            Button("Dub \(script.speaker(withID: characterID)?.name ?? "this character")'s lines") {
+                onStart(DubSetup(clip: request.clip, section: request.section, script: script, characterID: characterID))
+            }
+            .buttonStyle(PrimaryButtonStyle(cornerRadius: 16))
+            .disabled(characterLines.isEmpty)
+            .opacity(characterLines.isEmpty ? 0.5 : 1)
+            .accessibilityIdentifier("startDubbing")
+            .padding(16)
+            .background(Palette.background)
+        }
         .onChange(of: speakerCount) { _, count in
             script = ScriptBuilder.buildScript(analysis: analysis, speakerCount: count, names: script.speakers.map(\.name))
             characterID = min(characterID, count - 1)
@@ -273,6 +304,7 @@ private struct ScriptEditor: View {
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(isSelected ? [.isSelected] : [])
+        .accessibilityIdentifier("characterCard-\(speaker.id)")
     }
 }
 
@@ -314,5 +346,7 @@ private struct ScriptLineRow: View {
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Palette.surface, in: RoundedRectangle(cornerRadius: 12))
+        .containerIdentifier("scriptLine-\(line.id)")
+        .accessibilityValue("\(line.speakerID)")
     }
 }

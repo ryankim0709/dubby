@@ -4,7 +4,7 @@ import SwiftUI
 struct MyDubsView: View {
     let dubs: LoadState<[SavedDub]>
     let folder: URL
-    let onChange: () -> Void
+    let onDelete: (SavedDub) async throws -> Void
     let onRetry: () -> Void
     @State private var playing: SavedDub?
     @State private var pendingDelete: SavedDub?
@@ -18,17 +18,19 @@ struct MyDubsView: View {
                     .dubFont(24, weight: .semibold)
                     .foregroundStyle(Palette.textPrimary)
                     .padding(.top, 8)
-                LoadStateContent(state: dubs, retry: onRetry) { dubs in
+                LoadStateContent(state: dubs, failureIdentifier: "myDubsLoadFailed", retry: onRetry) { dubs in
                     if dubs.isEmpty {
                         EmptyStateView(
                             systemImage: "film",
                             title: "No dubs yet",
                             message: "Dub a scene from Discover and it shows up here, ready to watch and share."
                         )
+                        .accessibilityIdentifier("myDubsEmpty")
                     } else {
                         Text("\(dubs.count) \(dubs.count == 1 ? "dub" : "dubs") saved on this iPhone")
                             .dubFont(14, weight: .regular)
                             .foregroundStyle(Palette.textSecondary)
+                            .overlay { StateCarriers(items: [StateCarrier(identifier: "myDubsCount", value: "\(dubs.count)")]) }
                         LazyVGrid(
                             columns: adaptiveGridColumns(spacing: 8, isAccessibilitySize: dynamicTypeSize.isAccessibilitySize),
                             spacing: 16
@@ -40,6 +42,8 @@ struct MyDubsView: View {
                                     SavedDubCard(dub: dub, video: DubLibrary.videoURL(for: dub, in: folder))
                                 }
                                 .buttonStyle(.plain)
+                                .accessibilityIdentifier("savedDub-\(dub.id.uuidString)")
+                                .accessibilityValue("\(dub.linesDubbed) of \(dub.totalLines)")
                                 .contextMenu {
                                     Button("Delete", systemImage: "trash", role: .destructive) { pendingDelete = dub }
                                 }
@@ -56,6 +60,7 @@ struct MyDubsView: View {
             }
             .padding(.horizontal, 16)
             .padding(.bottom, 16)
+            .containerIdentifier("myDubsScreen")
         }
         .scrollIndicators(.hidden)
         .background(Palette.background)
@@ -70,20 +75,22 @@ struct MyDubsView: View {
             presenting: pendingDelete
         ) { dub in
             Button("Delete dub", role: .destructive) { delete(dub) }
+                .accessibilityIdentifier("confirmDeleteDub")
         } message: { dub in
             Text("\(dub.sceneTitle) as \(dub.characterName) will be removed from this iPhone.")
         }
     }
 
     private func delete(_ dub: SavedDub) {
-        do {
-            _ = try DubLibrary.delete(dub, in: folder)
-            deleteFailure = nil
-        } catch {
-            deleteFailure = "Couldn't delete that dub: \(error.localizedDescription)"
-        }
         pendingDelete = nil
-        onChange()
+        Task {
+            do {
+                try await onDelete(dub)
+                deleteFailure = nil
+            } catch {
+                deleteFailure = "Couldn't delete that dub: \(error.localizedDescription)"
+            }
+        }
     }
 }
 
@@ -148,6 +155,7 @@ private struct SavedDubPlayer: View {
                     }
                     Spacer()
                     Button("Done") { dismiss() }
+                        .accessibilityIdentifier("savedDubDone")
                         .dubFont(16, weight: .semibold)
                         .foregroundStyle(Palette.accentText)
                         .frame(minWidth: 44, minHeight: 44)
@@ -162,9 +170,10 @@ private struct SavedDubPlayer: View {
                     Label("Share dub", systemImage: "square.and.arrow.up")
                 }
                 .buttonStyle(PrimaryButtonStyle(cornerRadius: 16))
-                .accessibilityIdentifier("shareSavedDub")
+                .accessibilityIdentifier("savedDubShare")
             }
             .padding(16)
+            .containerIdentifier("savedDubPlayer")
         }
         .background(Palette.background)
         .preferredColorScheme(.dark)

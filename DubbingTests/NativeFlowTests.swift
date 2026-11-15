@@ -170,3 +170,56 @@ struct PermissionStateTests {
         #expect(FlowIssue(error: DubFlowError.noSpeechFound).message == DubFlowError.noSpeechFound.errorDescription)
     }
 }
+
+struct LaunchConfigurationTests {
+    private func clip(_ name: String) -> LibraryClip {
+        LibraryClip(url: URL(filePath: "/bundle/\(name).mp4"), title: name, durationSeconds: 10)
+    }
+
+    @Test func readsOnlyTheDocumentedArguments() {
+        let configuration = LaunchConfiguration(arguments: [
+            "Dubbing", "-DUBIT_UI_TEST", "1", "-DUBIT_DEMO_SCENE", "demo", "-DUBIT_EXPORT_STEP_DELAY_MS", "250", "-Other", "x",
+        ])
+        #expect(configuration.isUITest)
+        #expect(configuration.demoSceneID == "demo")
+        #expect(configuration.exportStepDelayMilliseconds == 250)
+    }
+
+    @Test func ignoresMissingOrInvalidValues() {
+        let configuration = LaunchConfiguration(arguments: ["-DUBIT_UI_TEST", "0", "-DUBIT_EXPORT_STEP_DELAY_MS", "soon", "-DUBIT_DEMO_SCENE"])
+        #expect(!configuration.isUITest)
+        #expect(configuration.demoSceneID == nil)
+        #expect(configuration.exportStepDelayMilliseconds == nil)
+        #expect(LaunchConfiguration.inactive == LaunchConfiguration(arguments: []))
+    }
+
+    @Test func listsTheDemoSceneFirstAndLeavesOtherOrderAlone() {
+        let clips = [clip("alpha"), clip("demo"), clip("omega")]
+        let ordered = LaunchConfiguration(arguments: ["-DUBIT_DEMO_SCENE", "demo"]).ordering(clips)
+        #expect(ordered.map(\.sceneID) == ["demo", "alpha", "omega"])
+        #expect(LaunchConfiguration(arguments: ["-DUBIT_DEMO_SCENE", "missing"]).ordering(clips) == clips)
+        #expect(LaunchConfiguration.inactive.ordering(clips) == clips)
+    }
+
+    @Test func cleanStateRemovesFoldersAndToleratesMissingOnes() throws {
+        let folder = FileManager.default.temporaryDirectory.appending(path: "CleanStateTests-\(UUID().uuidString)", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        try Data([1]).write(to: folder.appending(path: "dubs.json"))
+        CleanState.wipe(folders: [folder, folder.appending(path: "missing")])
+        #expect(!FileManager.default.fileExists(atPath: folder.path(percentEncoded: false)))
+    }
+}
+
+struct IssueStateTests {
+    @Test func exposesTheErrorCaseWithoutItsPayload() {
+        #expect(FlowIssue(error: DubFlowError.recordingInterrupted("a call came in")).code == "recordingInterrupted")
+        #expect(FlowIssue(error: DubFlowError.recordingFailed("take.m4a")).code == "recordingFailed")
+        #expect(FlowIssue(error: DubFlowError.microphoneDenied).code == "microphoneDenied")
+    }
+
+    @Test func aTakeWithoutAudioShowsNoLevelInsteadOfAnInventedOne() {
+        let unread = TakeMeasurement(lineID: 1, takeSeconds: 1, lineSeconds: 2, allowedSeconds: 2.75, peakDecibels: nil)
+        #expect(unread.levelDescription == nil)
+        #expect(!MeasuredPractice(measurements: []).hasMeasurements)
+    }
+}

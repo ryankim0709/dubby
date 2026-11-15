@@ -11,17 +11,20 @@ enum LoadState<Value> {
 struct LoadStateContent<Value, Content: View>: View {
     let state: LoadState<Value>
     let retry: (() -> Void)?
+    let failureIdentifier: String?
     @ViewBuilder let content: (Value) -> Content
 
     init(state: LoadState<Value>, @ViewBuilder content: @escaping (Value) -> Content) {
         self.state = state
         retry = nil
+        failureIdentifier = nil
         self.content = content
     }
 
-    init(state: LoadState<Value>, retry: @escaping () -> Void, @ViewBuilder content: @escaping (Value) -> Content) {
+    init(state: LoadState<Value>, failureIdentifier: String, retry: @escaping () -> Void, @ViewBuilder content: @escaping (Value) -> Content) {
         self.state = state
         self.retry = retry
+        self.failureIdentifier = failureIdentifier
         self.content = content
     }
 
@@ -36,6 +39,7 @@ struct LoadStateContent<Value, Content: View>: View {
         case .failed(let message):
             VStack(spacing: 12) {
                 EmptyStateView(systemImage: "exclamationmark.triangle", title: "Couldn't load this", message: message)
+                    .accessibilityIdentifier(failureIdentifier ?? "loadFailed")
                 if let retry {
                     Button("Try again", action: retry)
                         .buttonStyle(OutlineCapsuleButtonStyle())
@@ -85,13 +89,14 @@ struct DiscoverView: View {
                         .dubFont(14, weight: .regular)
                         .foregroundStyle(Palette.textSecondary)
                 }
-                LoadStateContent(state: clips, retry: onRetry) { clips in
+                LoadStateContent(state: clips, failureIdentifier: "discoverLoadFailed", retry: onRetry) { clips in
                     if clips.isEmpty {
                         EmptyStateView(
                             systemImage: "film.stack",
                             title: "No scenes in this build",
                             message: "Scenes are the MP4 or MOV clips bundled from the Media folder. Add one there, then build and run again."
                         )
+                        .accessibilityIdentifier("discoverEmpty")
                     } else {
                         VStack(spacing: 16) {
                             ForEach(clips) { clip in
@@ -103,6 +108,7 @@ struct DiscoverView: View {
             }
             .padding(.horizontal, 16)
             .padding(.bottom, 16)
+            .containerIdentifier("discoverScreen")
         }
         .scrollIndicators(.hidden)
         .background(Palette.background)
@@ -135,11 +141,12 @@ struct SceneCard: View {
                     .foregroundStyle(Palette.textPrimary)
                 Button("Dub this scene", action: onDub)
                     .buttonStyle(PrimaryButtonStyle(cornerRadius: 12))
-                    .accessibilityIdentifier("dubScene")
+                    .accessibilityIdentifier("dubScene-\(clip.sceneID)")
             }
             .padding(12)
             .background(Palette.surface)
         }
         .clipShape(RoundedRectangle(cornerRadius: 16))
+        .containerIdentifier("sceneCard-\(clip.sceneID)")
     }
 }

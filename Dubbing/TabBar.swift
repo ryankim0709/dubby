@@ -17,8 +17,8 @@ struct DubTabBar: View {
                 .fill(Palette.divider)
                 .frame(height: 1)
             HStack(alignment: .bottom) {
-                tabButton(.discover, title: "Discover", systemImage: "house")
-                tabButton(.messages, title: "DMs", systemImage: "bubble.left.and.bubble.right")
+                tabButton(.discover, title: "Discover", systemImage: "house", identifier: "tab-discover")
+                tabButton(.messages, title: "DMs", systemImage: "bubble.left.and.bubble.right", identifier: "tab-messages")
                 Button(action: onCreate) {
                     VStack(spacing: 4) {
                         Image(systemName: "plus")
@@ -38,15 +38,15 @@ struct DubTabBar: View {
                 .accessibilityShowsLargeContentViewer {
                     Label("Create", systemImage: "plus")
                 }
-                tabButton(.progress, title: "Progress", systemImage: "chart.bar")
-                tabButton(.myDubs, title: "My Dubs", systemImage: "film")
+                tabButton(.progress, title: "Progress", systemImage: "chart.bar", identifier: "tab-progress")
+                tabButton(.myDubs, title: "My Dubs", systemImage: "film", identifier: "tab-myDubs")
             }
             .padding(.top, 8)
         }
         .background(Palette.background)
     }
 
-    private func tabButton(_ tab: AppTab, title: String, systemImage: String) -> some View {
+    private func tabButton(_ tab: AppTab, title: String, systemImage: String, identifier: String) -> some View {
         Button {
             selection = tab
         } label: {
@@ -54,6 +54,7 @@ struct DubTabBar: View {
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(selection == tab ? [.isSelected] : [])
+        .accessibilityIdentifier(identifier)
     }
 
     private func tabLabel(title: String, systemImage: String, isActive: Bool) -> some View {

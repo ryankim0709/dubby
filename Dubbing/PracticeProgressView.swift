@@ -13,7 +13,7 @@ struct PracticeProgressView: View {
                     .dubFont(24, weight: .semibold)
                     .foregroundStyle(Palette.textPrimary)
                     .padding(.top, 8)
-                LoadStateContent(state: dubs, retry: onRetry) { dubs in
+                LoadStateContent(state: dubs, failureIdentifier: "progressLoadFailed", retry: onRetry) { dubs in
                     if dubs.isEmpty {
                         EmptyStateView(
                             systemImage: "flame",

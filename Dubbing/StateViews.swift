@@ -21,11 +21,48 @@ nonisolated enum MicrophoneAccess: Equatable, Sendable {
 nonisolated struct FlowIssue: Equatable, Sendable {
     let message: String
     let opensSettings: Bool
+    /// The error case's name, without its payload (for example `recordingFailed`), so a test can assert the state.
+    let code: String
 
     init(error: any Error) {
         message = error.localizedDescription
         let denial = error as? DubFlowError
         opensSettings = denial == .microphoneDenied || denial == .speechRecognitionDenied
+        code = denial.map { String(String(describing: $0).prefix { $0 != "(" }) } ?? "error"
+    }
+}
+
+extension View {
+    /// Makes a stack addressable as one element while its children stay reachable.
+    func containerIdentifier(_ identifier: String) -> some View {
+        accessibilityElement(children: .contain)
+            .accessibilityIdentifier(identifier)
+    }
+}
+
+/// An invisible element that exposes real UI state through its accessibility value, so a UI test can assert
+/// a state without reading prose.
+struct StateCarrier: Identifiable {
+    let identifier: String
+    let value: String
+
+    var id: String { identifier }
+}
+
+struct StateCarriers: View {
+    let items: [StateCarrier]
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ForEach(items) { item in
+                Color.clear
+                    .frame(width: 1, height: 1)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityIdentifier(item.identifier)
+                    .accessibilityValue(item.value)
+            }
+        }
+        .allowsHitTesting(false)
     }
 }
 
@@ -47,6 +84,10 @@ struct OpenSettingsButton: View {
 struct IssueCard: View {
     let title: String
     let issue: FlowIssue
+    let identifier: String
+    let value: String
+    let retryTitle: String
+    let retryIdentifier: String
     let retry: (() -> Void)?
 
     var body: some View {
@@ -62,16 +103,17 @@ struct IssueCard: View {
                     OpenSettingsButton()
                 }
                 if let retry {
-                    Button("Try again", action: retry)
+                    Button(retryTitle, action: retry)
                         .buttonStyle(OutlineCapsuleButtonStyle())
-                        .accessibilityIdentifier("retry")
+                        .accessibilityIdentifier(retryIdentifier)
                 }
             }
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Palette.surface, in: RoundedRectangle(cornerRadius: 16))
-        .accessibilityElement(children: .contain)
+        .containerIdentifier(identifier)
+        .accessibilityValue(value)
     }
 }
 
