@@ -14,4 +14,6 @@ Erica is the product UI/UX designer. Her SwiftUI reference in `erica-frontend/Du
 
 This is an existing-reference port; no new visual concept or concept seed was generated. Screen-specific intent is recorded in `.impeccable/surfaces/dubbing-contentview-swift.md`. `DESIGN.md` describes the implemented reusable system.
 
+The merged native UI in `Dubbing/` is the user's approved final design. Future work preserves this baseline and follows `.cursor/rules/ui.mdc`; a new feature does not authorize a redesign.
+
 Implementation and verification conventions remain in `AGENTS.md` and `README.md`.
