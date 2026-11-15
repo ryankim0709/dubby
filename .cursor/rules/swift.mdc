@@ -1,0 +1,22 @@
+---
+description: Swift and SwiftUI implementation conventions for the native iOS app and tests
+globs: "Dubbing/**/*.swift,DubbingTests/**/*.swift"
+alwaysApply: false
+---
+
+# Native implementation
+
+- Extend the existing SwiftUI app and shared Xcode scheme. Keep the `Dubbing` target and bundle identifiers; do not migrate to Expo or rename the project as part of a feature.
+- Use Apple frameworks for platform capabilities when practical, including AVFoundation for media and PhotosUI for imports. Add third-party dependencies only for a concrete requirement.
+- Keep views focused on rendering and interaction. Put media, persistence, and networking effects in small clients, with pure functions for transformations and scoring calculations.
+- Use structs and enums for domain data and explicit enums for workflow states; avoid collections of booleans that permit contradictory recording or export states.
+- Use typed, Codable models for external data. Require needed fields, tolerate unrelated fields, and validate semantic constraints after decoding; avoid `[String: Any]` and force casts.
+- Keep function inputs and returns explicit. Do not use default arguments or flag parameters to switch behavior, except signatures required by a framework.
+- Respect the project's Swift 6 concurrency settings. Keep UI updates on MainActor, move expensive media work off the UI actor, and propagate cancellation when the user leaves a workflow.
+- Do not use detached tasks, unchecked Sendable, or isolation escapes to silence compiler errors. Model ownership and actor boundaries correctly.
+- Present specific failures through typed error states. Do not use `try?`, empty catch blocks, or placeholder results to conceal a failed recording, decode, request, or export.
+- Persist accepted takes and completed project metadata deliberately. Cancelling a retry must not destroy a previously accepted take.
+- Keep secrets out of Swift source, assets, project settings, and logs. A bundled app cannot keep a long-lived provider key secret.
+- Support VoiceOver labels, Dynamic Type, safe areas, and clear disabled and busy states. Give recording controls accessible names that describe their current action.
+- In UI tests, query accessibility identifiers or element roles with accessible names; avoid raw visible-text selectors and fallback clicks.
+- Follow the existing formatting. Do not introduce a formatter or reformat unrelated code as part of a feature.
