@@ -14,14 +14,7 @@ struct AccountView: View {
                         .foregroundStyle(Palette.textPrimary)
                         .accessibilityAddTraits(.isHeader)
                     Spacer()
-                    Button(action: onClose) {
-                        Image(systemName: "xmark")
-                            .dubFont(16, weight: .medium)
-                            .foregroundStyle(Palette.textPrimary)
-                            .frame(minWidth: 44, minHeight: 44)
-                            .contentShape(Rectangle())
-                    }
-                    .accessibilityLabel("Close")
+                    DubGlassIconButton(systemImage: "xmark", label: "Close", action: onClose)
                     .accessibilityIdentifier("accountClose")
                 }
                 content
@@ -123,7 +116,7 @@ struct AccountView: View {
             Button("Sign out") {
                 Task { await account.signOut() }
             }
-            .buttonStyle(OutlineCapsuleButtonStyle())
+            .buttonStyle(.dubSecondary)
             .accessibilityIdentifier("signOut")
         }
     }
@@ -135,7 +128,7 @@ struct AccountView: View {
             Button("Try again") {
                 Task { await account.retry() }
             }
-            .buttonStyle(OutlineCapsuleButtonStyle())
+            .buttonStyle(.dubSecondary)
             .accessibilityIdentifier("accountRetry")
         }
     }
