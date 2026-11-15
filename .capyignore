@@ -1,0 +1,11 @@
+# Excluded from the workspace archive that tools.mobile.build uploads to Revyl
+# (tar exclude syntax). The upload caps at 100 MB and iOS builds need none of this.
+landing
+node_modules
+convex/_generated
+build
+.git
+.claude
+.DS_Store
+*.xcresult
+xcuserdata

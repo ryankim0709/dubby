@@ -174,6 +174,8 @@ xcodebuild -project Dubbing.xcodeproj -scheme Dubbing \
   CODE_SIGNING_ALLOWED=NO build test
 ```
 
+The same build and test is scripted as `scripts/qa/ios-build-test.sh`, which selects the simulator, writes an `.xcresult` and a summary under `build/qa/`, and is what iOS CI and Revyl run. See the [QA guide](docs/qa/README.md) for its options, the Revyl and GitHub Actions routes, and the bundle and secret checks.
+
 Typecheck the Convex backend after `npm install`:
 
 ```sh
