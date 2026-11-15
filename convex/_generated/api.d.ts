@@ -21,6 +21,7 @@ import type * as attempts from "../attempts.js";
 import type * as coachCharacters from "../coachCharacters.js";
 import type * as coachReply from "../coachReply.js";
 import type * as crons from "../crons.js";
+import type * as gradingContract from "../gradingContract.js";
 import type * as history from "../history.js";
 import type * as http from "../http.js";
 import type * as integrations_azureEngine from "../integrations/azureEngine.js";
@@ -42,6 +43,17 @@ import type * as media from "../media.js";
 import type * as projects from "../projects.js";
 import type * as scenes from "../scenes.js";
 import type * as takes from "../takes.js";
+import type * as tutoring from "../tutoring.js";
+import type * as tutoringCoaching from "../tutoringCoaching.js";
+import type * as tutoringExercise from "../tutoringExercise.js";
+import type * as tutoringHttp from "../tutoringHttp.js";
+import type * as tutoringMemory from "../tutoringMemory.js";
+import type * as tutoringPreferences from "../tutoringPreferences.js";
+import type * as tutoringProgress from "../tutoringProgress.js";
+import type * as tutoringRecords from "../tutoringRecords.js";
+import type * as tutoringRefs from "../tutoringRefs.js";
+import type * as tutoringReply from "../tutoringReply.js";
+import type * as tutoringTables from "../tutoringTables.js";
 import type * as users from "../users.js";
 
 import type {
@@ -64,6 +76,7 @@ declare const fullApi: ApiFromModules<{
   coachCharacters: typeof coachCharacters;
   coachReply: typeof coachReply;
   crons: typeof crons;
+  gradingContract: typeof gradingContract;
   history: typeof history;
   http: typeof http;
   "integrations/azureEngine": typeof integrations_azureEngine;
@@ -85,6 +98,17 @@ declare const fullApi: ApiFromModules<{
   projects: typeof projects;
   scenes: typeof scenes;
   takes: typeof takes;
+  tutoring: typeof tutoring;
+  tutoringCoaching: typeof tutoringCoaching;
+  tutoringExercise: typeof tutoringExercise;
+  tutoringHttp: typeof tutoringHttp;
+  tutoringMemory: typeof tutoringMemory;
+  tutoringPreferences: typeof tutoringPreferences;
+  tutoringProgress: typeof tutoringProgress;
+  tutoringRecords: typeof tutoringRecords;
+  tutoringRefs: typeof tutoringRefs;
+  tutoringReply: typeof tutoringReply;
+  tutoringTables: typeof tutoringTables;
   users: typeof users;
 }>;
 

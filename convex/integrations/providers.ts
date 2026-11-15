@@ -1,4 +1,5 @@
 import { createAzureEngine } from "./azureEngine";
+import { tutoringCoachingProvider } from "../tutoringCoaching";
 import type { AssessmentEngine, CoachingProvider } from "./contracts";
 
 // The engine and coaching implementations register here. With none registered, jobs end in the
@@ -19,5 +20,5 @@ export function getAssessmentEngine(): AssessmentEngine | null {
 }
 
 export function getCoachingProvider(): CoachingProvider | null {
-  return null;
+  return tutoringCoachingProvider;
 }

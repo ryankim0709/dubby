@@ -9,7 +9,7 @@ let fetchSpy: ReturnType<typeof vi.spyOn>;
 
 beforeEach(() => {
   fetchSpy = vi.spyOn(globalThis, "fetch");
-  for (const name of ["ANTHROPIC_API_KEY", "LIVEAVATAR_API_KEY"]) vi.stubEnv(name, "");
+  for (const name of ["OPENAI_API_KEY", "LIVEAVATAR_API_KEY"]) vi.stubEnv(name, "");
 });
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -22,7 +22,7 @@ describe("coach routes", () => {
     for (const [path, body] of [["/coach/session-token", sessionBody], ["/coach/reply", replyBody]] as const) {
       const response = await t.fetch(path, post(body));
       expect(response.status).toBe(401);
-      expect(await response.json()).toEqual({ error: expect.any(String) });
+      expect(await response.json()).toEqual({ error: expect.any(String), code: "unauthenticated" });
     }
     expect(fetchSpy).not.toHaveBeenCalled();
   });
@@ -36,7 +36,7 @@ describe("coach routes", () => {
     const t = newBackend().withIdentity(alice);
     const notJson = await t.fetch("/coach/reply", post("not json"));
     expect(notJson.status).toBe(400);
-    expect(await notJson.json()).toEqual({ error: expect.any(String) });
+    expect(await notJson.json()).toEqual({ error: expect.any(String), code: "invalid_request" });
     expect((await t.fetch("/coach/session-token", post(JSON.stringify({ characterId: "anakin", language: "Spanish" })))).status).toBe(400);
     expect((await t.fetch("/coach/reply", post(JSON.stringify({ characterId: "anakin", languageName: "Spanish", turns: [{ role: "coach", text: "Hi" }] })))).status).toBe(400);
   });
@@ -47,7 +47,7 @@ describe("coach routes", () => {
     expect((await t.fetch("/coach/session-token", post(unknown(sessionBody)))).status).toBe(404);
     const reply = await t.fetch("/coach/reply", post(unknown(replyBody)));
     expect(reply.status).toBe(404);
-    expect(await reply.json()).toEqual({ error: "No coach named nobody" });
+    expect(await reply.json()).toEqual({ error: "No coach named nobody", code: "not_found" });
   });
 
   it("answers 503 without calling a provider when its key is unset", async () => {
@@ -55,7 +55,7 @@ describe("coach routes", () => {
     for (const [path, body] of [["/coach/session-token", sessionBody], ["/coach/reply", replyBody]] as const) {
       const response = await t.fetch(path, post(body));
       expect(response.status).toBe(503);
-      expect(await response.json()).toEqual({ error: expect.stringContaining("isn't set") });
+      expect(await response.json()).toEqual({ error: expect.stringContaining("isn't set"), code: "not_configured" });
     }
     expect(fetchSpy).not.toHaveBeenCalled();
   });

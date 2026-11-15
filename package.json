@@ -9,9 +9,9 @@
     "smoke:local": "node scripts/smoke-local.mjs"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^1.8.0",
     "convex": "^1.50.0",
     "openai": "^7.57.0",
+    "supermemory": "^5.1.2",
     "zod": "^4.6.7"
   },
   "devDependencies": {
