@@ -2,7 +2,7 @@ import AVFoundation
 import LiveKit
 import os
 
-/// One conversation with a coach: the learner's speech goes to the LLM, and the LLM's reply goes to the avatar.
+/// One conversation with a coach: the learner's speech goes to the backend's coach model, and its reply goes to the avatar.
 @MainActor
 @Observable
 final class CoachSession {
@@ -19,7 +19,13 @@ final class CoachSession {
     private(set) var turns: [CoachTurn] = []
     private(set) var videoTrack: RemoteVideoTrack?
     private(set) var errorMessage: String?
+    private(set) var needsMicrophoneAccess = false
+    /// The latest coach reply's feedback basis and cited evidence, for labelling that reply.
+    private(set) var lastReply: CoachReply?
+    /// The one exercise on show: the one the call started with, replaced by any newer one a reply carries.
+    private(set) var exercise: CoachRemoteState<NextExercise>
 
+    private let practice: CoachPracticeContext?
     private let backend: CoachBackendClient
     private let room = AvatarRoom()
     private let recorder = TakeRecorder()
@@ -32,10 +38,12 @@ final class CoachSession {
     private static let logger = Logger(subsystem: "com.ryankim.Dubbing", category: "coach")
     private static let keepAliveInterval = Duration.seconds(60)
 
-    init(character: CoachCharacter, language: SpokenLanguage, backend: CoachBackendClient) {
+    init(character: CoachCharacter, language: SpokenLanguage, backend: CoachBackendClient, practice: CoachPracticeContext?, exercise: CoachRemoteState<NextExercise>) {
         self.character = character
         self.language = language
         self.backend = backend
+        self.practice = practice
+        self.exercise = exercise
     }
 
     /// Starts the avatar and follows the room until it disconnects or the caller's task is cancelled.
@@ -134,10 +142,12 @@ final class CoachSession {
 
     private func startListening() {
         errorMessage = nil
+        needsMicrophoneAccess = false
         let url = FileManager.default.temporaryDirectory.appending(path: "coach-\(UUID().uuidString).m4a")
         activity = .listening
         turnTask = Task {
             guard await AVAudioApplication.requestRecordPermission() else {
+                needsMicrophoneAccess = true
                 fail(DubFlowError.microphoneDenied)
                 return
             }
@@ -164,9 +174,12 @@ final class CoachSession {
                 guard let said = CoachConversation.learnerText(from: words) else { throw CoachError.noSpeechHeard }
                 turns.append(CoachTurn(role: .learner, text: said))
                 activity = .thinking
-                let reply = try await backend.reply(characterID: character.id, language: language, turns: turns)
-                turns.append(CoachTurn(role: .coach, text: reply))
-                try await room.speak(reply)
+                let reply = try await backend.reply(characterID: character.id, language: language, practice: practice, turns: turns)
+                turns.append(CoachTurn(role: .coach, text: reply.text))
+                lastReply = reply
+                if let newExercise = reply.exercise { exercise = .loaded(newExercise) }
+                // The avatar says the reply exactly as it is shown.
+                try await room.speak(reply.text)
                 // The avatar's speak_started and speak_ended events move this along from here.
                 activity = .speaking
             } catch is CancellationError {

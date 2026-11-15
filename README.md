@@ -194,9 +194,11 @@ One turn of the conversation:
 
 1. The learner taps the mic and speaks. The app records to a temporary file and transcribes it on the iPhone with the dub flow's `SpeechTranscription`, then deletes the file.
 2. The app sends the conversation so far to the backend's `POST /coach/reply`. The Convex function asks OpenAI (`gpt-6-luna` through the Responses API, no reasoning, `store: false`; override with `OPENAI_COACH_MODEL`) for a short spoken reply grounded in the learner's stored practice. The system prompt combines the shared coaching rules with the character's persona.
-3. The app sends the reply on the LiveKit `agent-control` topic as an `avatar.speak_text` command, and the avatar says it word for word. The avatar's `avatar.speak_started` and `avatar.speak_ended` events, on the `agent-response` topic, drive the button's state. The learner can tap to interrupt.
+3. With `audio: true` in the request, the reply also carries OpenAI speech as one-second chunks of 24 kHz mono 16-bit PCM (base64). The app forwards each chunk to the LiveAvatar LITE session's WebSocket as an `agent.speak` command, then sends `agent.speak_end`, and the avatar says the reply word for word. The session's `agent.speak_started` and `agent.speak_ended` events drive the button's state, and the learner can tap to interrupt with `agent.interrupt`. If speech generation fails, the reply still returns its text with `audio: null` and an `audioError` code. The exact shape is in the tutoring interface document, section 4.
 
-The learner's microphone is never published to the LiveKit room, and sessions are created in LiveAvatar's LITE mode, where LiveAvatar runs no speech recognition, language model or voice and only renders video from the audio the app sends it. The avatar therefore says only what OpenAI wrote and voiced.
+The learner's microphone is never published to the LiveKit room, and sessions are created in LiveAvatar's LITE mode, where LiveAvatar runs no speech recognition, language model or voice and only renders video from the audio the app sends it. The avatar therefore says only what OpenAI wrote and voiced. Voices are OpenAI's stock voices only; no custom or cloned voice is used. The learner's recordings never go to LiveAvatar or to speech generation.
+
+OpenAI's text-to-speech models (`gpt-4o-mini-tts`, `tts-1`, `tts-1-hd`) shut down on 2027-01-06, and the named replacement `gpt-realtime-2.1-mini` isn't a speech-endpoint model. The speech model stays configurable with `OPENAI_TTS_MODEL` until that migration is decided.
 
 ### Keys and sessions
 
@@ -218,7 +220,7 @@ These steps create accounts and avatars and can cost money, so the project owner
 
 ### Not verified yet
 
-- No real LiveAvatar session has run. The LITE-mode flow needs a sandbox test: the app must send the reply's 24 kHz PCM audio over the LITE session's WebSocket with `agent.speak`, and the OpenAI call itself hasn't run with a real key.
+- No real LiveAvatar session has run with this backend's audio, and the OpenAI and Supermemory calls haven't run with real keys. The app's LITE WebSocket client is still to be built.
 - The coach's audio needs an actual iPhone. The app manages the audio session itself, so the recorder and LiveKit playback can share it. Recording during playback, interruptions, Bluetooth routes, and echo still need testing on a device.
 - The Convex functions typecheck but haven't been deployed or bundled by Convex.
 

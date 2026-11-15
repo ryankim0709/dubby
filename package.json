@@ -4,7 +4,9 @@
   "type": "module",
   "scripts": {
     "typecheck": "tsc --noEmit -p convex",
-    "test": "vitest run convex"
+    "test": "vitest run",
+    "codegen": "convex codegen",
+    "smoke:local": "node scripts/smoke-local.mjs"
   },
   "dependencies": {
     "convex": "^1.50.0",

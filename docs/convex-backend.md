@@ -1,0 +1,188 @@
+# Convex backend
+
+The Convex backend stores scenes, learners' projects, recordings, accepted takes, and assessments, and
+serves the coach HTTP routes. It follows the Convex backend contract v1 and the grading contract in
+[grading-contract.md](grading-contract.md). Nothing here is deployed by the code in this repository;
+the steps below are what the owner does once.
+
+## Setup the owner must do
+
+1. **Create a Convex project** and a development deployment (`npx convex dev` once logged in, or the
+   dashboard). Production needs its own deployment and a deploy key for CI; neither is created by code.
+2. **Choose the auth provider.** The recommended provider is Clerk (native Sign in with Apple, a free
+   development instance, and an official Swift integration). In Clerk, create the Convex JWT template,
+   then set `CLERK_JWT_ISSUER_DOMAIN` on the Convex deployment to that template's issuer domain
+   (for example `https://example.clerk.accounts.dev`). The backend accepts any identity Convex
+   validates; changing providers means changing only `convex/auth.config.ts`.
+3. **Set provider keys** on the deployment only for the features you turn on (table below).
+4. **Seed the catalog** from a scene manifest (see Scene catalog). Pushing code never seeds data or
+   runs migrations.
+
+### Environment variables
+
+Nothing is required to boot. A deployment with none set pushes cleanly; every signed-in function and
+spending route then rejects, because no auth provider exists to produce an identity.
+
+| Variable | Needed for | Secret |
+| --- | --- | --- |
+| `CLERK_JWT_ISSUER_DOMAIN` | Signing in with Clerk. Unset means no Clerk provider. | no |
+| `OPENAI_API_KEY` | The only LLM key. Used by runtime LLM workloads through `convex/lib/openai.ts`. Unset: routes that need it answer 503. | yes |
+| `ANTHROPIC_API_KEY` | Read only by the not-yet-migrated coach reply until Tutoring's change lands, then retired. | yes |
+| `LIVEAVATAR_API_KEY`, `LIVEAVATAR_AVATAR_ID_*`, `LIVEAVATAR_VOICE_ID_*`, `LIVEAVATAR_SANDBOX` | The talking coach (`POST /coach/session-token`). | key: yes |
+| `AZURE_SPEECH_KEY`, `AZURE_SPEECH_REGION` or `AZURE_SPEECH_ENDPOINT` | The pronunciation engine, once it is wired in. Until then assessment jobs fail with `engine_not_configured`. | key: yes |
+| `DEV_ONLY_TEST_JWT_ISSUER`, `DEV_ONLY_TEST_JWT_AUDIENCE`, `DEV_ONLY_TEST_JWT_JWKS` | **Local development only.** Enables a test sign-in whose private key sits on a developer machine. **Never set these on a shared, preview, or production deployment.** All three must be set for the provider to exist. | no (but dangerous) |
+
+How unset variables behave: Convex evaluates `auth.config.ts` on the deployment at push time and
+throws when the file reads an unset variable, which fails the push (the CLI reports
+`AuthConfigMissingEnvironmentVariable`). `auth.config.ts` reads each variable inside a try/catch, so an
+unset variable only disables its provider. Probing with `"NAME" in process.env` does not work: it is
+always false there. This was checked on a fresh local deployment with no variables set, and again
+with only some set.
+
+## Identity and ownership
+
+- Every function derives the caller from `ctx.auth.getUserIdentity()`; no function takes a user id.
+  `requireLearner(ctx)` in `convex/lib/auth.ts` returns `{ subject }` (the token identifier) and throws
+  `UNAUTHENTICATED` otherwise. Tutoring uses the same helper.
+- `users.ensure` creates the learner's row on first sign-in. Other functions throw `USER_NOT_FOUND`
+  until it has run.
+- Owned rows (`projects`, `attempts`, `acceptedTakes`, `assessmentJobs`, `assessments`) carry `ownerId`.
+  Another user's row behaves exactly like a missing one: queries return `null`, mutations throw
+  `NOT_FOUND`, and the media route answers 404.
+- Errors thrown to clients are `ConvexError` with `data: { code, message }`. Codes: `UNAUTHENTICATED`,
+  `USER_NOT_FOUND`, `NOT_FOUND`, `INVALID_ARGUMENT`, `INVALID_UPLOAD`, `CONFLICT`, `INVALID_STATE`,
+  `INCOMPLETE_TAKES` (also carries `missingLineKeys`).
+
+## Functions for the app
+
+| Function | Purpose |
+| --- | --- |
+| `users.ensure()` | Register the signed-in learner. Returns `{ userId, created }`. |
+| `users.setTimeZone({ timeZone })` | IANA zone, used as the fallback for each attempt's local day. |
+| `scenes.list()` | Published scenes with their characters. |
+| `scenes.get({ sceneId })` | A published scene with provenance and the newest revision of every line. Media files ship inside the app. |
+| `projects.start({ sceneId, characterId })` | Start dubbing one character; repeating it while active returns the same project. |
+| `projects.get({ projectId })` | Project state with its accepted takes. |
+| `attempts.generateUploadUrl()` | A one-time URL to POST the recording to. |
+| `attempts.create({ projectId, lineId, clientAttemptId, storageId, durationMs, capturedAt, timeZone? })` | Claim an upload as an attempt and queue its assessment. Idempotent on `clientAttemptId`. Returns `{ attemptId, jobId }`. |
+| `attempts.listForLine({ projectId, lineId })` | Takes of one line, newest first, with job state and the latest result summary. |
+| `assessments.forAttempt({ attemptId })` | The latest job and the latest assessment of an attempt. |
+| `assessments.retry({ jobId })` | Re-queue a failed, retryable job. |
+| `takes.accept({ attemptId })` | Keep a take for its line; moves only the pointer. |
+| `projects.complete({ projectId })` | Finish the dub once every line of the character has an accepted take. |
+| `history.list({ status?, limit? })` | My Dubs: the learner's projects, newest activity first. |
+
+Internal functions (not callable by clients): `scenes.seed`, `assessments.reassess`, and the job
+internals (`run`, `claim`, `saveOutcome`, `complete`, `recordFailure`, `reclaimStale`, `media.attemptAudio`).
+
+### HTTP routes
+
+| Route | Auth | Notes |
+| --- | --- | --- |
+| `GET /health` | none | `{ ok: true, service: "dubit-backend", schemaVersion: 1 }`. Constants only. |
+| `GET /coach/characters` | none | Unchanged. |
+| `POST /coach/session-token` | Bearer | Unchanged body and response. 401 before any provider call; 400, 404, 503 as before. |
+| `POST /coach/reply` | Bearer | Same. Still served by the baseline coach code (see Known gaps). |
+| `GET /media/attempts/{attemptId}/audio` | Bearer | Streams the original recording to its owner, with byte ranges. 404 for anyone else. Recordings never get a raw storage URL. |
+
+Every error body is `{ "error": string }`.
+
+## Recordings
+
+The app uploads WAV audio (`audio/wav`, 16 kHz mono 16-bit PCM), at most 30 s and 10 MB, and keeps
+its original take locally. `attempts.create` checks the stored upload's content type and size, that the
+project and line belong to the caller, a plausible `capturedAt` (at most 5 minutes ahead and 30 days
+behind the server clock), and that no other attempt already claimed the storage id. The encoding
+itself is checked by the engine, which fails the job with `invalid_input` on a wrong format.
+An attempt records the learner's time zone at capture time, from `timeZone` or the profile fallback.
+
+## Assessment jobs
+
+`attempts.create` inserts an attempt and an `initial` job and schedules it.
+
+```mermaid
+stateDiagram-v2
+  [*] --> queued
+  queued --> processing: claim (lease)
+  processing --> queued: transient failure, backoff 2 s then 4 s
+  processing --> succeeded: assessment stored
+  processing --> failed: non-retryable error, config missing, or 3 tries spent
+  processing --> queued: lease expired (cron, every 2 min)
+  failed --> queued: assessments.retry (retryable only)
+```
+
+- **Stages.** `measure` calls the engine; `coach` calls the coaching provider. The validated engine
+  outcome is stored on the job, so a retry of a coaching failure never calls the engine again.
+- **Failure codes.** Every failure is explicit: `{ code, message, retryable }`. `engine_not_configured`
+  and `coach_not_configured` are retryable and are not retried automatically. Engine error kinds
+  `invalid_input`, `invalid_reference`, `provider_auth`, `provider_rejected`, and
+  `invalid_provider_response` are not retryable; `provider_unavailable` is retried up to 3 tries and is then
+  a retryable failure. `invalid_engine_output` and `invalid_coaching_output` mean a result broke the
+  contract and are not retryable. `lease_expired` and `audio_missing` complete the set.
+- **Unscorable audio** is a successful assessment with `status: "unscorable"`, not a failure.
+- **Idempotency.** A repeated `attempts.create` returns the same attempt and job. `assessments.retry`
+  re-queues the same job and never creates an attempt or a second assessment for it. A regrade
+  (`assessments.reassess`, internal) makes a new `reassessment` job and a new assessment id for the same
+  attempt. A learner's retry of a line is a new recording and therefore a new attempt.
+- **Validation.** Before storing an engine outcome the backend checks that it describes this attempt,
+  that every null score has exactly one unavailable-metric entry, that `languageOverall` never hides a
+  missing component, that the alignment covers each reference word once in order, that word
+  boundaries fit the recording, and that a `transcript_only` measurement carries no pronunciation
+  value. The engine owns the totals; the backend does not recompute them. Coaching explains
+  measurements and never supplies scores; word indices it cites must exist.
+- **Logs.** Each outcome or failed try writes one JSON line (`operation`, ids, `status`, `errorCode`).
+  Tokens, keys, audio, and transcripts are never logged.
+
+### Plugging in the engine and coaching
+
+Both are registered in `convex/integrations/providers.ts`, which returns `null` until wired. The engine
+seam in `convex/integrations/contracts.ts` takes the assessment adapter's `AssessAttemptInput` plus the
+audio and returns its `AssessmentOutcome`, with the adapter's error kinds (`AssessmentError`). Wiring the
+pronunciation service is one file: construct an engine that inspects the WAV, calls the provider, and
+calls the adapter. The backend passes its job id as `assessmentId` for correlation; the stored assessment
+gets its own database id. Test doubles live only in test files.
+
+## Scene catalog
+
+`scenes.seed` loads a scene from the fields of a Scene Manifest v1 plus `published`: `sceneId` becomes the
+scene slug, `characters[].id` and `displayName` the characters, and `lines[].id` the stable `lineKey`.
+Run it from an authorized machine:
+
+```sh
+npx convex run scenes:seed '<manifest json with "published": true>'
+```
+
+It validates finite times with `0 <= start < end <= durationSeconds`, resolvable character ids, sorted
+lines, and no overlap among one character's lines. Re-running it with the same manifest changes
+nothing. A changed line must carry a higher `referenceVersion`, which inserts a new row; attempts keep
+the exact row they were recorded against. File entries and word timings are ignored.
+
+## Checks
+
+```sh
+npm ci
+CONVEX_AGENT_MODE=anonymous npm run codegen   # regenerate convex/_generated against a local backend
+npm run typecheck
+npm test                                       # convex-test with two identities
+```
+
+Local end-to-end run over real HTTP, with no cloud account and no provider call:
+
+```sh
+CONVEX_AGENT_MODE=anonymous npx convex dev --once    # creates the local deployment under .convex/
+node scripts/dev-auth.mjs configure                  # sets the DEV_ONLY_TEST_JWT_* variables locally
+CONVEX_AGENT_MODE=anonymous npx convex dev           # leave running in another terminal
+npm run smoke:local
+```
+
+## Known gaps
+
+- Tutoring owns migrating the coach reply to the OpenAI Responses API, removing the Anthropic
+  dependency, and moving the coach routes behind its own router. Until then `/coach/reply` still uses
+  the baseline Anthropic code and needs `ANTHROPIC_API_KEY`.
+- Calling Tutoring's ingestion after an assessment is stored is not wired; `convex/lib/ingest.ts`
+  builds the payload and is tested. Deletion hooks are not wired either.
+- No engine or coaching implementation is registered, so jobs end in `engine_not_configured`.
+- Export upload (`projects.exportStorageId`), progress analytics, and account deletion are not built.
+- A Convex storage id is unguessable but not bound to the user who uploaded it until `attempts.create`
+  claims it.

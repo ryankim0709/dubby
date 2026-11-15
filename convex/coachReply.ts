@@ -1,6 +1,6 @@
 import OpenAI from "openai";
 import type { CoachCharacter } from "./coachCharacters";
-import { requiredEnv } from "./env";
+import { createOpenAIClient } from "./lib/openai";
 import { maxSpokenWords, scriptDisclosure, renderEvidence, type EvidencePack, type GeneratedReply } from "./tutoringReply";
 
 export type CoachTurn = { role: "learner" | "coach"; text: string };
@@ -14,9 +14,9 @@ export class CoachTimeoutError extends Error {}
 const requestTimeoutMs = 8_000;
 const requestRetries = 1;
 
-/** The one place the OpenAI client is built; the key stays in the Convex environment. */
+/** The shared backend client with this workload's tighter timeout and retry budget. */
 export function createCoachClient(): OpenAI {
-  return new OpenAI({ apiKey: requiredEnv("OPENAI_API_KEY"), timeout: requestTimeoutMs, maxRetries: requestRetries });
+  return createOpenAIClient().withOptions({ timeout: requestTimeoutMs, maxRetries: requestRetries });
 }
 
 // Model IDs are plain configuration, not secrets. Defaults were checked against developers.openai.com on 2026-11-15.

@@ -4,6 +4,7 @@ import SwiftUI
 struct PracticeProgressView: View {
     let dubs: LoadState<[SavedDub]>
     let folder: URL
+    let onRetry: () -> Void
 
     var body: some View {
         ScrollView {
@@ -12,12 +13,12 @@ struct PracticeProgressView: View {
                     .dubFont(24, weight: .semibold)
                     .foregroundStyle(Palette.textPrimary)
                     .padding(.top, 8)
-                LoadStateContent(state: dubs) { dubs in
+                LoadStateContent(state: dubs, failureIdentifier: "progressLoadFailed", retry: onRetry) { dubs in
                     if dubs.isEmpty {
                         EmptyStateView(
                             systemImage: "flame",
                             title: "Start your streak",
-                            message: "Finish a dub today and your streak, totals, and recent scenes appear here."
+                            message: "Finish a dub today and your streak, totals, and measured takes appear here."
                         )
                     } else {
                         ProgressSummary(dubs: dubs, folder: folder, today: .now, calendar: .current)
@@ -49,6 +50,7 @@ private struct ProgressSummary: View {
                 StatTile(value: "\(dubs.reduce(0) { $0 + $1.linesDubbed })", label: "Lines recorded")
                 StatTile(value: "\(Int((dubs.reduce(0) { $0 + $1.sceneSeconds } / 60).rounded(.up)))m", label: "Of scenes dubbed")
             }
+            measuredCard
             Text("Recent dubs")
                 .dubFont(18, weight: .semibold)
                 .foregroundStyle(Palette.textPrimary)
@@ -81,6 +83,35 @@ private struct ProgressSummary: View {
                 }
             }
         }
+    }
+
+    private var measuredCard: some View {
+        let practice = MeasuredPractice(dubs: dubs)
+        return VStack(alignment: .leading, spacing: 8) {
+            Text("Measured takes")
+                .dubFont(18, weight: .semibold)
+                .foregroundStyle(Palette.textPrimary)
+            if practice.hasMeasurements {
+                MeasurementRow(label: "Takes measured", value: "\(practice.measuredTakes)")
+                MeasurementRow(label: "Fit their line", value: "\(practice.takesFittingLine) of \(practice.measuredTakes)")
+                MeasurementRow(label: "Clear voice picked up", value: "\(practice.takesWithVoice) of \(practice.measuredTakes)")
+            } else {
+                MeasurementRow(label: "Take length and mic level", value: nil)
+            }
+            if practice.dubsWithoutMeasurements > 0 {
+                Text("\(practice.dubsWithoutMeasurements) saved \(practice.dubsWithoutMeasurements == 1 ? "dub was" : "dubs were") recorded before takes were measured and \(practice.dubsWithoutMeasurements == 1 ? "isn't" : "aren't") counted here.")
+                    .dubFont(12, weight: .regular)
+                    .foregroundStyle(Palette.textSecondary)
+            }
+            MeasurementRow(label: "Pronunciation, accuracy, fluency", value: nil)
+            Text("Pronunciation scoring isn't connected yet, so progress shows only what the device measured: take length and mic level.")
+                .dubFont(12, weight: .regular)
+                .foregroundStyle(Palette.textSecondary)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Palette.surface, in: RoundedRectangle(cornerRadius: 16))
+        .accessibilityIdentifier("measuredTakes")
     }
 
     private var streakCard: some View {

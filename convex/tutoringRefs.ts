@@ -8,7 +8,7 @@ import type { EvidencePack } from "./tutoringReply";
 /** Typed handles to the tutoring functions, so other modules can call them without Convex codegen. */
 export const tutoringRefs = {
   // Called by Convex Backend.
-  ingestAssessment: makeFunctionReference<"mutation", { subject: string; assessment: unknown; attempt: unknown; evaluator: unknown }, IngestResult>("tutoring:ingestAssessment"),
+  ingestAssessment: makeFunctionReference<"mutation", { assessment: unknown; attempt: unknown; provenance: unknown }, IngestResult>("tutoring:ingestAssessment"),
   ingestDubbingSession: makeFunctionReference<"mutation", { subject: string; session: unknown }, IngestResult>("tutoring:ingestDubbingSession"),
   removeAssessment: makeFunctionReference<"mutation", { subject: string; assessmentId: string }, { removed: number }>("tutoring:removeAssessment"),
   removeAttempt: makeFunctionReference<"mutation", { subject: string; attemptId: string }, { removed: number }>("tutoring:removeAttempt"),

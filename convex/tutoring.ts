@@ -11,8 +11,8 @@ import {
   type QueryBuilder,
 } from "convex/server";
 import { ConvexError, v } from "convex/values";
-import { ConfigurationError, requiredEnv } from "./env";
-import { requireLearner } from "./tutoringAuth";
+import { ConfigurationError, requiredEnv } from "./lib/env";
+import { requireLearner } from "./lib/auth";
 import { selectNextExercise } from "./tutoringExercise";
 import {
   createMemoryStore,
@@ -144,15 +144,25 @@ async function ingestSession(ctx: MutationCtx, subject: string, input: unknown):
   return { outcome: "ok", results };
 }
 
-/** One assessment, as Backend schedules it right after persisting the assessment. Idempotent by (subject, assessmentId). */
+/**
+ * One assessment, as Backend schedules it right after storing the assessment: Backend's own payload, whose
+ * attempt block carries the owner (taken from the verified user row, never from a client). Idempotent by
+ * (subject, assessmentId). The project stands in for the dubbing session.
+ */
 export const ingestAssessment = internalMutationGeneric({
-  args: { subject: v.string(), assessment: v.any(), attempt: v.any(), evaluator: v.any() },
+  args: { assessment: v.any(), attempt: v.any(), provenance: v.any() },
   handler: async (ctx, args): Promise<IngestResult> => {
     const attempt = (typeof args.attempt === "object" && args.attempt !== null ? args.attempt : {}) as Record<string, unknown>;
-    const { speakingDurationMs, recordingDurationMs, ...session } = attempt;
-    return ingestSession(ctx, args.subject, {
-      ...session,
-      evaluator: args.evaluator,
+    const { ownerSubject, projectId, speakingDurationMs, recordingDurationMs, sceneId, characterId, timeZone } = attempt;
+    if (typeof ownerSubject !== "string" || ownerSubject.length === 0) {
+      return { outcome: "rejected", issues: [{ path: "attempt.ownerSubject", message: "the owner is required" }] };
+    }
+    return ingestSession(ctx, ownerSubject, {
+      sessionId: projectId,
+      sceneId,
+      characterId,
+      timeZone,
+      evaluator: args.provenance,
       assessments: [{ assessment: args.assessment, speakingDurationMs, recordingDurationMs }],
     });
   },

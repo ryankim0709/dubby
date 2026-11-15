@@ -1,5 +1,5 @@
 import { Supermemory, SupermemoryError } from "supermemory";
-import { requiredEnv } from "./env";
+import { requiredEnv } from "./lib/env";
 import type { LearnerPreferences } from "./tutoringPreferences";
 import { applicableRecords, isWordDifficulty, normalizeWord, type TutoringReport } from "./tutoringProgress";
 import type { TutoringRecord } from "./tutoringRecords";

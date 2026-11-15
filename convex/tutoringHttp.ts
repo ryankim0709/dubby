@@ -4,7 +4,7 @@ import OpenAI from "openai";
 import { z } from "zod";
 import { coachCharacters, findCharacter, publicCharacter, type CoachCharacter } from "./coachCharacters";
 import { coachModelId, coachReply, CoachReplyError, CoachTimeoutError, createCoachClient, pcmSampleRateHz, speakReply, speechModelId } from "./coachReply";
-import { ConfigurationError, requiredEnv } from "./env";
+import { ConfigurationError, requiredEnv } from "./lib/env";
 import { createSessionToken, LiveAvatarError, sandboxAvatarId } from "./liveAvatar";
 import { tutoringRefs } from "./tutoringRefs";
 import { composeReply } from "./tutoringReply";
@@ -27,6 +27,8 @@ const locale = z.string().min(2).max(35);
 
 const sessionRequest = z.object({
   characterId: z.string().min(1),
+  /** Two-letter code the app already sends. LITE mode needs no language, since the avatar only renders audio we send. */
+  language: z.string().regex(/^[a-z]{2}$/).optional(),
 });
 
 const replyRequest = z.object({
@@ -129,10 +131,19 @@ function failure(operation: string, error: unknown): Response {
   throw error;
 }
 
+/** A token no configured provider accepts makes getUserIdentity throw; to a caller that is the same as no sign-in. */
+async function isSignedIn(ctx: ActionCtx): Promise<boolean> {
+  try {
+    return (await ctx.auth.getUserIdentity()) !== null;
+  } catch {
+    return false;
+  }
+}
+
 /** Runs the handler only for a signed-in learner; the handler never receives an identity from the client. */
 function authenticated(handler: (ctx: ActionCtx, request: Request) => Promise<Response>) {
   return httpActionGeneric(async (ctx, request) => {
-    if ((await ctx.auth.getUserIdentity()) === null) return json(401, errorBody("unauthenticated", "Sign in to use the coach"));
+    if (!(await isSignedIn(ctx))) return json(401, errorBody("unauthenticated", "Sign in to use the coach"));
     try {
       return await handler(ctx, request);
     } catch (error) {

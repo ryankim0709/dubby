@@ -1,9 +1,10 @@
 import { defineConfig } from "vitest/config";
 
-// Convex functions run in an edge-style runtime, so tests do too; convex-test must be inlined to load its modules.
 export default defineConfig({
   test: {
     environment: "edge-runtime",
+    silent: "passed-only",
+    include: ["convex/**/*.test.ts"],
     server: { deps: { inline: ["convex-test"] } },
   },
 });

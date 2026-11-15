@@ -75,21 +75,27 @@ struct SectionPickerView: View {
                     .buttonStyle(OutlineCapsuleButtonStyle())
                     Spacer()
                 }
-                Button("Transcribe scene") {
-                    player.stop()
-                    onTranscribe(TranscriptionRequest(
-                        clip: clip,
-                        section: ClipSection(start: selection.start, end: selection.end),
-                        language: language
-                    ))
-                }
-                .buttonStyle(PrimaryButtonStyle(cornerRadius: 16))
-                .accessibilityIdentifier("transcribeScene")
             }
             .padding(.horizontal, 16)
             .padding(.bottom, 16)
+            .containerIdentifier("sectionScreen")
         }
         .scrollIndicators(.hidden)
+        // Pinned so the primary action stays on screen however tall the framing controls get.
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            Button("Transcribe scene") {
+                player.stop()
+                onTranscribe(TranscriptionRequest(
+                    clip: clip,
+                    section: ClipSection(start: selection.start, end: selection.end),
+                    language: language
+                ))
+            }
+            .buttonStyle(PrimaryButtonStyle(cornerRadius: 16))
+            .accessibilityIdentifier("transcribeScene")
+            .padding(16)
+            .background(Palette.background)
+        }
         .background(Palette.background)
         .toolbar(.hidden, for: .navigationBar)
         .task {

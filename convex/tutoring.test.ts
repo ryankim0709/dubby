@@ -519,20 +519,13 @@ describe("convex tutoring functions", () => {
   test("the single-assessment entry point validates and rejects bad payloads without storing them", async () => {
     const t = convexTest(schema, modules);
     const item = first.assessments[0]!;
-    const result = await t.mutation(tutoringRefs.ingestAssessment, {
-      subject: alice.tokenIdentifier,
-      assessment: item.assessment,
-      attempt: { sessionId: "s1", sceneId: "scene_001", characterId: "anakin", timeZone: "America/Los_Angeles", speakingDurationMs: 2000, recordingDurationMs: 6000 },
-      evaluator: first.evaluator,
-    });
+    const attempt = { attemptId: "a1", ownerSubject: alice.tokenIdentifier, projectId: "p1", sceneId: "scene_001", characterId: "anakin", timeZone: "America/Los_Angeles", speakingDurationMs: 2000, recordingDurationMs: 6000 };
+    const result = await t.mutation(tutoringRefs.ingestAssessment, { assessment: item.assessment, attempt, provenance: first.evaluator });
     expect(result).toMatchObject({ outcome: "ok", results: [{ outcome: "inserted" }] });
-    const bad = await t.mutation(tutoringRefs.ingestAssessment, {
-      subject: alice.tokenIdentifier,
-      assessment: { ...item.assessment, scores: "nope" },
-      attempt: {},
-      evaluator: first.evaluator,
-    });
+    const bad = await t.mutation(tutoringRefs.ingestAssessment, { assessment: { ...item.assessment, scores: "nope" }, attempt, provenance: first.evaluator });
     expect(bad.outcome).toBe("rejected");
+    const noOwner = await t.mutation(tutoringRefs.ingestAssessment, { assessment: item.assessment, attempt: {}, provenance: first.evaluator });
+    expect(noOwner.outcome).toBe("rejected");
   });
 
   test("a regrade adds neither an attempt nor speaking time", async () => {
@@ -555,7 +548,7 @@ describe("convex tutoring functions", () => {
     expect(await asBob.query(tutoringRefs.nextExercise, {})).toMatchObject({ kind: "first_attempt" });
     expect(await asBob.query(tutoringRefs.memoryStatus, {})).toEqual({ pending: 0, failed: 0, done: 0 });
     expect((await t.withIdentity(alice).query(tutoringRefs.progress, {})).series).toHaveLength(1);
-    await expect(t.query(tutoringRefs.progress, {})).rejects.toThrow(/no authenticated learner/);
+    await expect(t.query(tutoringRefs.progress, {})).rejects.toThrow(/UNAUTHENTICATED/);
   });
 
   test("preferences are validated and a stale version is a conflict", async () => {
@@ -603,9 +596,7 @@ describe("convex tutoring functions", () => {
     memory.failures = { status: 503, remaining: 99 };
     const t = convexTest(schema, modules);
     await t.mutation(tutoringRefs.ingestDubbingSession, ingestArgs(alice.tokenIdentifier, first));
-    const pending = drain(t);
-    await vi.advanceTimersByTimeAsync(60_000);
-    expect(await pending).toEqual({ sent: 0, failed: 1 });
+    expect(await withTimeAdvancing(drain(t))).toEqual({ sent: 0, failed: 1 });
     const rows = await t.run(async (ctx) => ctx.db.query("tutoringMemoryOutbox").collect());
     expect(rows[0]).toMatchObject({ state: "pending", attempts: 1 });
     expect(rows[0]!.nextAttemptAt).toBeGreaterThan(new Date("2026-11-15T12:00:00Z").getTime());
@@ -651,6 +642,16 @@ describe("convex tutoring functions", () => {
     expect(asBob.pack.items).toEqual([]);
   });
 });
+
+/** Moves fake time forward in small steps until the promise settles, so a timer set after a few awaits is still reached. */
+async function withTimeAdvancing<T>(promise: Promise<T>): Promise<T> {
+  let settled = false;
+  const guarded = promise.finally(() => {
+    settled = true;
+  });
+  for (let step = 0; step < 200 && !settled; step += 1) await vi.advanceTimersByTimeAsync(1_000);
+  return guarded;
+}
 
 type OpenAiCall = { path: string; body: Record<string, unknown> };
 
@@ -775,9 +776,7 @@ describe("coach and tutor HTTP routes", () => {
 
   test("a speech request that stalls becomes a provider_timeout for the audio only", async () => {
     fakeOpenAI(() => JSON.stringify({ text: "Say it again.", cites: ["as1"] }), undefined, { hang: true });
-    const pending = post(await seededTutor(), {}, JSON.stringify({ ...JSON.parse(replyBody), audio: true }));
-    await vi.advanceTimersByTimeAsync(20_000);
-    const response = await pending;
+    const response = await withTimeAdvancing(post(await seededTutor(), {}, JSON.stringify({ ...JSON.parse(replyBody), audio: true })));
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({ text: "Say it again.", audio: null, audioError: { code: "provider_timeout" } });
   });
