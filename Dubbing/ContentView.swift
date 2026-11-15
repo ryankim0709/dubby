@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct ContentView: View {
-    @Environment(AccountModel.self) private var account
+    let account: AccountModel
     @State private var tab: AppTab = .discover
     @State private var clips: LoadState<[LibraryClip]> = .loading
     @State private var dubs: LoadState<[SavedDub]> = .loading
@@ -92,6 +92,5 @@ struct ContentView: View {
 }
 
 #Preview {
-    ContentView()
-        .environment(AccountModel(service: nil))
+    ContentView(account: AccountModel(service: nil))
 }

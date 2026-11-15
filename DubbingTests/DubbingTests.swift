@@ -3,6 +3,6 @@ import Testing
 
 struct DubbingTests {
     @Test @MainActor func contentViewBuilds() {
-        _ = ContentView().body
+        _ = ContentView(account: AccountModel(service: nil)).body
     }
 }

@@ -11,7 +11,7 @@ struct AccountModelTests {
         var registerCalls = 0
         var signOutFails = false
         var token: String? = "convex.jwt"
-        var ends: [Void] = []
+        var endedSessions = 0
 
         func restoreSession() async throws -> AccountProfile? { restored }
         func signInWithApple() async throws -> AccountProfile { try signInResult.get() }
@@ -28,9 +28,9 @@ struct AccountModelTests {
         }
         func authToken() async throws -> String? { token }
         func sessionEnds() -> AsyncStream<Void> {
-            let ends = ends
+            let count = endedSessions
             return AsyncStream { continuation in
-                ends.forEach { continuation.yield($0) }
+                for _ in 0..<count { continuation.yield() }
                 continuation.finish()
             }
         }
@@ -88,7 +88,7 @@ struct AccountModelTests {
     @Test func storedSessionRestoresAndEndedSessionSignsOut() async throws {
         let service = FakeAccountService()
         service.restored = AccountProfile(displayName: "Sam")
-        service.ends = [()]
+        service.endedSessions = 1
         let account = AccountModel(service: service)
 
         await account.start()
