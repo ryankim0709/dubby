@@ -1,12 +1,17 @@
 import { type Auth, httpActionGeneric, httpRouter } from "convex/server";
 import { ConvexError } from "convex/values";
+import OpenAI from "openai";
+import { z } from "zod";
 import { internal } from "./_generated/api";
 import { httpAction } from "./_generated/server";
 import { SCHEMA_VERSION } from "./lib/config";
 import { ConfigurationError, requiredEnv } from "./lib/env";
 import { PASSWORD_JWKS_PATH, publicJwks } from "./lib/passwordAuth";
 import { logEvent } from "./lib/log";
+import { ConfigurationError } from "./lib/env";
+import { TranscriptionResponseError } from "./lib/transcription";
 import { registerTutoringRoutes } from "./tutoringHttp";
+import { transcribePublishedScene } from "./sceneTranscription";
 
 // The coach and tutoring routes (tutoringHttp.ts) require a signed-in caller where they spend provider credit and
 // answer 401 before any provider call; /coach/characters, /scenes, and /health are public and spend nothing.
@@ -67,6 +72,37 @@ http.route({
     const scenes = await ctx.runQuery(internal.scenes.catalog, {});
     logEvent({ operation: "scenes.catalog", status: "ok", count: scenes.length, httpStatus: 200 });
     return json(200, { scenes });
+  }),
+});
+
+const transcriptionRequest = z.object({ slug: z.string().min(1).max(200), sha256: z.string().min(1).max(100), locale: z.enum(["en-US", "ko-KR", "ja-JP", "es-ES", "fr-FR", "de-DE", "zh-CN"]) });
+
+// No uploaded audio or arbitrary URLs: the action checks publication, checksum and locale before spending credit.
+http.route({
+  path: "/scenes/transcribe",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    let body: z.infer<typeof transcriptionRequest>;
+    try {
+      body = transcriptionRequest.parse(await request.json());
+    } catch (error) {
+      if (error instanceof SyntaxError || error instanceof z.ZodError) return json(400, { error: "A scene slug, checksum and supported locale are required." });
+      throw error;
+    }
+    try {
+      const result = await transcribePublishedScene(ctx, body);
+      return json(result.status === "ready" ? 200 : 202, result);
+    } catch (error) {
+      if (error instanceof ConvexError) {
+        const data = z.object({ code: z.string(), message: z.string() }).parse(error.data);
+        const status = data.code === "NOT_FOUND" ? 404 : data.code === "CONFLICT" ? 409 : 400;
+        return json(status, { error: data.message });
+      }
+      if (error instanceof ConfigurationError) return json(503, { error: error.message, code: "not_configured" });
+      if (error instanceof OpenAI.APIError) return json(502, { error: "OpenAI couldn't transcribe the library scene. Try again shortly.", code: "provider_failed" });
+      if (error instanceof TranscriptionResponseError) return json(502, { error: error.message, code: "provider_failed" });
+      throw error;
+    }
   }),
 });
 
