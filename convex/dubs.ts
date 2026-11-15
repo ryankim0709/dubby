@@ -204,6 +204,54 @@ export const scoreSheet = query({
   },
 });
 
+const historyItemV = v.object({
+  clientDubId: v.string(),
+  capturedAt: v.number(),
+  sceneTitle: v.string(),
+  characterName: v.string(),
+  locale: v.string(),
+  /** Which evaluator scored the dub, so a chart only joins dubs from the same progress series; null when no take was graded. */
+  evaluator: nullable(v.object({ rubricVersion: v.string(), provider: v.string(), configVersion: v.string() })),
+  dubScore: nullable(v.number()),
+  wordAccuracy: nullable(v.number()),
+  timingFit: nullable(v.number()),
+});
+
+/** The learner's completed dubs, oldest first, with each one's score card totals: what the Progress charts plot. */
+export const history = query({
+  args: {},
+  returns: v.array(historyItemV),
+  handler: async (ctx) => {
+    const user = await requireUser(ctx);
+    const dubs = await ctx.db
+      .query("dubs")
+      .withIndex("by_owner_client", (q) => q.eq("ownerId", user._id))
+      .collect();
+    const items = [];
+    for (const dub of dubs) {
+      if (dub.status !== "complete") continue;
+      const takes = await ctx.db
+        .query("dubTakes")
+        .withIndex("by_dub", (q) => q.eq("dubId", dub._id))
+        .collect();
+      const { dubScore, wordAccuracy, timingFit } = summarizeSheet(takes.map(sheetLineInput));
+      const engine = takes.find((take) => take.result !== undefined)?.result?.provenance.engine;
+      items.push({
+        clientDubId: dub.clientDubId,
+        capturedAt: dub.capturedAt,
+        sceneTitle: dub.sceneTitle,
+        characterName: dub.characterName,
+        locale: dub.locale,
+        evaluator: engine === undefined ? null : { rubricVersion: RUBRIC_VERSION, provider: engine.provider, configVersion: engine.configVersion },
+        dubScore,
+        wordAccuracy,
+        timingFit,
+      });
+    }
+    return items.sort((a, b) => a.capturedAt - b.capturedAt);
+  },
+});
+
 // ---- Grading ------------------------------------------------------------------------------------------------
 
 export const takeForScoring = internalQuery({

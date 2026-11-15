@@ -12,7 +12,7 @@ the steps below are what the owner does once.
 2. **Turn on sign-in.** The app signs in with a username and password (`convex/passwordAuth.ts`). The
    backend signs its own session tokens and serves the public key at `/.well-known/jwks.json`, which
    `convex/auth.config.ts` points Convex at. Set the signing key, then create the shared demo logins
-   (`demo`/`demo` and `demo1`/`demo1`):
+   (`demo`, `demo1`, `maya`, `theo`, and `jordan`, each with the username as its password):
 
    ```sh
    npx convex env set PASSWORD_AUTH_PRIVATE_KEY "$(node scripts/generate-password-auth-key.mjs)"
@@ -24,6 +24,10 @@ the steps below are what the owner does once.
 3. **Set provider keys** on the deployment only for the features you turn on (table below).
 4. **Seed the catalog** from a scene manifest (see Scene catalog). Pushing code never seeds data or
    runs migrations.
+5. **Seed demo progress (optional).** On macOS, `node scripts/seed-demo-progress.mjs` gives the demo
+   logins about four weeks of scored dubs in English, Spanish, and French, so the Progress tab and the
+   coach's memory have history. Each take is spoken by a macOS voice and scored by the real pipeline,
+   so it calls OpenAI and Supermemory. It is safe to re-run; existing dubs are skipped.
 
 ### Environment variables
 

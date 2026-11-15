@@ -439,6 +439,8 @@ export const drainMemoryOutbox = internalActionGeneric({
       }
       await ctx.runMutation(tutoringRefs.recordOutboxResult, { id: row._id, expectedHash: row.contentHash, outcome, error: message });
     }
+    // A full batch can leave due rows behind (a new dub can queue more than one batch of notes), so keep going.
+    if (due.length === outboxBatchSize) await ctx.scheduler.runAfter(0, tutoringRefs.drainMemoryOutbox, {});
     return { sent, failed };
   },
 });
