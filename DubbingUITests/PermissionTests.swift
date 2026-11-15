@@ -16,6 +16,7 @@ final class PermissionTests: DubbingUITestCase {
         capture("microphone-denied")
 
         XCTAssertFalse(element("recordLine").isEnabled, "recordLine must be disabled while the microphone is off")
+        _ = requireElement("permissionRetry")
         tap("openSettings")
         let settings = XCUIApplication(bundleIdentifier: "com.apple.Preferences")
         XCTAssertTrue(settings.wait(for: .runningForeground, timeout: 15), "The Settings app did not open")
@@ -27,10 +28,7 @@ final class PermissionTests: DubbingUITestCase {
         capture("settings-microphone-on")
 
         app.activate()
-        XCTAssertTrue(element("recordLine").waitForExistence(timeout: 10))
-        let enabled = XCTNSPredicateExpectation(predicate: NSPredicate(format: "isEnabled == true"), object: element("recordLine"))
-        XCTAssertEqual(XCTWaiter().wait(for: [enabled], timeout: 10), .completed, "recordLine must re-enable on its own once the app returns with the microphone allowed")
-        tap("recordLine")
+        tap("permissionRetry")
         _ = requireElement("recordingIndicator", timeout: 20)
         waitForDisappearance("recordingIndicator", timeout: 60)
         tap("keepTake")

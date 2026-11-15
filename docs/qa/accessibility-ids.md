@@ -112,12 +112,14 @@ The baseline has Frame the scene → Transcribe → Script review with speaker c
 | `myDubsCount` | other | Value: integer | no |
 | `savedDub-<dubID>` | button | Card; value: `<linesDubbed> of <totalLines>` | no |
 | `savedDubPlayer` | other | Playback sheet root | no |
-| `shareSavedDub` | button | ShareLink in the playback sheet | no (label "Share dub") |
+| `savedDubShare` | button | ShareLink in the playback sheet | no (label "Share dub") |
 | `savedDubDone` | button | Closes the sheet | no (label "Done") |
 
-### Already present on mobile/native-flow (4151f2a)
+### Implemented on mobile/native-flow (637f17c, read from source)
 
-Read from that branch's source; these exist and the tests use them as they are: `openSettings` (Open Settings button inside the permission card), `retry` (the "Try again" button inside an issue card, in the studio and on the export screen), `retryLoad` (Discover and My Dubs load failure), `takeFeedback` (measured take card: length, mic level, and "Pronunciation: Not measured"), `takeSummary` (measured summary on the result and in the saved-dub player), `shareSavedDub` (ShareLink in the saved-dub player). Recovery from a denied microphone is automatic: the studio re-reads the permission when the app returns to the foreground and re-enables `recordLine`, so the contract has no separate permission-retry control. Export on that branch has an extra phase, `measuring`, between `mixing` and `saving`.
+State carriers and containers are in place for `discoverScreen`, `sceneCard-<sceneID>`, `dubScene-<sceneID>`, `scriptScreen`, `characterCard-<id>`, `studioScreen` with `studioStatus`, `studioProgress`, `currentLine`, `lineKept-<id>`, the studio controls (`keepTake`, `retryTake`, `cancelRecording`, `recordingIndicator`, `studioBack`), `microphonePermissionBanner` (value `denied`) with `permissionRetry` (button "Check again", which re-reads access and starts the recording), `studioError` with `studioRetry`, `speechPermissionNotice` and `transcribeError` with `transcribeRetry`, `exportScreen` with `exportStatus` and `savedStatus`, `resultPlayer`, `cancelExport`, `retryExport`, `exportBack`, `doneDub`, `tab-*`, `myDubsScreen`, `myDubsCount`, `savedDub-<dubID>`, `savedDubPlayer`, `savedDubShare`, `savedDubDone`, `confirmDeleteDub`, plus `takeFeedback`, `takeSummary`, `measuredTakes`, `retryLoad`. Saving is automatic (no `saveDub`): the tests read `savedStatus`. Export has an extra phase, `measuring`, between `mixing` and `saving`. Not yet verified by a build: whether each element has the type and value the tests expect.
+
+Still missing on that branch as of 637f17c: `fixtureInputBadge` (Engine), `feedbackBasis` and `pronunciationScore` (Mobile, in progress on #4), and the demo scene (Engine).
 
 ### Coach runtime provider (QA/DEBUG only; blocked until a development deployment exists)
 
@@ -132,7 +134,7 @@ Shown only with `-DUBIT_UI_TEST 1`. They expose facts the app already holds, nev
 | `coachRetry` | button | Re-sends the same turn after a failure |
 | `feedbackBasis` | other | Value `acoustic`, `script_agreement` or `none` for the shown feedback |
 | `pronunciationScore` | other | Must exist only when `feedbackBasis` is `acoustic` and the provenance is acoustic; never for transcript agreement or a model opinion |
-| launch argument `-DUBIT_QA_COACH_FAULT <missing_key\|provider_error\|provider_timeout>` | | Makes the QA/DEBUG client add header `X-QA-Fault` to coach requests; the backend honors it only where `QA_FAULTS_ENABLED` is set on a non-production deployment |
+| launch argument `-DUBIT_QA_COACH_FAULT <missing_key|provider_error|provider_timeout>` | | Makes the QA/DEBUG client add header `X-QA-Fault` to coach requests; the backend honors it only where `QA_FAULTS_ENABLED` is set on a non-production deployment |
 
 ### System UI (no app identifiers; role plus accessible name)
 

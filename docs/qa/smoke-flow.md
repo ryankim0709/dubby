@@ -48,14 +48,14 @@ Column "Sim" = can a simulator exercise it: **Yes**, **Partly** (the app-side st
 | S-20 | Leave the flow | `doneDub` | Back on Discover | screenshot | Yes |
 | S-21 | Reopen My Dubs | `tab-myDubs`, `myDubsScreen`, `myDubsCount`, `savedDub-<dubID>` | Count = 1, the card shows `N of N` lines | screenshot `my-dubs-one` | Yes |
 | S-22 | Persistence | terminate and relaunch without `-DUBIT_UI_TEST`, repeat S-21 | The dub is still listed | screenshot | Yes |
-| S-23 | Play and share a saved dub | `savedDub-<dubID>`, `savedDubPlayer`, `shareSavedDub`, "Close", `savedDubDone` | Player opens, share sheet opens and closes, sheet closes | screenshot | Yes |
+| S-23 | Play and share a saved dub | `savedDub-<dubID>`, `savedDubPlayer`, `savedDubShare`, "Close", `savedDubDone` | Player opens, share sheet opens and closes, sheet closes | screenshot | Yes |
 
 ## Permission paths
 
 | Step | Action | Element | Expected result | Evidence | Sim |
 | --- | --- | --- | --- | --- | --- |
 | S-30 | Deny the microphone | `recordLine`, alert button "Don't Allow" | No recording starts, no take, `microphonePermissionBanner` value `denied`, `studioError` value `microphoneDenied` (typed state, not a generic failure) | screenshot `microphone-denied` | Yes |
-| S-31 | Recover through Settings | `openSettings`, Settings switch "Microphone", return | Settings opens on the app's page; after the switch is on and the app returns, the banner clears, `recordLine` re-enables without a manual retry, and recording works | screenshots, log | Yes |
+| S-31 | Recover through Settings | `openSettings`, Settings switch "Microphone", return, `permissionRetry` ("Check again") | Settings opens on the app's page; after the switch is on and the app returns, `permissionRetry` re-reads access and starts the recording, and the banner clears | screenshots, log | Yes |
 | S-32 | Deny speech recognition (baseline transcription step) | `transcribeScene`, alert button "Don't Allow" | `speechPermissionNotice` value `denied`; no script is produced; a path back to the permission exists | screenshot | Yes |
 | S-33 | Restricted permission (parental/MDM restriction) | n/a | Banner value `restricted`, with no Settings recovery offered | n/a | No (needs a restricted device) |
 | S-34 | Prompt reappearance | Fresh install | The prompt appears once per install; deny is remembered across relaunch | log | Yes |
@@ -81,13 +81,13 @@ Ryan's rule: every AI agent inside the deployed app uses OpenAI only (official S
 | Step | Action | Element / signal | Expected result | Evidence | Sim |
 | --- | --- | --- | --- | --- | --- |
 | S-60 | Static provider check | `scripts/qa/e2e/check-runtime-provider.sh` | No Anthropic or other vendor SDK, key name, or model id in `convex/`, `package.json`, `package-lock.json`, `Dubbing/`, `Config/`; the OpenAI SDK is used through the Responses API; no key name or `sk-` literal in app code | script output | Yes (runs on Linux) |
-| S-61 | A coach reply names its provider | send a turn; `coachReplyProvenance`; server log line `coach.reply` | Value starts with `openai/`; the reply envelope's `provenance.provider` is `openai`, `provenance.api` is `responses`; no other vendor appears in the log | screenshot, log line (non-secret fields only) | Yes (needs dev deployment) |
-| S-62 | Backend key missing | deployment without `OPENAI_API_KEY`; `coachError`, `coachRetry` | `coachError` = `not_configured`; no `coachReplyText`, no avatar speech, no template or fallback-vendor text; `coachRetry` is available | screenshot | Yes |
+| S-61 | A coach reply names its provider (a source "template" reply, which Tutoring returns only when OpenAI answered but failed the evidence or length check, has no provenance and does not count as a model reply) | send a turn; `coachReplyProvenance`; server log line `coach.reply` | Value starts with `openai/`; the reply envelope's `provenance.provider` is `openai`, `provenance.api` is `responses`; no other vendor appears in the log | screenshot, log line (non-secret fields only) | Yes (needs dev deployment) |
+| S-62 | Backend key missing | fault `missing_key` (the only development deployment keeps its key, so the backend answers as if it were unset; requested from Tutoring), or the local anonymous backend where the backend tests already assert the 503; `coachError`, `coachRetry` | `coachError` = `not_configured`; no `coachReplyText`, no avatar speech, no template or fallback-vendor text; `coachRetry` is available | screenshot | Yes |
 | S-63 | Provider error | fault `provider_error`; `coachError`, `coachRetry` | `coachError` = `provider_failed`; no invented reply; after the fault is cleared, `coachRetry` produces a reply that passes S-61 | screenshots before and after | Yes |
 | S-64 | Provider timeout | fault `provider_timeout` | `coachError` = `provider_timeout` within the app's request timeout; the call screen is not stuck; `coachRetry` works | screenshot | Yes |
 | S-65 | LiveAvatar speaks only OpenAI text | `coachAvatarSpeech` versus `coachReplyText` | Equal strings for every turn; while `coachError` shows, `coachAvatarSpeech` does not change | screenshot, log | Yes (needs a LiveAvatar sandbox) |
 | S-66 | Feedback is never mislabeled pronunciation | `feedbackBasis`, `pronunciationScore`, `takeFeedback` | With a transcript-only or script-agreement basis there is no `pronunciationScore` and the UI says pronunciation is not measured (native-flow already shows "Not measured"); a number appears only with an acoustic provenance | screenshot | Yes (needs assessment) |
-| S-67 | Secrets stay server-side | script and app bundle search | `OPENAI_API_KEY` and key-shaped strings appear in no app file, test, fixture or log | script output | Yes |
+| S-67 | No provider key is reachable from the app | scripts/qa/e2e/check-no-key-in-artifacts.sh over the built Dubbing.app, the app log output (cloud-phone logs or the xcresult log export) and the UI-test text output; plus a walk of the coach screens and My Dubs looking for key-shaped text | None of OPENAI_API_KEY, sk- strings, bearer credentials or other provider key names appears in the bundle, logs or any visible text; the app talks only to the Convex site URL | script output (matched values are never printed), screenshots | Yes (bundle and logs); the repository secret scan in CI belongs to DUBB-16 |
 
 ## Skipped steps and blockers
 

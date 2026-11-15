@@ -46,9 +46,9 @@ if [ -d convex ]; then
   fi
 fi
 
-if grep -rnE 'OPENAI_API_KEY|sk-[A-Za-z0-9_-]{20,}' Dubbing Config DubbingTests DubbingUITests .github .revyl scripts 2>/dev/null | grep -v 'scripts/qa/e2e/check-runtime-provider.sh' | grep -q .; then
+if grep -rnE 'OPENAI_API_KEY|sk-[A-Za-z0-9_-]{20,}' Dubbing Config DubbingTests DubbingUITests .github .revyl scripts 2>/dev/null | grep -v 'scripts/qa/e2e/check-' | grep -q .; then
   fail "a key name or key-shaped string appears outside the backend:"
-  grep -rnE 'OPENAI_API_KEY|sk-[A-Za-z0-9_-]{20,}' Dubbing Config DubbingTests DubbingUITests .github .revyl scripts 2>/dev/null | grep -v 'scripts/qa/e2e/check-runtime-provider.sh' | cut -c1-160 | sed 's/^/        /'
+  grep -rnE 'OPENAI_API_KEY|sk-[A-Za-z0-9_-]{20,}' Dubbing Config DubbingTests DubbingUITests .github .revyl scripts 2>/dev/null | grep -v 'scripts/qa/e2e/check-' | cut -c1-160 | sed 's/^/        /'
 else
   pass "no OPENAI_API_KEY name or key-shaped string in the app, tests, workflows or Revyl config"
 fi

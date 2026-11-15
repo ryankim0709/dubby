@@ -55,7 +55,7 @@ final class SmokeFlowTests: DubbingUITestCase {
         saved.tap()
         _ = requireElement("savedDubPlayer")
         capture("saved-dub-player")
-        openAndCloseShareSheet(from: "shareSavedDub")
+        openAndCloseShareSheet(from: "savedDubShare")
         tap("savedDubDone")
     }
 }

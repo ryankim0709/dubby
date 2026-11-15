@@ -97,7 +97,7 @@ test:
     - type: validation
       step_description: "The element with accessibility identifier \"savedDubPlayer\" is visible"
     - type: instructions
-      step_description: "Tap the button with accessibility identifier \"shareSavedDub\""
+      step_description: "Tap the button with accessibility identifier \"savedDubShare\""
     - type: validation
       step_description: "The system share sheet is visible"
     - type: instructions

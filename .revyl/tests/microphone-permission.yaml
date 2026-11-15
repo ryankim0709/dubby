@@ -29,7 +29,7 @@ test:
     - type: instructions
       step_description: "Turn on the switch named \"Microphone\", then return to the app"
     - type: instructions
-      step_description: "Wait until the button with accessibility identifier \"recordLine\" is enabled again, then tap it"
+      step_description: "Tap the button with accessibility identifier \"permissionRetry\" (named \"Check again\"), which re-reads access and starts recording"
     - type: validation
       step_description: "The element \"recordingIndicator\" is visible"
     - type: manual
