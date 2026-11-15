@@ -70,8 +70,6 @@ test:
       step_description: "30"
     - type: validation
       step_description: "The element \"exportStatus\" has the value \"finished\" and \"resultPlayer\" has the value \"ready\""
-    - type: instructions
-      step_description: "If the button with accessibility identifier \"saveDub\" is visible, tap it"
     - type: validation
       step_description: "The element \"savedStatus\" has the value \"saved\""
     - type: instructions
