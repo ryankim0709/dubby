@@ -3,8 +3,8 @@ import SwiftUI
 struct LibrarySceneDetail: View {
     let clip: LibraryClip
     let onDub: () -> Void
+    let onClose: () -> Void
     @State private var isVisible = false
-    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         ScrollView {
@@ -44,7 +44,7 @@ struct LibrarySceneDetail: View {
         .screenBackground()
         .safeAreaInset(edge: .bottom) {
             AdaptiveStack(rowAlignment: .center, spacing: 10) {
-                Button("Not now") { dismiss() }
+                Button("Not now", action: onClose)
                     .buttonStyle(SecondaryButtonStyle())
                 Button("Dub this scene", action: onDub)
                     .buttonStyle(PrimaryButtonStyle(cornerRadius: Radius.control))
@@ -55,7 +55,15 @@ struct LibrarySceneDetail: View {
             .padding(.bottom, 8)
             .background(Palette.background)
         }
+        .toolbar(.visible, for: .navigationBar)
         .toolbar(.hidden, for: .tabBar)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button("Close scene", systemImage: "xmark", action: onClose)
+                    .labelStyle(.iconOnly)
+                    .accessibilityIdentifier("closeLibraryScene")
+            }
+        }
         .toolbarBackground(.hidden, for: .navigationBar)
         .navigationBarTitleDisplayMode(.inline)
         .onAppear { isVisible = true }

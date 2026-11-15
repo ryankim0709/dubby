@@ -253,7 +253,7 @@ struct VideoThumbnail: View {
                     if let time {
                         image = try await MediaPipeline.thumbnail(for: url, at: time, maximumSize: CGSize(width: 640, height: 640))
                     } else {
-                        image = try await MediaPipeline.thumbnails(for: url, count: 1, maximumSize: CGSize(width: 640, height: 640)).first
+                        image = try await MediaPipeline.previewPicture(for: url).image
                     }
                 } catch {
                     failure = error.localizedDescription

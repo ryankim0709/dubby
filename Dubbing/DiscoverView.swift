@@ -86,7 +86,7 @@ struct DiscoverView: View {
             .searchable(text: $query, prompt: "Scenes, films, characters")
             .navigationBarTitleDisplayMode(.inline)
             .navigationDestination(for: LibrarySceneOpening.self) { opening in
-                LibrarySceneDetail(clip: opening.clip, onDub: { onDub(opening.clip) })
+                LibrarySceneDetail(clip: opening.clip, onDub: { onDub(opening.clip) }, onClose: { openings = [] })
                     .navigationTransition(.zoom(sourceID: opening.sourceID, in: zoomNamespace))
             }
             .toolbar {
