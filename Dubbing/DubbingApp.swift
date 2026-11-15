@@ -5,6 +5,7 @@ struct DubbingApp: App {
     @State private var account = AccountModel.live(in: .main)
 
     init() {
+        DisplayFont.register()
         LaunchConfiguration.current.prepareProcess()
     }
 

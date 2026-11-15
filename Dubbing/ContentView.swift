@@ -18,29 +18,31 @@ struct ContentView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            Group {
-                switch tab {
-                case .discover:
-                    DiscoverView(clips: clips, streakDays: streakDays, onDub: { launch = .scene($0) }, isSignedIn: account.phase.isSignedIn, onTalkToCoach: { isCoachPresented = true }, onAccount: { isAccountPresented = true }, onRetry: reloadClips)
-                case .messages:
-                    MessagesView()
-                case .progress:
-                    PracticeProgressView(dubs: dubs, folder: libraryFolder, account: account, onAccount: { isAccountPresented = true }, onRetry: reloadDubs)
-                case .myDubs:
-                    MyDubsView(dubs: dubs, folder: libraryFolder, onDelete: { dub in
+        TabView(selection: tabSelection) {
+            Tab("Discover", systemImage: "popcorn.fill", value: AppTab.discover) {
+                DiscoverView(clips: clips, streakDays: streakDays, onDub: { launch = .scene($0) }, isSignedIn: account.phase.isSignedIn, onTalkToCoach: { isCoachPresented = true }, onAccount: { isAccountPresented = true }, onRetry: reloadClips)
+            }
+            Tab("Feed", systemImage: "play.rectangle.on.rectangle.fill", value: AppTab.feed) {
+                CommunityFeedView(onCreate: { launch = .chooseScene })
+            }
+            Tab("Create", systemImage: "plus.circle.fill", value: AppTab.create) {
+                Color.clear
+            }
+            Tab("Inbox", systemImage: "tray.fill", value: AppTab.messages) {
+                NavigationStack { MessagesView() }
+            }
+            Tab("Shelf", systemImage: "books.vertical.fill", value: AppTab.myDubs) {
+                NavigationStack {
+                    MyDubsView(dubs: dubs, folder: libraryFolder, account: account, onAccount: { isAccountPresented = true }, onDelete: { dub in
                         _ = try await history.delete(dub)
                         reloadDubs()
                     }, onRetry: reloadDubs)
                 }
             }
-            // Attached to the tab roots only, so pushed screens keep their full-height layout.
-            .safeAreaInset(edge: .bottom, spacing: 0) {
-                DubTabBar(selection: $tab, onCreate: { launch = .chooseScene })
-            }
         }
+        .tint(Palette.textPrimary)
         .fullScreenCover(item: $launch, onDismiss: reloadDubs) { launch in
-            DubFlowView(launch: launch, clips: clips, onClose: { self.launch = nil })
+            DubFlowView(launch: launch, clips: clips, onRetry: reloadClips, onClose: { self.launch = nil })
         }
         .fullScreenCover(isPresented: $isCoachPresented) {
             // The dub result screen has no coach entry yet. When it gains one it should pass a
@@ -55,6 +57,19 @@ struct ContentView: View {
             await loadClips()
         }
         .preferredColorScheme(.dark)
+    }
+
+    private var tabSelection: Binding<AppTab> {
+        Binding(
+            get: { tab },
+            set: { selected in
+                if selected == .create {
+                    launch = .chooseScene
+                } else {
+                    tab = selected
+                }
+            }
+        )
     }
 
     private func reloadClips() {

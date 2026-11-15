@@ -12,7 +12,7 @@ struct PracticeProgressView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 Text("Your progress")
-                    .dubFont(24, weight: .semibold)
+                    .dubFont(32, weight: .bold)
                     .foregroundStyle(Palette.textPrimary)
                     .padding(.top, 8)
                 if account.phase.isSignedIn {
@@ -23,7 +23,7 @@ struct PracticeProgressView: View {
                         .accessibilityAddTraits(.isHeader)
                 } else if account.isAvailable {
                     Button("Sign in to see your coach's progress", action: onAccount)
-                        .buttonStyle(OutlineCapsuleButtonStyle())
+                        .buttonStyle(SecondaryButtonStyle())
                         .accessibilityIdentifier("progressSignIn")
                 }
                 LoadStateContent(state: dubs, failureIdentifier: "progressLoadFailed", retry: onRetry) { dubs in
@@ -38,12 +38,13 @@ struct PracticeProgressView: View {
                     }
                 }
             }
-            .padding(.horizontal, 16)
+            .padding(.horizontal, 20)
             .padding(.bottom, 16)
         }
         .scrollIndicators(.hidden)
-        .background(Palette.background)
-        .toolbar(.hidden, for: .navigationBar)
+        .screenBackground()
+        .navigationTitle("Progress")
+        .navigationBarTitleDisplayMode(.inline)
     }
 }
 
