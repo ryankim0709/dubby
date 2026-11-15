@@ -69,15 +69,16 @@ rows = []
 def walk(node, trail):
     kids = node.get("children", [])
     name = node.get("name", "?")
-    if not kids:
+    if node.get("nodeType") == "Test Case":
         rows.append((node.get("result", "?"), "/".join(trail + [name])))
+        return
     for kid in kids:
         walk(kid, trail + [name])
 for root in json.load(sys.stdin).get("testNodes", []):
     walk(root, [])
 for result, name in rows:
     print("%-8s %s" % (result, name))
-print("TOTAL %d, PASSED %d, FAILED %d" % (len(rows), sum(r == "Passed" for r, _ in rows), sum(r == "Failed" for r, _ in rows)))
+print("TOTAL %d, PASSED %d, FAILED %d, SKIPPED %d" % (len(rows), sum(r == "Passed" for r, _ in rows), sum(r == "Failed" for r, _ in rows), sum(r == "Skipped" for r, _ in rows)))
 ' | tee "$OUT/results.txt"
   xcrun xcresulttool export attachments --path "$RESULT" --output-path "$OUT/attachments" >/dev/null 2>&1 || echo "note: attachments could not be exported" >&2
 fi

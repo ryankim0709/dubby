@@ -34,7 +34,6 @@ jobs:
       - uses: actions/checkout@v6
       - name: Runtime provider scan
         run: scripts/qa/e2e/check-runtime-provider.sh
-        continue-on-error: true
       - name: Key scan over the repository text
         run: scripts/qa/e2e/check-no-key-in-artifacts.sh Dubbing Config DubbingUITests .revyl
 
