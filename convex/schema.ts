@@ -3,10 +3,12 @@ import { v } from "convex/values";
 import { tutoringTables } from "./tutoringTables";
 import { assessmentContentFields, jobErrorV, jobStageV, jobStatusV, outcomeV } from "./lib/validators";
 import { timedWordV } from "./lib/transcription";
+import { socialTables } from "./socialTables";
 
 /** Tables follow docs/convex-backend.md and contract v1 section 4. Ids are Convex ids; times are epoch milliseconds. */
 export default defineSchema({
   ...tutoringTables,
+  ...socialTables,
 
   /** Landing-page signups. Emails are stored lowercased, so `by_email` finds repeat signups. */
   waitlist: defineTable({
@@ -23,9 +25,10 @@ export default defineSchema({
 
   users: defineTable({
     tokenIdentifier: v.string(),
+    username: v.optional(v.string()),
     timeZone: v.optional(v.string()),
     createdAt: v.number(),
-  }).index("by_token_identifier", ["tokenIdentifier"]),
+  }).index("by_token_identifier", ["tokenIdentifier"]).index("by_username", ["username"]),
 
   /** Username and password logins (passwordAuth.ts). A users row links to one through its token's subject, the account id. */
   passwordAccounts: defineTable({

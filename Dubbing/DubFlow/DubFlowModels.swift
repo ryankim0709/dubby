@@ -16,7 +16,7 @@ nonisolated struct ClipSection: Hashable, Sendable {
     var duration: Double { end - start }
 }
 
-nonisolated struct TimeSpan: Hashable, Sendable {
+nonisolated struct TimeSpan: Codable, Hashable, Sendable {
     let start: Double
     let end: Double
 }
@@ -142,16 +142,24 @@ nonisolated struct DubSetup: Hashable, Sendable {
     let script: Script
     /// The played speaker's id in `script`.
     let characterID: Int
+    let locale: String
     /// Set when the dub is of a curated scene, whose prepared tracks replace the speech-band filter.
     let curated: CuratedSceneSelection?
+    let protectedAudioSpans: [TimeSpan]
 
     /// A dub of a raw clip, scripted by transcription.
-    init(clip: ImportedClip, section: ClipSection, script: Script, characterID: Int) {
+    init(clip: ImportedClip, section: ClipSection, script: Script, characterID: Int, locale: String) {
+        self.init(clip: clip, section: section, script: script, characterID: characterID, locale: locale, protectedAudioSpans: [])
+    }
+
+    init(clip: ImportedClip, section: ClipSection, script: Script, characterID: Int, locale: String, protectedAudioSpans: [TimeSpan]) {
         self.clip = clip
         self.section = section
         self.script = script
         self.characterID = characterID
+        self.locale = locale
         curated = nil
+        self.protectedAudioSpans = protectedAudioSpans
     }
 
     /// A dub of a curated scene; see `CuratedSceneStudio.makeSetup`.
@@ -160,7 +168,9 @@ nonisolated struct DubSetup: Hashable, Sendable {
         section = ClipSection(start: 0, end: curated.scene.durationSeconds)
         self.script = script
         characterID = curated.speakerID
+        locale = curated.scene.locale
         self.curated = curated
+        protectedAudioSpans = []
     }
 
     /// How a take that runs long is bounded in this dub.

@@ -39,11 +39,17 @@ private enum ExportPhase: Equatable {
 struct DubResultView: View {
     let setup: DubSetup
     let takes: [Int: RecordedTake]
+    let account: AccountModel
+    let completionRoom: CoDubRoom?
     let onDone: () -> Void
+    let onKeepRecording: () -> Void
     @State private var phase: ExportPhase = .filteringDialogue
     @State private var attempt = 0
     @State private var exportTask: Task<Void, Never>?
     @State private var saveFailed = false
+    @State private var socialSource: SocialDubSource?
+    @State private var isCoDubUploading = false
+    @State private var returnsToStudio = false
 
     private static let logger = Logger(subsystem: "com.ryankim.Dubbing", category: "export")
     private let history = LocalDubHistory(folder: DubLibrary.defaultFolder)
@@ -117,14 +123,22 @@ struct DubResultView: View {
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if case .finished(let video, _, _) = phase {
                 VStack(spacing: 8) {
+                    if completionRoom == nil {
+                        Button("Invite a friend or post to feed", systemImage: "person.2") {
+                            socialSource = SocialDubSource(video: video, setup: setup, takes: takes)
+                        }
+                        .buttonStyle(PrimaryButtonStyle(cornerRadius: Radius.control))
+                        .accessibilityIdentifier("shareWithDubbyFriends")
+                    }
                     ShareLink(item: video) {
                         Label("Share dub", systemImage: "square.and.arrow.up")
                     }
-                    .buttonStyle(PrimaryButtonStyle(cornerRadius: 16))
+                    .buttonStyle(SecondaryButtonStyle())
                     .accessibilityIdentifier("shareDub")
                     Button("Done", action: onDone)
                         .buttonStyle(SecondaryButtonStyle())
                         .accessibilityIdentifier("doneDub")
+                        .disabled(isCoDubUploading)
                 }
                 .padding(16)
                 .background(Palette.background)
@@ -141,6 +155,17 @@ struct DubResultView: View {
             }
         }
         .onDisappear { exportTask?.cancel() }
+        .sheet(item: $socialSource, onDismiss: {
+            if returnsToStudio {
+                returnsToStudio = false
+                onKeepRecording()
+            }
+        }) { source in
+            SocialSharingView(source: source, account: account, onClose: { socialSource = nil }, onKeepRecording: {
+                returnsToStudio = true
+                socialSource = nil
+            })
+        }
     }
 
     private var header: some View {
@@ -157,6 +182,7 @@ struct DubResultView: View {
             }
             .accessibilityLabel("Back")
             .accessibilityIdentifier("exportBack")
+            .disabled(isCoDubUploading)
             Text("Your dub")
                 .dubFont(16, weight: .semibold)
                 .foregroundStyle(Palette.textPrimary)
@@ -183,6 +209,9 @@ struct DubResultView: View {
             ResultPlayer(url: video)
                 .aspectRatio(16 / 9, contentMode: .fit)
                 .clipShape(RoundedRectangle(cornerRadius: 16))
+            if let completionRoom {
+                CompleteCoDubView(room: completionRoom, video: video, linesRecorded: takes.count, account: account, isWorking: $isCoDubUploading)
+            }
             Text("You're the main character.")
                 .dubFont(22, weight: .bold)
                 .foregroundStyle(Palette.textPrimary)
@@ -247,7 +276,7 @@ struct DubResultView: View {
             sectionDuration: section.duration,
             grace: DubTiming.lineGrace
         )
-        let spans = ScriptBuilder.suppressionSpans(placements: placements, padding: DubTiming.suppressionPadding, sectionDuration: section.duration)
+        let spans = SocialAudioProtection.subtract(setup.protectedAudioSpans, from: ScriptBuilder.suppressionSpans(placements: placements, padding: DubTiming.suppressionPadding, sectionDuration: section.duration))
         let folder = setup.clip.workingDirectory
         let sceneAudio = folder.appending(path: "mix-scene-\(run).m4a")
         let background = folder.appending(path: "mix-background-\(run).caf")
