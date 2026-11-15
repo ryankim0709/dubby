@@ -21,10 +21,7 @@ final class LiveTutorAudio {
     private let voiceFormat: AVAudioFormat
 
     init() throws {
-        guard let voiceFormat = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: LiveTutorRealtime.sampleRate, channels: 1, interleaved: false) else {
-            throw LiveTutorAudioError.unavailable("the tutor's voice format isn't supported")
-        }
-        self.voiceFormat = voiceFormat
+        voiceFormat = try TutorVoice.format()
         (microphone, microphoneContinuation) = AsyncStream.makeStream(bufferingPolicy: .bufferingNewest(50))
     }
 
@@ -51,15 +48,7 @@ final class LiveTutorAudio {
     /// Queues the tutor's voice behind whatever is already playing.
     func play(_ samples: [Float]) throws {
         guard !samples.isEmpty else { return }
-        guard let buffer = AVAudioPCMBuffer(pcmFormat: voiceFormat, frameCapacity: AVAudioFrameCount(samples.count)), let channel = buffer.floatChannelData?[0] else {
-            throw LiveTutorAudioError.unavailable("the tutor's voice couldn't be buffered")
-        }
-        buffer.frameLength = AVAudioFrameCount(samples.count)
-        samples.withUnsafeBufferPointer { source in
-            guard let base = source.baseAddress else { return }
-            channel.update(from: base, count: samples.count)
-        }
-        player.scheduleBuffer(buffer)
+        player.scheduleBuffer(try TutorVoice.buffer(samples, format: voiceFormat))
         if !player.isPlaying { player.play() }
     }
 
@@ -89,9 +78,62 @@ final class LiveTutorAudio {
     }
 }
 
-/// Converts microphone samples to the 24 kHz PCM 16-bit the Realtime API takes. One encoder serves one call,
+/// The tutor's voice as the player takes it: 24 kHz mono float samples.
+nonisolated enum TutorVoice {
+    static func format() throws -> AVAudioFormat {
+        guard let format = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: LiveTutorRealtime.sampleRate, channels: 1, interleaved: false) else {
+            throw LiveTutorAudioError.unavailable("the tutor's voice format isn't supported")
+        }
+        return format
+    }
+
+    static func buffer(_ samples: [Float], format: AVAudioFormat) throws -> AVAudioPCMBuffer {
+        guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(samples.count)), let channel = buffer.floatChannelData?[0] else {
+            throw LiveTutorAudioError.unavailable("the tutor's voice couldn't be buffered")
+        }
+        buffer.frameLength = AVAudioFrameCount(samples.count)
+        samples.withUnsafeBufferPointer { source in
+            guard let base = source.baseAddress else { return }
+            channel.update(from: base, count: samples.count)
+        }
+        return buffer
+    }
+}
+
+/// Plays the take coach's voice through whatever audio session the studio has set up. It never opens the
+/// microphone, so it can't get in the way of recording.
+final class TutorVoicePlayer {
+    private let engine = AVAudioEngine()
+    private let player = AVAudioPlayerNode()
+    private let format: AVAudioFormat
+
+    init() throws {
+        format = try TutorVoice.format()
+        engine.attach(player)
+        engine.connect(player, to: engine.mainMixerNode, format: format)
+    }
+
+    func play(_ samples: [Float]) throws {
+        guard !samples.isEmpty else { return }
+        // The studio switches the audio session for recording and playback, which stops a running engine.
+        if !engine.isRunning { try engine.start() }
+        player.scheduleBuffer(try TutorVoice.buffer(samples, format: format))
+        if !player.isPlaying { player.play() }
+    }
+
+    func stop() {
+        player.stop()
+    }
+
+    func shutDown() {
+        player.stop()
+        engine.stop()
+    }
+}
+
+/// Converts mono float samples to the 24 kHz PCM 16-bit the Realtime API takes. One encoder serves one stream,
 /// because the converter carries resampling state from one buffer to the next.
-final class LiveTutorMicrophoneEncoder {
+nonisolated final class LiveTutorMicrophoneEncoder {
     private let converter: AVAudioConverter
     private let inputFormat: AVAudioFormat
     private let outputFormat: AVAudioFormat

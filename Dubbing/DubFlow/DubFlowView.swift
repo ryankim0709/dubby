@@ -46,7 +46,7 @@ struct DubFlowView: View {
                     case .script(let request):
                         ScriptReviewView(request: request) { path.append(.studio($0)) }
                     case .studio(let setup):
-                        DubSessionView(setup: setup) { path.append(.result(setup, $0)) }
+                        DubSessionView(setup: setup, account: account) { path.append(.result(setup, $0)) }
                     case .result(let setup, let takes):
                         DubResultView(setup: setup, takes: takes, account: account, scoring: scoring, onDone: onClose)
                     }

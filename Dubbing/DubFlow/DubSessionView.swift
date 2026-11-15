@@ -13,15 +13,19 @@ private enum SessionActivity: Equatable {
 /// A take that was just recorded and waits for the user to keep it or record again. A kept take is never
 /// replaced until a newer one is kept, so cancelling or abandoning a retry loses nothing.
 private struct PendingTake {
+    let id: UUID
     let lineID: Int
     let take: RecordedTake
     let measurement: TakeMeasurement
+    let timing: TakeTiming
 }
 
 /// The real dubbing studio: hear each original line, then record yours along with the muted video.
 struct DubSessionView: View {
     let setup: DubSetup
     let onFinish: ([Int: RecordedTake]) -> Void
+    /// Listens to each take and suggests keeping it or trying again; nil when the build has no backend.
+    @State private var coach: TakeCoach?
     @State private var player: SegmentPlayer
     @State private var recorder = TakeRecorder()
     @State private var takePlayer = TakePlayer()
@@ -42,13 +46,28 @@ struct DubSessionView: View {
     @State private var interruption: String?
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private static let logger = Logger(subsystem: "com.ryankim.Dubbing", category: "studio")
 
-    init(setup: DubSetup, onFinish: @escaping ([Int: RecordedTake]) -> Void) {
+    init(setup: DubSetup, account: AccountModel, onFinish: @escaping ([Int: RecordedTake]) -> Void) {
         self.setup = setup
         self.onFinish = onFinish
         _player = State(initialValue: SegmentPlayer(url: setup.clip.url))
+        _coach = State(initialValue: Self.makeCoach(setup: setup, account: account))
+    }
+
+    /// The coach needs the backend, which a build without COACH_BACKEND_URL doesn't have.
+    private static func makeCoach(setup: DubSetup, account: AccountModel) -> TakeCoach? {
+        let backend: CoachBackendClient
+        do {
+            backend = try CoachBackendClient.configured(in: .main, tokens: AccountTokenProvider(account: account))
+        } catch {
+            logger.info("The studio has no take coach. reason=\(error.localizedDescription, privacy: .public)")
+            return nil
+        }
+        let characterName = setup.script.speaker(withID: setup.characterID)?.name ?? "Your coach"
+        return TakeCoach(backend: backend, sceneTitle: setup.clip.title, characterName: characterName, locale: setup.locale)
     }
 
     private var lines: [ScriptLine] { setup.script.lines(spokenBy: setup.characterID) }
@@ -162,6 +181,9 @@ struct DubSessionView: View {
             }
             await player.seek(to: lineStart)
         }
+        .task {
+            await coach?.run()
+        }
         .onReceive(NotificationCenter.default.publisher(for: AVAudioSession.interruptionNotification)) { notification in
             guard
                 let rawType = notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
@@ -192,6 +214,8 @@ struct DubSessionView: View {
         }
         .onDisappear {
             stopActivity()
+            let coach = coach
+            Task { await coach?.end() }
             do {
                 try StudioAudioSession.deactivate()
             } catch {
@@ -381,12 +405,11 @@ struct DubSessionView: View {
 
     private var controls: some View {
         VStack(spacing: 10) {
-            if pendingForLine == nil {
-                recordingControls
+            if let pending = pendingForLine, activity != .recording {
+                coachPanel(for: pending)
+                    .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
             } else {
-                Text("How did that feel?")
-                    .dubFont(20, weight: .bold)
-                    .foregroundStyle(Palette.textPrimary)
+                recordingControls
             }
             if activity == .recording {
                 Button("Cancel recording") {
@@ -396,7 +419,7 @@ struct DubSessionView: View {
                 .buttonStyle(SecondaryButtonStyle())
                 .accessibilityIdentifier("cancelRecording")
             }
-            if let take = shownTake {
+            if pendingForLine == nil, let take = shownTake {
                 Button {
                     if activity == .playingTake {
                         stopActivity()
@@ -410,20 +433,35 @@ struct DubSessionView: View {
                 .disabled(activity == .recording || activity == .playingOriginal)
                 .accessibilityIdentifier("playTake")
             }
-            if pendingForLine != nil {
-                AdaptiveStack(rowAlignment: .center, spacing: 12) {
-                    Button("Retry") { record() }
-                        .frame(maxWidth: .infinity)
-                        .buttonStyle(SecondaryButtonStyle())
-                        .disabled(activity != .idle || microphone == .denied)
-                        .accessibilityIdentifier("retryTake")
-                    Button("Keep take", action: keepPending)
-                        .buttonStyle(PrimaryButtonStyle(cornerRadius: Radius.control))
-                        .disabled(activity != .idle)
-                        .accessibilityIdentifier("keepTake")
-                }
-            }
         }
+        .animation(reduceMotion ? nil : .spring(duration: 0.4), value: pendingForLine?.id)
+    }
+
+    private func coachPanel(for pending: PendingTake) -> some View {
+        TakeCoachPanel(
+            characterName: characterName,
+            lineText: line.text,
+            timing: pending.timing,
+            coach: coach?.review.flatMap { $0.takeID == pending.id ? $0.state : nil },
+            isCoachSpeaking: coach?.isSpeaking ?? false,
+            isPlayingTake: activity == .playingTake,
+            canPlayTake: activity == .idle || activity == .playingTake,
+            canRetry: activity == .idle && microphone != .denied,
+            canKeep: activity == .idle,
+            onPlayTake: {
+                if activity == .playingTake {
+                    stopActivity()
+                } else {
+                    coach?.stopSpeaking()
+                    playTake(pending.take)
+                }
+            },
+            onRetry: {
+                coach?.dismiss()
+                record()
+            },
+            onKeep: keepPending
+        )
     }
 
     private var recordingControls: some View {
@@ -456,6 +494,12 @@ struct DubSessionView: View {
                 .dubFont(14, weight: .regular)
                 .foregroundStyle(Palette.textPrimary)
                 .multilineTextAlignment(.center)
+            if coach != nil && takes.isEmpty && pending == nil {
+                Text("After each take, your coach listens to it using OpenAI.")
+                    .dubFont(12, weight: .regular)
+                    .foregroundStyle(Palette.textSecondary)
+                    .multilineTextAlignment(.center)
+            }
         }
     }
 
@@ -501,6 +545,7 @@ struct DubSessionView: View {
 
     private func keepPending() {
         guard let pending else { return }
+        coach?.dismiss()
         takes[pending.lineID] = pending.take
         measurements[pending.lineID] = pending.measurement
         self.pending = nil
@@ -541,10 +586,16 @@ struct DubSessionView: View {
             }
             let take = RecordedTake(url: url, duration: duration)
             let measurement = await TakeMeasuring.measure(take: take, line: target, lines: setup.script.lines, sectionDuration: setup.section.duration)
+            let timing = await TakeTiming.measure(take: take, lineDuration: target.duration)
             if let replaced = pending, replaced.lineID == target.id {
                 discardFile(at: replaced.take.url)
             }
-            pending = PendingTake(lineID: target.id, take: take, measurement: measurement)
+            let recorded = PendingTake(id: UUID(), lineID: target.id, take: take, measurement: measurement, timing: timing)
+            pending = recorded
+            // Fixture audio from UI tests isn't anyone's voice, so it never goes to a provider.
+            if !take.inputSource.isSynthetic {
+                coach?.listen(to: recorded.id, take: take, note: "The line: “\(target.text)”. \(timing.note)")
+            }
         }
     }
 
@@ -600,6 +651,7 @@ struct DubSessionView: View {
 
     /// Stops whatever is playing or recording because the system took the audio away.
     private func interrupt(because reason: String) {
+        coach?.stopSpeaking()
         guard activity != .idle else { return }
         interruption = reason
         player.stop()

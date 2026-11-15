@@ -53,6 +53,65 @@ nonisolated enum LiveTutorClientEvent {
         let type = "response.create"
     }
 
+    private struct TargetedResponse: Encodable {
+        struct Options: Encodable {
+            struct Function: Encodable {
+                let type = "function"
+                let name: String
+            }
+
+            let output_modalities: [String]
+            let tool_choice: ToolChoice
+            /// Echoed back in `response.created`, so late answers about an earlier take can be told apart.
+            let metadata: [String: String]
+        }
+
+        enum ToolChoice: Encodable {
+            case none
+            case function(String)
+
+            func encode(to encoder: any Encoder) throws {
+                switch self {
+                case .none:
+                    var container = encoder.singleValueContainer()
+                    try container.encode("none")
+                case .function(let name):
+                    try Options.Function(name: name).encode(to: encoder)
+                }
+            }
+        }
+
+        let type = "response.create"
+        let response: Options
+    }
+
+    private struct CancelResponse: Encodable {
+        let type = "response.cancel"
+    }
+
+    private struct CreateItem<Item: Encodable>: Encodable {
+        let type = "conversation.item.create"
+        let item: Item
+    }
+
+    private struct UserMessage: Encodable {
+        struct Part: Encodable {
+            let type: String
+            let text: String?
+            let audio: String?
+        }
+
+        let type = "message"
+        let role = "user"
+        let content: [Part]
+    }
+
+    private struct FunctionCallOutput: Encodable {
+        let type = "function_call_output"
+        let call_id: String
+        let output: String
+    }
+
     private struct Truncate: Encodable {
         let type = "conversation.item.truncate"
         let item_id: String
@@ -70,6 +129,30 @@ nonisolated enum LiveTutorClientEvent {
     /// Asks the tutor to speak without waiting for the learner, which opens the session.
     static func createResponse() throws -> String { try encode(CreateResponse()) }
 
+    /// Adds one recorded take to the conversation, with what was measured about it, without asking for a reply.
+    static func take(note: String, pcm: Data) throws -> String {
+        try encode(CreateItem(item: UserMessage(content: [
+            UserMessage.Part(type: "input_text", text: note, audio: nil),
+            UserMessage.Part(type: "input_audio", text: nil, audio: pcm.base64EncodedString()),
+        ])))
+    }
+
+    /// Asks for nothing but a call to the named tool, as text, tagged with the review it answers.
+    static func requestToolCall(named name: String, reviewID: String) throws -> String {
+        try encode(TargetedResponse(response: .init(output_modalities: ["text"], tool_choice: .function(name), metadata: ["review": reviewID])))
+    }
+
+    /// Asks the tutor to speak, with tools off, tagged with the review it answers.
+    static func requestSpeech(reviewID: String) throws -> String {
+        try encode(TargetedResponse(response: .init(output_modalities: ["audio"], tool_choice: .none, metadata: ["review": reviewID])))
+    }
+
+    static func toolResult(callID: String, output: String) throws -> String {
+        try encode(CreateItem(item: FunctionCallOutput(call_id: callID, output: output)))
+    }
+
+    static func cancelResponse() throws -> String { try encode(CancelResponse()) }
+
     /// Tells the server how much of the tutor's reply the learner actually heard before cutting in, so the
     /// conversation doesn't assume they heard the rest.
     static func truncate(itemID: String, contentIndex: Int, audioEndMs: Int) throws -> String {
@@ -84,9 +167,12 @@ nonisolated enum LiveTutorServerEvent: Equatable, Sendable {
     case learnerStoppedSpeaking
     case learnerTranscript(itemID: String, text: String)
     case learnerTranscriptUnavailable(itemID: String)
-    case tutorAudio(itemID: String, contentIndex: Int, pcm: Data)
+    /// `reviewID` is the `review` metadata the app attached when it asked for the response.
+    case responseCreated(responseID: String, reviewID: String?)
+    case toolCall(responseID: String, callID: String, name: String, arguments: String)
+    case tutorAudio(responseID: String, itemID: String, contentIndex: Int, pcm: Data)
     case tutorTranscript(itemID: String, delta: String)
-    case responseDone
+    case responseDone(responseID: String)
     case failed(code: String?, message: String)
 
     private struct Raw: Decodable {
@@ -95,23 +181,56 @@ nonisolated enum LiveTutorServerEvent: Equatable, Sendable {
             let code: String?
         }
 
+        struct Response: Decodable {
+            let id: String
+            let metadata: [String: String]?
+        }
+
         let type: String
         let itemID: String?
         let contentIndex: Int?
+        let responseID: String?
+        let callID: String?
+        let name: String?
+        let arguments: String?
         let delta: String?
         let transcript: String?
+        let response: Response?
         let error: Failure?
 
         enum CodingKeys: String, CodingKey {
-            case type, delta, transcript, error
+            case type, delta, transcript, error, name, arguments, response
             case itemID = "item_id"
             case contentIndex = "content_index"
+            case responseID = "response_id"
+            case callID = "call_id"
         }
     }
 
     /// Decodes one frame, or returns nil for an event the tutor doesn't use. A used event missing a field it needs throws.
+    private struct Kind: Decodable {
+        let type: String
+    }
+
+    private static let handledTypes: Set<String> = [
+        "session.created",
+        "input_audio_buffer.speech_started",
+        "input_audio_buffer.speech_stopped",
+        "conversation.item.input_audio_transcription.completed",
+        "conversation.item.input_audio_transcription.failed",
+        "response.created",
+        "response.function_call_arguments.done",
+        "response.output_audio.delta",
+        "response.output_audio_transcript.delta",
+        "response.done",
+        "error",
+    ]
+
     static func decode(_ text: String) throws -> LiveTutorServerEvent? {
-        let raw = try JSONDecoder().decode(Raw.self, from: Data(text.utf8))
+        let data = Data(text.utf8)
+        // Only the events used here are read in full, so a field shaped differently elsewhere can't break the socket.
+        guard handledTypes.contains(try JSONDecoder().decode(Kind.self, from: data).type) else { return nil }
+        let raw = try JSONDecoder().decode(Raw.self, from: data)
         func required<Value>(_ value: Value?, _ field: String) throws -> Value {
             guard let value else {
                 throw CoachError.invalidResponse(operation: "Listening to your tutor", reason: "\(raw.type) had no \(field)")
@@ -133,11 +252,26 @@ nonisolated enum LiveTutorServerEvent: Equatable, Sendable {
             guard let pcm = Data(base64Encoded: try required(raw.delta, "delta")) else {
                 throw CoachError.invalidResponse(operation: "Listening to your tutor", reason: "the tutor's audio wasn't Base64")
             }
-            return .tutorAudio(itemID: try required(raw.itemID, "item_id"), contentIndex: try required(raw.contentIndex, "content_index"), pcm: pcm)
+            return .tutorAudio(
+                responseID: try required(raw.responseID, "response_id"),
+                itemID: try required(raw.itemID, "item_id"),
+                contentIndex: try required(raw.contentIndex, "content_index"),
+                pcm: pcm
+            )
         case "response.output_audio_transcript.delta":
             return .tutorTranscript(itemID: try required(raw.itemID, "item_id"), delta: try required(raw.delta, "delta"))
+        case "response.created":
+            let response = try required(raw.response, "response")
+            return .responseCreated(responseID: response.id, reviewID: response.metadata?["review"])
+        case "response.function_call_arguments.done":
+            return .toolCall(
+                responseID: try required(raw.responseID, "response_id"),
+                callID: try required(raw.callID, "call_id"),
+                name: try required(raw.name, "name"),
+                arguments: try required(raw.arguments, "arguments")
+            )
         case "response.done":
-            return .responseDone
+            return .responseDone(responseID: try required(raw.response, "response").id)
         case "error":
             let failure = try required(raw.error, "error")
             return .failed(code: failure.code, message: failure.message)
@@ -183,7 +317,7 @@ nonisolated struct LiveTutorTranscript: Equatable, Sendable {
                 return LiveTutorTranscript(lines: lines + [Line(id: itemID, speaker: .tutor, text: delta)])
             }
             return LiveTutorTranscript(lines: lines.map { $0.id == itemID ? Line(id: itemID, speaker: .tutor, text: $0.text + delta) : $0 })
-        case .sessionCreated, .learnerStoppedSpeaking, .tutorAudio, .responseDone, .failed:
+        case .sessionCreated, .learnerStoppedSpeaking, .responseCreated, .toolCall, .tutorAudio, .responseDone, .failed:
             return self
         }
     }

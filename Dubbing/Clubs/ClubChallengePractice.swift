@@ -38,7 +38,7 @@ struct ClubChallengePractice: View {
                     .navigationTitle("Bridge challenge").navigationBarTitleDisplayMode(.inline)
                 case .preparing: ProgressView("Preparing the scene…")
                 case .studio(let setup):
-                    DubSessionView(setup: setup) { stage = .result(setup, $0) }
+                    DubSessionView(setup: setup, account: account) { stage = .result(setup, $0) }
                 case .result(let setup, let takes):
                     DubResultView(setup: setup, takes: takes, account: account, scoring: scoring, onDone: { dismiss() })
                 }

@@ -13,7 +13,14 @@ struct LiveTutorTests {
         #expect(try decode(#"{"type":"session.created","event_id":"e1","session":{"type":"realtime"}}"#) == .sessionCreated)
         #expect(try decode(#"{"type":"input_audio_buffer.speech_started","item_id":"u1","audio_start_ms":120}"#) == .learnerStartedSpeaking(itemID: "u1"))
         #expect(try decode(#"{"type":"response.output_audio.delta","item_id":"t1","content_index":0,"output_index":0,"response_id":"r","delta":"\#(pcm.base64EncodedString())"}"#)
-            == .tutorAudio(itemID: "t1", contentIndex: 0, pcm: pcm))
+            == .tutorAudio(responseID: "r", itemID: "t1", contentIndex: 0, pcm: pcm))
+        #expect(try decode(#"{"type":"response.created","response":{"id":"r2","status":"in_progress","metadata":{"review":"take-1"}}}"#)
+            == .responseCreated(responseID: "r2", reviewID: "take-1"))
+        #expect(try decode(#"{"type":"response.function_call_arguments.done","response_id":"r2","item_id":"f","output_index":0,"call_id":"c1","name":"suggest_next_step","arguments":"{}"}"#)
+            == .toolCall(responseID: "r2", callID: "c1", name: "suggest_next_step", arguments: "{}"))
+        #expect(try decode(#"{"type":"response.done","response":{"id":"r2","status":"completed","output":[]}}"#) == .responseDone(responseID: "r2"))
+        // An event the tutor ignores is skipped even when its fields are shaped unlike the ones it reads.
+        #expect(try decode(#"{"type":"conversation.item.added","item":{"id":"i"},"response":"not an object"}"#) == nil)
         #expect(try decode(#"{"type":"conversation.item.input_audio_transcription.completed","item_id":"u1","content_index":0,"transcript":"hola"}"#)
             == .learnerTranscript(itemID: "u1", text: "hola"))
         #expect(try decode(#"{"type":"error","error":{"type":"invalid_request_error","code":"response_cancel_not_active","message":"nothing to cancel"}}"#)
@@ -31,6 +38,15 @@ struct LiveTutorTests {
         #expect(try object(LiveTutorClientEvent.createResponse()) == ["type": "response.create"])
         #expect(try object(LiveTutorClientEvent.truncate(itemID: "t1", contentIndex: 0, audioEndMs: 1500))
             == ["type": "conversation.item.truncate", "item_id": "t1", "content_index": 0, "audio_end_ms": 1500])
+        let audio = Data([1, 2]).base64EncodedString()
+        #expect(try object(LiveTutorClientEvent.take(note: "The line: Hola.", pcm: Data([1, 2])))
+            == object(#"{"type":"conversation.item.create","item":{"type":"message","role":"user","content":[{"type":"input_text","text":"The line: Hola."},{"type":"input_audio","audio":"\#(audio)"}]}}"#))
+        #expect(try object(LiveTutorClientEvent.requestToolCall(named: "suggest_next_step", reviewID: "take-1"))
+            == object(#"{"type":"response.create","response":{"output_modalities":["text"],"tool_choice":{"type":"function","name":"suggest_next_step"},"metadata":{"review":"take-1"}}}"#))
+        #expect(try object(LiveTutorClientEvent.requestSpeech(reviewID: "take-1"))
+            == object(#"{"type":"response.create","response":{"output_modalities":["audio"],"tool_choice":"none","metadata":{"review":"take-1"}}}"#))
+        #expect(try object(LiveTutorClientEvent.toolResult(callID: "c1", output: "Shown."))
+            == object(#"{"type":"conversation.item.create","item":{"type":"function_call_output","call_id":"c1","output":"Shown."}}"#))
     }
 
     @Test func learnerLinesKeepTheirPlaceWhenTheirTranscriptArrivesAfterTheTutorStartsAnswering() {
@@ -81,5 +97,27 @@ struct LiveTutorTests {
         #expect(abs(frames - 24_000) < 200)
         let samples = LiveTutorRealtime.samples(fromPCM16: encoded.reduce(Data(), +))
         #expect((samples.max() ?? 0) > 0.4)
+    }
+
+    @Test func takeTimingComparesTheVoiceWithTheLine() {
+        // SYNTHETIC takes: silence with a 220 Hz tone where the learner "speaks", at 16 kHz.
+        func take(voiceFrom start: Double, to end: Double, length: Double) -> [Float] {
+            (0..<Int(length * 16_000)).map { index in
+                let time = Double(index) / 16_000
+                return time >= start && time < end ? Float(sin(2 * Double.pi * 220 * time)) * 0.5 : 0
+            }
+        }
+        func assess(_ samples: [Float]) -> TakeTiming {
+            TakeTiming.assess(samples: samples, sampleRate: 16_000, lineDuration: 1.0)
+        }
+        #expect(assess(take(voiceFrom: 0.1, to: 1.1, length: 1.5)) == .onCue)
+        #expect(assess(take(voiceFrom: 0, to: 1.0, length: 1.5)) == .early)
+        #expect(assess(Array(repeating: 0, count: 24_000)) == .noVoice)
+        guard case .late(let late) = assess(take(voiceFrom: 0.5, to: 1.4, length: 1.5)) else { Issue.record("expected late"); return }
+        #expect(abs(late - 0.5) < 0.03)
+        guard case .long(let long) = assess(take(voiceFrom: 0.1, to: 1.8, length: 2.0)) else { Issue.record("expected long"); return }
+        #expect(abs(long - 0.8) < 0.03)
+        guard case .short(let short) = assess(take(voiceFrom: 0.1, to: 0.3, length: 1.5)) else { Issue.record("expected short"); return }
+        #expect(abs(short - 0.7) < 0.03)
     }
 }
