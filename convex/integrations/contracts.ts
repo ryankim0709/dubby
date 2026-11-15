@@ -3,33 +3,15 @@ import { z } from "zod";
 // Seams between the backend and the engine and coaching implementations. Implementations return
 // plain data; the backend validates it (lib/outcome.ts, coachingSchema) before storing anything.
 //
-// The engine seam mirrors the assessment adapter's input and outcome shapes so wiring a provider is
-// a one-file change. The adapter computes languageOverall, wordAccuracy, and timingFit itself; the
-// backend checks them for consistency but never recomputes them.
+// The engine seam is the assessment adapter's input and outcome. The adapter computes
+// languageOverall, wordAccuracy, and timingFit itself; the backend checks them for consistency but
+// never recomputes them.
 
-export type AssessmentErrorKind =
-  | "invalid_input"
-  | "invalid_reference"
-  | "provider_unavailable"
-  | "provider_auth"
-  | "provider_rejected"
-  | "invalid_provider_response";
-
-/** Only provider_unavailable is retryable; every other kind fails the job without an automatic retry. */
-export class AssessmentError extends Error {
-  constructor(
-    readonly kind: AssessmentErrorKind,
-    message: string,
-    readonly details: Record<string, unknown> = {},
-  ) {
-    super(message);
-    this.name = "AssessmentError";
-  }
-
-  get retryable(): boolean {
-    return this.kind === "provider_unavailable";
-  }
-}
+// The error class and the input type are the assessment adapter's own, so the seam is exactly its shape.
+export { AssessmentError } from "../assessment/types";
+export type { AssessmentErrorKind } from "../assessment/types";
+export type { AssessAttemptInput } from "../assessment";
+import type { AssessAttemptInput } from "../assessment";
 
 export class CoachingError extends Error {
   constructor(
@@ -40,25 +22,6 @@ export class CoachingError extends Error {
     super(message);
     this.name = "CoachingError";
   }
-}
-
-export interface AssessAttemptInput {
-  /** Correlation id for the adapter; the stored assessment gets its own database id. */
-  assessmentId: string;
-  attemptId: string;
-  lineId: string;
-  referenceVersion: number;
-  locale: string;
-  /** RFC 3339 capture time from validated attempt metadata. */
-  recordedAt: string;
-  /** Reference text resolved from stored project data, never from the client. */
-  referenceText: string;
-  /** The source line's dialogue window in integer milliseconds; used only for timingFit. */
-  targetWindowMs: { startMs: number; endMs: number };
-  /** The backend passes the validated client-reported length; an implementation that inspects the WAV may override it. */
-  recordingDurationMs: number;
-  /** The HTTP result of the provider call, filled in by the implementation, never by the backend. */
-  provider?: { httpStatus: number; body: unknown };
 }
 
 const score = z.number().finite().min(0).max(100).nullable();
@@ -88,6 +51,7 @@ const envelope = {
   recordedAt: z.string().min(1),
   referenceText: z.string().min(1),
   recognizedText: z.string().nullable(),
+  measurement: z.enum(["acoustic", "transcript_only"]),
 };
 
 const scoredResponse = z.object({
@@ -144,6 +108,7 @@ const evidenceSchema = z.object({
     omitted: z.array(z.number().int().min(0)),
     inserted: z.number().int().min(0),
   }),
+  measurement: z.enum(["acoustic", "transcript_only"]),
   timing: z
     .object({
       spokenStartMs: z.number().finite(),
@@ -157,26 +122,43 @@ const evidenceSchema = z.object({
 });
 export type AssessmentEvidence = z.infer<typeof evidenceSchema>;
 
+/**
+ * Evaluator provenance reported with an outcome. `measurement` is acoustic when an acoustic model
+ * scored the audio, and transcript_only when a transcript was read without one, in which case every
+ * pronunciation value must be null. A model's opinion is never acoustic evidence.
+ */
+const outcomeProvenanceSchema = z.object({
+  evaluator: z.string().min(1),
+  measurement: z.enum(["acoustic", "transcript_only"]),
+  modelVersion: z.string().nullable(),
+  evaluatorConfigVersion: z.string().min(1),
+});
+
 export const assessmentOutcomeSchema = z.object({
   response: z.union([scoredResponse, unscorableResponse]),
   evidence: evidenceSchema,
+  provenance: outcomeProvenanceSchema,
 });
 export type AssessmentOutcome = z.infer<typeof assessmentOutcomeSchema>;
 
-export const engineProvenanceSchema = z.object({
-  provider: z.string().min(1),
-  providerModelVersion: z.string().nullable(),
-  configVersion: z.string().min(1),
-  /**
-   * acoustic: an acoustic model scored the audio. transcript_only: a transcript was read without an
-   * acoustic model, so every pronunciation value must be null. A model's opinion is never acoustic evidence.
-   */
-  measurement: z.enum(["acoustic", "transcript_only"]),
-});
-export type EngineProvenance = z.infer<typeof engineProvenanceSchema>;
+/** The provenance as stored with an assessment. */
+export type EngineProvenance = {
+  provider: string;
+  providerModelVersion: string | null;
+  configVersion: string;
+  measurement: "acoustic" | "transcript_only";
+};
+
+export function toEngineProvenance(provenance: AssessmentOutcome["provenance"]): EngineProvenance {
+  return {
+    provider: provenance.evaluator,
+    providerModelVersion: provenance.modelVersion,
+    configVersion: provenance.evaluatorConfigVersion,
+    measurement: provenance.measurement,
+  };
+}
 
 export interface AssessmentEngine {
-  readonly provenance: EngineProvenance;
   /** Throws AssessmentError for failures. The outcome is validated before anything is stored. */
   assess(input: AssessAttemptInput, audio: Blob): Promise<AssessmentOutcome>;
 }
