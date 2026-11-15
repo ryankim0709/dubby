@@ -2,17 +2,34 @@ import AVFoundation
 import LiveKit
 import SwiftUI
 
-/// The coaches the backend offers, and the client that reaches them.
-private struct CoachRoster {
-    let backend: CoachBackendClient
-    let characters: [CoachCharacter]
+/// Where the coach's navigation stack can go from the roster.
+private enum CoachRoute: Hashable {
+    case character(CoachCharacter)
+    case preferences
 }
 
-/// Pick a scene character to coach you, and the language to practise.
+/// Pick a scene character to coach you, and the language to practise. `practice` is the line the
+/// dub flow is on, when the coach is opened from there; it lets the coach talk about that line.
 struct CoachView: View {
+    let practice: CoachPracticeContext?
+    let tokens: any CoachAuthTokenProvider
     let onClose: () -> Void
-    @State private var roster: LoadState<CoachRoster> = .loading
-    @State private var language = SpokenLanguage.all[0]
+    @State private var roster: LoadState<[CoachCharacter]> = .loading
+    @State private var exercise: CoachRemoteState<NextExercise> = .loading
+    @State private var language: SpokenLanguage
+
+    /// Opens the coach with no practice line and nobody signed in. The dub flow and the app's sign-in
+    /// should call `init(practice:tokens:onClose:)` instead.
+    init(onClose: @escaping () -> Void) {
+        self.init(practice: nil, tokens: SignedOutCoachTokens(), onClose: onClose)
+    }
+
+    init(practice: CoachPracticeContext?, tokens: any CoachAuthTokenProvider, onClose: @escaping () -> Void) {
+        self.practice = practice
+        self.tokens = tokens
+        self.onClose = onClose
+        _language = State(initialValue: SpokenLanguage.all.first { $0.identifier == practice?.locale } ?? SpokenLanguage.all[0])
+    }
 
     var body: some View {
         NavigationStack {
@@ -30,6 +47,14 @@ struct CoachView: View {
                             .dubFont(16, weight: .semibold)
                             .foregroundStyle(Palette.textPrimary)
                         Spacer()
+                        NavigationLink(value: CoachRoute.preferences) {
+                            Image(systemName: "slider.horizontal.3")
+                                .dubFont(16, weight: .medium)
+                                .foregroundStyle(Palette.textPrimary)
+                                .frame(minWidth: 44, minHeight: 44)
+                        }
+                        .accessibilityLabel("Your coaching preferences and memory")
+                        .accessibilityIdentifier("coachPreferences")
                     }
                     Text("Pick who teaches you. They'll listen to what you say and coach you out loud.")
                         .dubFont(14, weight: .regular)
@@ -44,21 +69,19 @@ struct CoachView: View {
                         .tint(Palette.accentText)
                         .accessibilityIdentifier("coachLanguage")
                     }
+                    NextExerciseSection(state: exercise)
                     LoadStateContent(state: roster) { roster in
                         VStack(spacing: 12) {
-                            ForEach(roster.characters) { character in
-                                NavigationLink(value: character) {
+                            ForEach(roster) { character in
+                                NavigationLink(value: CoachRoute.character(character)) {
                                     CharacterRow(character: character)
                                 }
                                 .buttonStyle(.plain)
                                 .accessibilityIdentifier("coach-\(character.id)")
                             }
                         }
-                        .navigationDestination(for: CoachCharacter.self) { character in
-                            CoachSessionView(session: CoachSession(character: character, language: language, backend: roster.backend))
-                        }
                     }
-                    Text("What you say is transcribed on this iPhone. The text goes to Anthropic's Claude to write your coach's reply, and LiveAvatar by HeyGen turns that reply into the coach's voice and video.")
+                    Text("What you say is transcribed on this iPhone. The text goes through DubIt's servers to OpenAI, which writes your coach's reply, and LiveAvatar by HeyGen turns that reply into the coach's voice and video.")
                         .dubFont(12, weight: .regular)
                         .foregroundStyle(Palette.placeholder)
                 }
@@ -68,17 +91,47 @@ struct CoachView: View {
             .scrollIndicators(.hidden)
             .background(Palette.background)
             .toolbar(.hidden, for: .navigationBar)
+            .navigationDestination(for: CoachRoute.self) { route in
+                destination(for: route)
+            }
         }
         .preferredColorScheme(.dark)
         .task { await loadRoster() }
+        .task(id: language) { await loadExercise() }
     }
 
     private func loadRoster() async {
         do {
-            let backend = try CoachBackendClient.configured(in: .main)
-            roster = .loaded(CoachRoster(backend: backend, characters: try await backend.characters()))
+            let backend = try CoachBackendClient.configured(in: .main, tokens: tokens)
+            roster = .loaded(try await backend.characters())
+        } catch is CancellationError {
+            return
         } catch {
             roster = .failed(error.localizedDescription)
+        }
+    }
+
+    @ViewBuilder
+    private func destination(for route: CoachRoute) -> some View {
+        switch Result(catching: { try CoachBackendClient.configured(in: .main, tokens: tokens) }) {
+        case .failure(let error):
+            EmptyStateView(systemImage: "exclamationmark.triangle", title: "Couldn't open this", message: error.localizedDescription)
+                .padding(16)
+        case .success(let backend):
+            switch route {
+            case .character(let character):
+                CoachSessionView(session: CoachSession(character: character, language: language, backend: backend, practice: practice, exercise: exercise))
+            case .preferences:
+                CoachPreferencesView(service: backend, practice: practice)
+            }
+        }
+    }
+
+    /// Reloaded when the practice language changes, since an exercise belongs to one locale.
+    private func loadExercise() async {
+        exercise = .loading
+        exercise = await CoachRemoteState.result {
+            try await CoachBackendClient.configured(in: .main, tokens: tokens).nextExercise(locale: language.identifier)
         }
     }
 }
@@ -119,6 +172,7 @@ private struct CharacterRow: View {
 struct CoachSessionView: View {
     @State private var session: CoachSession
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.openURL) private var openURL
 
     init(session: CoachSession) {
         _session = State(initialValue: session)
@@ -131,6 +185,11 @@ struct CoachSessionView: View {
                     .padding(.top, 8)
                 avatarCard
                 transcript
+                if let reply = session.lastReply,
+                   let basis = reply.feedbackBasis.display(citedEvidenceCount: reply.citedEvidenceIds.count) {
+                    FeedbackBasisLabel(display: basis)
+                }
+                NextExerciseSection(state: session.exercise)
                 if case .ended(let reason) = session.connection {
                     EmptyStateView(systemImage: "video.slash", title: "The call ended", message: reason)
                 } else {
@@ -141,6 +200,12 @@ struct CoachSessionView: View {
                     Text(errorMessage)
                         .dubFont(14, weight: .regular)
                         .foregroundStyle(Palette.streak)
+                    if session.needsMicrophoneAccess {
+                        Button("Open Settings") {
+                            if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
+                        }
+                        .buttonStyle(OutlineCapsuleButtonStyle())
+                    }
                 }
             }
             .padding(.horizontal, 16)

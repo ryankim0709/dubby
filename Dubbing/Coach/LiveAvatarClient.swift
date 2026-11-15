@@ -60,7 +60,8 @@ nonisolated struct LiveAvatarClient: Sendable {
 nonisolated enum LiveAvatarCommand {
     static let topic = "agent-control"
 
-    /// Makes the avatar say `text` word for word, with no LLM of its own involved.
+    /// Makes the avatar say `text` word for word, with no LLM of its own involved. The app never sends
+    /// `avatar.speak_response`, which would make LiveAvatar write the reply itself.
     static func speakText(_ text: String, eventID: UUID) throws -> Data {
         struct Payload: Encodable { let event_id: String; let event_type: String; let text: String }
         return try JSONEncoder().encode(Payload(event_id: eventID.uuidString.lowercased(), event_type: "avatar.speak_text", text: text))
