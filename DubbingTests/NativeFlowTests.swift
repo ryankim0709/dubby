@@ -220,8 +220,8 @@ struct IssueStateTests {
     @Test func measuredTakesCarryNoPronunciationBasis() {
         let take = TakeMeasurement(lineID: 1, takeSeconds: 1, lineSeconds: 2, allowedSeconds: 2.75, peakDecibels: -8)
         #expect(take.feedbackBasis == .none)
-        #expect(FeedbackBasis.acoustic.rawValue == "acoustic")
-        #expect(FeedbackBasis.scriptAgreement.rawValue == "script_agreement")
+        #expect(TakeFeedbackBasis.acoustic.rawValue == "acoustic")
+        #expect(TakeFeedbackBasis.scriptAgreement.rawValue == "script_agreement")
     }
 
     @Test func aTakeWithoutAudioShowsNoLevelInsteadOfAnInventedOne() {
