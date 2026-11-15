@@ -4,6 +4,7 @@ import { AssessmentError, CoachingError } from "./integrations/contracts";
 import type { AssessAttemptInput, AssessmentOutcome, Coaching, EngineProvenance } from "./integrations/contracts";
 import { buildIngestAssessmentArgs } from "./lib/ingest";
 import {
+  type FixtureOutcome,
   type World,
   acousticProvenance,
   alice,
@@ -28,7 +29,7 @@ let coachCalls = 0;
 
 function plugInDoubles(
   overrides: {
-    assess?: (input: AssessAttemptInput) => AssessmentOutcome | Promise<AssessmentOutcome>;
+    assess?: (input: AssessAttemptInput) => FixtureOutcome | Promise<FixtureOutcome>;
     coach?: () => Promise<Coaching>;
     provenance?: EngineProvenance;
   } = {},

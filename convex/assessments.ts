@@ -9,14 +9,16 @@ import {
   CoachingError,
   assessmentOutcomeSchema,
   coachingSchema,
-  engineProvenanceSchema,
+  toEngineProvenance,
 } from "./integrations/contracts";
 import { getAssessmentEngine, getCoachingProvider } from "./integrations/providers";
 import { getOwned, requireUser } from "./lib/auth";
 import { BACKOFF_BASE_MS, LEASE_MS, MAX_JOB_TRIES, RUBRIC_VERSION, SCHEMA_VERSION } from "./lib/config";
 import { appError } from "./lib/errors";
+import { buildIngestAssessmentArgs } from "./lib/ingest";
 import { logEvent } from "./lib/log";
 import { InvalidOutputError, validateCoaching, validateOutcome } from "./lib/outcome";
+import { tutoringRefs } from "./tutoringRefs";
 import { assessmentBodyFields, assessmentViewV, jobViewV, nullable, outcomeV } from "./lib/validators";
 
 /** How a job try ended. autoRetry spends another try after a backoff; retryable lets the owner retry once tries run out. */
@@ -235,6 +237,13 @@ export const complete = internalMutation({
     const now = Date.now();
     const assessmentId = await ctx.db.insert("assessments", { ownerId: job.ownerId, jobId, completedAt: now, ...assessment });
     await ctx.db.patch(jobId, { status: "succeeded", assessmentId, error: undefined, leaseExpiresAt: undefined, updatedAt: now });
+    const stored = await ctx.db.get("assessments", assessmentId);
+    const attempt = await ctx.db.get("attempts", job.attemptId);
+    const project = attempt === null ? null : await ctx.db.get("projects", attempt.projectId);
+    const owner = await ctx.db.get("users", job.ownerId);
+    if (stored !== null && attempt !== null && project !== null && owner !== null) {
+      await ctx.scheduler.runAfter(0, tutoringRefs.ingestAssessment, buildIngestAssessmentArgs({ assessment: stored, attempt, project, ownerSubject: owner.tokenIdentifier }));
+    }
     logEvent({
       operation: "assessments.job",
       status: "ok",
@@ -312,8 +321,6 @@ export const run = internalAction({
       if (outcome === null) {
         const engine = getAssessmentEngine();
         if (engine === null) throw new PipelineFailure("engine_not_configured", "No assessment engine is configured on this deployment", true, false);
-        const provenance = engineProvenanceSchema.safeParse(engine.provenance);
-        if (!provenance.success) throw new InvalidOutputError("invalid_engine_output", "The engine didn't declare valid provenance");
         const audio = await ctx.storage.get(claim.audioStorageId);
         if (audio === null) throw new PipelineFailure("audio_missing", "The recording is no longer in storage", false, false);
         const raw = await engine.assess(
@@ -332,20 +339,16 @@ export const run = internalAction({
         );
         const parsed = assessmentOutcomeSchema.safeParse(raw);
         if (!parsed.success) throw new InvalidOutputError("invalid_engine_output", "The engine outcome didn't match the contract");
-        validateOutcome(
-          parsed.data,
-          {
-            attemptId: claim.attemptId,
-            lineId: claim.lineId,
-            referenceVersion: claim.referenceVersion,
-            locale: claim.locale,
-            recordedAt,
-            referenceText: claim.referenceText,
-            recordingDurationMs: claim.recordingDurationMs,
-          },
-          provenance.data,
-        );
-        outcome = { ...parsed.data, provenance: provenance.data };
+        validateOutcome(parsed.data, {
+          attemptId: claim.attemptId,
+          lineId: claim.lineId,
+          referenceVersion: claim.referenceVersion,
+          locale: claim.locale,
+          recordedAt,
+          referenceText: claim.referenceText,
+          recordingDurationMs: claim.recordingDurationMs,
+        });
+        outcome = { response: parsed.data.response, evidence: parsed.data.evidence, provenance: toEngineProvenance(parsed.data.provenance) };
         if (!(await ctx.runMutation(internal.assessments.saveOutcome, { jobId, lease: claim.lease, outcome }))) return null;
       }
 

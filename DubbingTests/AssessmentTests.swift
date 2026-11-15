@@ -197,7 +197,7 @@ struct AssessmentAudioEncoderTests {
     }
 
     /// Writes a synthetic sine tone as a PCM WAV so the encoder has a known source.
-    private func writeTone(to url: URL, seconds: Double, sampleRate: Double, channels: AVAudioChannelCount) throws {
+    private func writeTone(to url: URL, seconds: Double, sampleRate: Double, channels: AVAudioChannelCount, settings: [String: Any]? = nil) throws {
         let format = try #require(AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: channels))
         let frames = AVAudioFrameCount(seconds * sampleRate)
         let buffer = try #require(AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frames))
@@ -208,7 +208,7 @@ struct AssessmentAudioEncoderTests {
                 samples[frame] = Float(0.4 * sin(2 * Double.pi * 440 * Double(frame) / sampleRate))
             }
         }
-        let settings: [String: Any] = [
+        let settings = settings ?? [
             AVFormatIDKey: kAudioFormatLinearPCM,
             AVSampleRateKey: sampleRate,
             AVNumberOfChannelsKey: channels,
@@ -249,6 +249,32 @@ struct AssessmentAudioEncoderTests {
 
         let peak = stride(from: 44, to: wav.count - 1, by: 2).map { abs(Int(Int16(bitPattern: UInt16(wav[$0]) | UInt16(wav[$0 + 1]) << 8))) }.max() ?? 0
         #expect(peak > 5_000)
+    }
+
+    @Test func convertsAMonoAACTakeAsTheTakeRecorderWritesIt() throws {
+        let directory = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let source = directory.appendingPathComponent("take.m4a")
+        // The same settings TakeRecorder passes to AVAudioRecorder.
+        try writeTone(
+            to: source, seconds: 1, sampleRate: 44_100, channels: 1,
+            settings: [
+                AVFormatIDKey: kAudioFormatMPEG4AAC,
+                AVSampleRateKey: 44_100,
+                AVNumberOfChannelsKey: 1,
+                AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue,
+            ]
+        )
+        let originalBytes = try Data(contentsOf: source)
+
+        let encoded = try AssessmentAudioEncoder.encode(from: source, to: directory.appendingPathComponent("take-16k.wav"))
+        let wav = try Data(contentsOf: encoded.url)
+
+        #expect(littleEndian(wav, 24, bytes: 4) == 16_000)
+        #expect(littleEndian(wav, 22, bytes: 2) == 1)
+        #expect(abs(encoded.durationMs - 1_000) <= 120)
+        #expect(littleEndian(wav, 40, bytes: 4) == wav.count - 44)
+        #expect(try Data(contentsOf: source) == originalBytes)
     }
 
     @Test func rejectsTakesOverTheAssessmentLimitInsteadOfTruncating() throws {
