@@ -8,7 +8,6 @@ import { SCHEMA_VERSION } from "./lib/config";
 import { ConfigurationError, requiredEnv } from "./lib/env";
 import { PASSWORD_JWKS_PATH, publicJwks } from "./lib/passwordAuth";
 import { logEvent } from "./lib/log";
-import { ConfigurationError } from "./lib/env";
 import { TranscriptionResponseError } from "./lib/transcription";
 import { registerTutoringRoutes } from "./tutoringHttp";
 import { transcribePublishedScene } from "./sceneTranscription";
