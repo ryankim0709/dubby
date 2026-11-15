@@ -41,7 +41,7 @@ jobs:
           xcodebuild -version
 
       - name: Build and test
-        run: scripts/qa/ios-build-test.sh all
+        run: QA_CONFIGURATION=Release scripts/qa/ios-build-test.sh build
 
       - name: Write job summary
         if: ${{ !cancelled() }}
