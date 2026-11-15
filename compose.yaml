@@ -1,0 +1,32 @@
+name: dubit
+
+services:
+  landing:
+    build:
+      context: ./landing
+      target: development
+    init: true
+    ports:
+      - "127.0.0.1:5173:5173"
+    develop:
+      watch:
+        - action: sync
+          path: ./landing
+          target: /app
+          initial_sync: true
+          ignore:
+            - node_modules/
+            - dist/
+            - package.json
+            - package-lock.json
+            - Dockerfile
+            - .dockerignore
+            - "*.tsbuildinfo"
+            - .env
+            - .env.*
+        - action: rebuild
+          path: ./landing/package.json
+        - action: rebuild
+          path: ./landing/package-lock.json
+        - action: rebuild
+          path: ./landing/Dockerfile

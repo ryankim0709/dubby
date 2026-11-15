@@ -1,0 +1,33 @@
+---
+description: Correct audio composition, recording lifecycle, pronunciation assessment, and service boundaries
+alwaysApply: true
+---
+
+# Dubbing pipeline
+
+## Media correctness
+
+- Model scene, character, line, take, and project identity explicitly. Each line references a valid character and uses seconds relative to the source clip.
+- Validate finite timestamps with `0 <= start < end <= clip duration`, resolvable asset references, and supported media before recording or rendering.
+- For curated scenes, use prepared background and dialogue tracks. Replace only the selected character's dialogue in the relevant windows; preserve music, effects, and other characters.
+- Never treat muting the entire original soundtrack as successful selective dialogue replacement. Automatic source separation for arbitrary uploads must not block the curated demo.
+- Keep the user's original take separate from any converted version. Make decisions about overlong takes, gaps, and overlaps explicit; do not silently truncate speech or shift the scene timeline.
+- Preview and export with the same timeline and accepted takes. Verify the MP4 is playable, synchronized, and contains the intended audio before marking the project complete.
+- Request microphone and media permissions when needed. Handle denial, audio interruptions, route changes, cancellation, and app backgrounding; release capture and playback resources when finished.
+
+## Coaching and voice conversion
+
+- Assess the original recording against the line's reference text and language before any voice conversion.
+- Distinguish pronunciation, fluency, and timing. Transcript similarity is not a pronunciation score, and a native-speech assessment is not a measurement of similarity to the actor.
+- Derive coaching from actual assessment results. Do not invent phoneme accuracy, scores, or improvement when a service has not measured them.
+- Keep provider calls behind typed clients and validate responses. Do not couple the user workflow to a vendor-specific payload or introduce multiple interchangeable providers speculatively.
+- Character-style conversion is optional and happens after a take is accepted. Preserve the source performance and use authorized voices; do not add unauthorized celebrity cloning.
+
+## Services and data
+
+- Keep long-lived AI credentials on a backend; use only appropriately scoped, short-lived credentials in the app when a service supports direct access.
+- Retry transient external failures with bounded backoff, emit a structured warning for each failed attempt, and raise the final error. Do not retry validation or authorization failures blindly.
+- Include operation, safe request parameters, status, and a redacted response body in service errors when available. Never log tokens, raw recordings, or private transcripts.
+- Use explicit processing states and propagate cancellation. Do not show a completed score, saved dub, or finished export before the corresponding operation succeeds.
+- Disclose third-party processing before uploading recordings. Keep original media intact and scope temporary files to the operation that owns them.
+- Exercise composition and timing with short synthetic fixtures, including multiple characters and a background track. Verify on-device capture and sharing separately from API integration tests.

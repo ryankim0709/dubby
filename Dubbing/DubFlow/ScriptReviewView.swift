@@ -1,0 +1,323 @@
+import SwiftUI
+
+private enum AnalysisPhase: Equatable {
+    case extractingAudio
+    case preparingModel
+    case transcribing
+    case groupingVoices
+    case ready(LineAnalysis)
+    case failed(String)
+
+    var stepIndex: Int {
+        switch self {
+        case .extractingAudio: 0
+        case .preparingModel: 1
+        case .transcribing: 2
+        case .groupingVoices: 3
+        case .ready, .failed: 4
+        }
+    }
+}
+
+/// Transcribes the scene and splits it into lines, then hands off to the script editor.
+struct ScriptReviewView: View {
+    let request: TranscriptionRequest
+    let onStart: (DubSetup) -> Void
+    @State private var phase: AnalysisPhase = .extractingAudio
+    @State private var attempt = 0
+
+    var body: some View {
+        Group {
+            switch phase {
+            case .ready(let analysis):
+                ScriptEditor(request: request, analysis: analysis, onStart: onStart)
+            case .failed(let message):
+                failure(message)
+            case .extractingAudio, .preparingModel, .transcribing, .groupingVoices:
+                progress
+            }
+        }
+        .background(Palette.background)
+        .toolbar(.hidden, for: .navigationBar)
+        .task(id: attempt) { await analyze() }
+    }
+
+    private var progress: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            BackHeader(title: "Building your script") { EmptyView() }
+                .padding(.top, 8)
+            VStack(alignment: .leading, spacing: 16) {
+                stepRow(index: 0, title: "Pulling the scene's audio")
+                stepRow(index: 1, title: "Getting the \(request.language.name) speech model")
+                stepRow(index: 2, title: "Transcribing the dialogue")
+                stepRow(index: 3, title: "Splitting lines by voice")
+            }
+            .padding(16)
+            .background(Palette.surface, in: RoundedRectangle(cornerRadius: 16))
+            Spacer()
+        }
+        .padding(.horizontal, 16)
+    }
+
+    private func stepRow(index: Int, title: String) -> some View {
+        HStack(spacing: 12) {
+            Group {
+                if index < phase.stepIndex {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(Palette.accent)
+                } else if index == phase.stepIndex {
+                    ProgressView()
+                        .tint(Palette.accentText)
+                } else {
+                    Image(systemName: "circle")
+                        .foregroundStyle(Palette.track)
+                }
+            }
+            .dubFont(18, weight: .regular)
+            .frame(width: 24)
+            Text(title)
+                .dubFont(16, weight: index == phase.stepIndex ? .medium : .regular)
+                .foregroundStyle(index <= phase.stepIndex ? Palette.textPrimary : Palette.textSecondary)
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    private func failure(_ message: String) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            BackHeader(title: "Building your script") { EmptyView() }
+                .padding(.top, 8)
+            Text("Something went wrong")
+                .dubFont(20, weight: .semibold)
+                .foregroundStyle(Palette.textPrimary)
+            Text(message)
+                .dubFont(14, weight: .regular)
+                .foregroundStyle(Palette.textSecondary)
+            Button("Try again") { attempt += 1 }
+                .buttonStyle(PrimaryButtonStyle(cornerRadius: 16))
+            Spacer()
+        }
+        .padding(.horizontal, 16)
+    }
+
+    private func analyze() async {
+        do {
+            phase = .extractingAudio
+            let audioURL = request.clip.workingDirectory.appending(path: "scene.m4a")
+            try await MediaPipeline.exportAudio(from: request.clip.url, section: request.section, to: audioURL)
+            phase = .preparingModel
+            let transcriber = try await SpeechTranscription.prepare(for: request.language)
+            phase = .transcribing
+            let words = try await SpeechTranscription.transcribe(audioURL: audioURL, using: transcriber)
+            let lines = ScriptBuilder.segmentLines(words: words, pauseThreshold: 0.7, sentencePause: 0)
+            guard !lines.isEmpty else { throw DubFlowError.noSpeechFound }
+            phase = .groupingVoices
+            phase = .ready(try await MediaPipeline.analyzeVoices(audioURL: audioURL, lines: lines, barCount: 48))
+        } catch {
+            phase = .failed(error.localizedDescription)
+        }
+    }
+}
+
+private struct ScriptEditor: View {
+    let request: TranscriptionRequest
+    let analysis: LineAnalysis
+    let onStart: (DubSetup) -> Void
+    @State private var speakerCount: Int
+    @State private var script: Script
+    @State private var characterID = 0
+    @State private var renamingSpeaker: Speaker?
+    @State private var draftName = ""
+
+    init(request: TranscriptionRequest, analysis: LineAnalysis, onStart: @escaping (DubSetup) -> Void) {
+        self.request = request
+        self.analysis = analysis
+        self.onStart = onStart
+        let speakerCount = 2
+        _speakerCount = State(initialValue: speakerCount)
+        _script = State(initialValue: ScriptBuilder.buildScript(analysis: analysis, speakerCount: speakerCount, names: []))
+    }
+
+    private var characterLines: [ScriptLine] { script.lines(spokenBy: characterID) }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                BackHeader(title: "Your script") { EmptyView() }
+                    .padding(.top, 8)
+                Text("\(script.lines.count) lines from a \(request.section.duration.preciseClockString) scene")
+                    .dubFont(14, weight: .regular)
+                    .foregroundStyle(Palette.textSecondary)
+                speakersCard
+                VStack(spacing: 8) {
+                    ForEach(script.lines) { line in
+                        ScriptLineRow(line: line, speakers: script.speakers) { speakerID in
+                            script = script.reassigning(lineID: line.id, to: speakerID)
+                        }
+                    }
+                }
+                Text("Who are you becoming?")
+                    .dubFont(20, weight: .semibold)
+                    .foregroundStyle(Palette.textPrimary)
+                    .padding(.top, 8)
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 8)], spacing: 8) {
+                    ForEach(script.speakers) { speaker in
+                        characterCard(speaker)
+                    }
+                }
+                Button("Dub \(script.speaker(withID: characterID)?.name ?? "this character")'s lines") {
+                    onStart(DubSetup(clip: request.clip, section: request.section, script: script, characterID: characterID))
+                }
+                .buttonStyle(PrimaryButtonStyle(cornerRadius: 16))
+                .disabled(characterLines.isEmpty)
+                .opacity(characterLines.isEmpty ? 0.5 : 1)
+                .accessibilityIdentifier("startDubbing")
+            }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 16)
+        }
+        .scrollIndicators(.hidden)
+        .onChange(of: speakerCount) { _, count in
+            script = ScriptBuilder.buildScript(analysis: analysis, speakerCount: count, names: script.speakers.map(\.name))
+            characterID = min(characterID, count - 1)
+        }
+        .alert("Rename speaker", isPresented: Binding(get: { renamingSpeaker != nil }, set: { if !$0 { renamingSpeaker = nil } })) {
+            TextField("Character name", text: $draftName)
+            Button("Save") {
+                let name = draftName.trimmingCharacters(in: .whitespaces)
+                if let speaker = renamingSpeaker, !name.isEmpty {
+                    script = script.renaming(speakerID: speaker.id, to: name)
+                }
+                renamingSpeaker = nil
+            }
+            Button("Cancel", role: .cancel) { renamingSpeaker = nil }
+        }
+    }
+
+    private var speakersCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            AdaptiveStack(rowAlignment: .center, spacing: 8) {
+                Text("Voices in this scene")
+                    .dubFont(16, weight: .medium)
+                    .foregroundStyle(Palette.textPrimary)
+                Spacer()
+                Stepper("\(speakerCount)", value: $speakerCount, in: 1...4)
+                    .dubFont(16, weight: .semibold)
+                    .foregroundStyle(Palette.textPrimary)
+                    .fixedSize()
+                    .accessibilityLabel("Voices in this scene")
+                    .accessibilityValue("\(speakerCount)")
+            }
+            ScrollView(.horizontal) {
+                HStack(spacing: 8) {
+                    ForEach(script.speakers) { speaker in
+                        Button {
+                            draftName = speaker.name
+                            renamingSpeaker = speaker
+                        } label: {
+                            HStack(spacing: 6) {
+                                Circle()
+                                    .fill(Palette.speakerColor(speaker.id))
+                                    .frame(width: 10, height: 10)
+                                Text(speaker.name)
+                                    .dubFont(14, weight: .medium)
+                                Image(systemName: "pencil")
+                                    .dubFont(12, weight: .regular)
+                                    .foregroundStyle(Palette.textSecondary)
+                            }
+                            .foregroundStyle(Palette.textPrimary)
+                            .padding(.horizontal, 12)
+                            .frame(minHeight: 36)
+                            .background(Palette.background, in: Capsule())
+                        }
+                        .accessibilityLabel("Rename \(speaker.name)")
+                    }
+                }
+            }
+            .scrollIndicators(.hidden)
+            Text("Voices are grouped by how they sound, so similar voices or loud music can mix them up. Tap a line's name to fix it.")
+                .dubFont(12, weight: .regular)
+                .foregroundStyle(Palette.textSecondary)
+        }
+        .padding(12)
+        .background(Palette.surface, in: RoundedRectangle(cornerRadius: 16))
+    }
+
+    private func characterCard(_ speaker: Speaker) -> some View {
+        let lines = script.lines(spokenBy: speaker.id)
+        let seconds = lines.reduce(0) { $0 + $1.duration }
+        let isSelected = speaker.id == characterID
+        return Button {
+            characterID = speaker.id
+        } label: {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Circle()
+                        .fill(Palette.speakerColor(speaker.id))
+                        .frame(width: 12, height: 12)
+                    Spacer()
+                    if isSelected {
+                        Image(systemName: "checkmark.circle")
+                            .foregroundStyle(Palette.accent)
+                    }
+                }
+                Text(speaker.name)
+                    .dubFont(16, weight: .medium)
+                    .foregroundStyle(Palette.textPrimary)
+                Text("\(lines.count) lines · \(Int(seconds.rounded())) sec")
+                    .dubFont(14, weight: .regular)
+                    .foregroundStyle(Palette.textSecondary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(12)
+            .background(isSelected ? Color.clear : Palette.surface, in: RoundedRectangle(cornerRadius: 16))
+            .overlay {
+                if isSelected {
+                    RoundedRectangle(cornerRadius: 16).strokeBorder(Palette.accent, lineWidth: 2)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
+    }
+}
+
+private struct ScriptLineRow: View {
+    let line: ScriptLine
+    let speakers: [Speaker]
+    let onAssign: (Int) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Menu {
+                    ForEach(speakers) { speaker in
+                        Button(speaker.name) { onAssign(speaker.id) }
+                    }
+                } label: {
+                    HStack(spacing: 4) {
+                        Text(speakers.first { $0.id == line.speakerID }?.name ?? "Speaker")
+                            .dubFont(12, weight: .semibold)
+                        Image(systemName: "chevron.down")
+                            .dubFont(10, weight: .semibold)
+                    }
+                    .foregroundStyle(Palette.onAccent)
+                    .padding(.horizontal, 10)
+                    .frame(minHeight: 24)
+                    .background(Palette.speakerColor(line.speakerID), in: Capsule())
+                }
+                .accessibilityLabel("Speaker for this line")
+                Spacer()
+                Text("\(line.start.preciseClockString) – \(line.end.preciseClockString)")
+                    .dubFont(12, weight: .regular)
+                    .monospacedDigit()
+                    .foregroundStyle(Palette.textSecondary)
+            }
+            Text(line.text)
+                .dubFont(16, weight: .regular)
+                .foregroundStyle(Palette.textPrimary)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Palette.surface, in: RoundedRectangle(cornerRadius: 12))
+    }
+}

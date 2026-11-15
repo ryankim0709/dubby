@@ -1,0 +1,39 @@
+---
+description: DubIt product scope, priorities, and the complete solo dubbing experience
+alwaysApply: true
+---
+
+# Product scope
+
+Build a functional 6–8-hour hackathon MVP. The reward is a playable scene containing the user's performance, with useful language feedback along the way.
+
+## Core journey
+
+1. Discover or search a small curated clip library.
+2. Choose a character and see that character's timed dialogue below the video.
+3. Listen to the original line, record a take, review coaching, and retry or keep it.
+4. Track accepted lines and advance through the selected character's dialogue.
+5. Render and preview the dubbed scene, share through the native iOS share sheet, and revisit it in My Dubs.
+
+## P0: complete before stretch work
+
+- Use 3–5 short, original or properly licensed scenes with prepared character metadata, transcripts, timestamps, and separated audio tracks.
+- Support character selection, line-by-line recording, original playback, retries, and accepted takes.
+- Provide real pronunciation feedback grounded in the user's recording and the reference text.
+- Export a playable MP4 that replaces the selected character while retaining background sound and other characters.
+- Support native sharing and local history of completed dubs.
+- First make one scene work end to end on an actual iPhone, then expand the library and polish.
+
+## Later priorities
+
+- P1: authorized character-style voice conversion, short camera-roll imports, upload transcription and speaker selection, a daily scene and streak.
+- P2: asynchronous friend invitations, automatic audio separation, and additional languages.
+- Keep synchronous collaboration, a public feed, internet-wide clip search, long-form editing, and the separate avatar tutor outside the MVP unless explicitly requested.
+- Search the curated library; do not imply that the app searches or licenses arbitrary movies.
+
+## Experience requirements
+
+- Keep the studio focused on video, the current sentence, progress, and clear Listen, Record, Retry, and Keep actions. Users should not need to edit a timeline.
+- Make feedback encouraging and specific, with a concrete next attempt rather than unsupported praise or invented scores.
+- Show real recording, assessment, and export states. Keep preview fixtures separate from runtime results; never simulate successful processing in the user flow.
+- Favor a polished, cinematic entertainment experience with accessible controls and readable subtitles. Complete the working loop before adding decorative effects.
