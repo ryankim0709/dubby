@@ -19,13 +19,13 @@ struct ContentView: View {
             Group {
                 switch tab {
                 case .discover:
-                    DiscoverView(clips: clips, streakDays: streakDays, onDub: { launch = .scene($0) }, onTalkToCoach: { isCoachPresented = true })
+                    DiscoverView(clips: clips, streakDays: streakDays, onDub: { launch = .scene($0) }, onTalkToCoach: { isCoachPresented = true }, onRetry: reloadClips)
                 case .messages:
                     MessagesView()
                 case .progress:
-                    PracticeProgressView(dubs: dubs, folder: libraryFolder)
+                    PracticeProgressView(dubs: dubs, folder: libraryFolder, onRetry: reloadDubs)
                 case .myDubs:
-                    MyDubsView(dubs: dubs, folder: libraryFolder)
+                    MyDubsView(dubs: dubs, folder: libraryFolder, onChange: reloadDubs, onRetry: reloadDubs)
                 }
             }
             // Attached to the tab roots only, so pushed screens keep their full-height layout.
@@ -41,13 +41,22 @@ struct ContentView: View {
         }
         .task {
             reloadDubs()
-            do {
-                clips = .loaded(try await MediaLibrary.loadClips(in: .main))
-            } catch {
-                clips = .failed(error.localizedDescription)
-            }
+            await loadClips()
         }
         .preferredColorScheme(.dark)
+    }
+
+    private func reloadClips() {
+        clips = .loading
+        Task { await loadClips() }
+    }
+
+    private func loadClips() async {
+        do {
+            clips = .loaded(try await MediaLibrary.loadClips(in: .main))
+        } catch {
+            clips = .failed("Scenes couldn't be read: \(error.localizedDescription)")
+        }
     }
 
     private func reloadDubs() {

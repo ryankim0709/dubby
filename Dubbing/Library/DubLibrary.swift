@@ -10,6 +10,8 @@ nonisolated struct SavedDub: Codable, Hashable, Sendable, Identifiable {
     let sceneSeconds: Double
     let createdAt: Date
     let videoFileName: String
+    /// Measured take data. Nil for dubs saved before takes were measured, which the UI reports as not measured.
+    var takeMeasurements: [TakeMeasurement]? = nil
 }
 
 /// Saved dubs live in one folder: each video plus a `dubs.json` index, newest first.
@@ -32,6 +34,17 @@ nonisolated enum DubLibrary {
         let dubs = [dub] + (try load(from: folder))
         try encoder.encode(dubs).write(to: indexURL(in: folder), options: .atomic)
         return dubs
+    }
+
+    /// Removes a dub's video and its index entry. Returns the remaining dubs.
+    static func delete(_ dub: SavedDub, in folder: URL) throws -> [SavedDub] {
+        let remaining = try load(from: folder).filter { $0.id != dub.id }
+        try encoder.encode(remaining).write(to: indexURL(in: folder), options: .atomic)
+        let video = videoURL(for: dub, in: folder)
+        if FileManager.default.fileExists(atPath: video.path(percentEncoded: false)) {
+            try FileManager.default.removeItem(at: video)
+        }
+        return remaining
     }
 
     static func videoURL(for dub: SavedDub, in folder: URL) -> URL {

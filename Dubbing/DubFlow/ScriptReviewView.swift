@@ -6,7 +6,7 @@ private enum AnalysisPhase: Equatable {
     case transcribing
     case groupingVoices
     case ready(LineAnalysis)
-    case failed(String)
+    case failed(FlowIssue)
 
     var stepIndex: Int {
         switch self {
@@ -31,8 +31,8 @@ struct ScriptReviewView: View {
             switch phase {
             case .ready(let analysis):
                 ScriptEditor(request: request, analysis: analysis, onStart: onStart)
-            case .failed(let message):
-                failure(message)
+            case .failed(let issue):
+                failure(issue)
             case .extractingAudio, .preparingModel, .transcribing, .groupingVoices:
                 progress
             }
@@ -54,6 +54,8 @@ struct ScriptReviewView: View {
             }
             .padding(16)
             .background(Palette.surface, in: RoundedRectangle(cornerRadius: 16))
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel("Building your script")
             Spacer()
         }
         .padding(.horizontal, 16)
@@ -82,18 +84,11 @@ struct ScriptReviewView: View {
         .accessibilityElement(children: .combine)
     }
 
-    private func failure(_ message: String) -> some View {
+    private func failure(_ issue: FlowIssue) -> some View {
         VStack(alignment: .leading, spacing: 16) {
             BackHeader(title: "Building your script") { EmptyView() }
                 .padding(.top, 8)
-            Text("Something went wrong")
-                .dubFont(20, weight: .semibold)
-                .foregroundStyle(Palette.textPrimary)
-            Text(message)
-                .dubFont(14, weight: .regular)
-                .foregroundStyle(Palette.textSecondary)
-            Button("Try again") { attempt += 1 }
-                .buttonStyle(PrimaryButtonStyle(cornerRadius: 16))
+            IssueCard(title: "The script couldn't be built", issue: issue, retry: { attempt += 1 })
             Spacer()
         }
         .padding(.horizontal, 16)
@@ -113,7 +108,7 @@ struct ScriptReviewView: View {
             phase = .groupingVoices
             phase = .ready(try await MediaPipeline.analyzeVoices(audioURL: audioURL, lines: lines, barCount: 48))
         } catch {
-            phase = .failed(error.localizedDescription)
+            phase = .failed(FlowIssue(error: error))
         }
     }
 }

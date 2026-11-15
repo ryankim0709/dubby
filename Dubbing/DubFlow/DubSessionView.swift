@@ -21,10 +21,16 @@ struct DubSessionView: View {
     @State private var takes: [Int: RecordedTake] = [:]
     @State private var activity: SessionActivity = .idle
     @State private var activityTask: Task<Void, Never>?
-    @State private var errorMessage: String?
+    @State private var issue: FlowIssue?
+    /// The activity that produced `issue`, so Try again repeats it.
+    @State private var failedActivity: SessionActivity?
+    @State private var measurements: [Int: TakeMeasurement] = [:]
+    @State private var microphone = MicrophoneAccess(AVAudioApplication.shared.recordPermission)
+    @State private var isConfirmingExit = false
     /// Why the current activity was cut short by the system, if it was; an interrupted recording isn't kept.
     @State private var interruption: String?
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.dismiss) private var dismiss
 
     private static let logger = Logger(subsystem: "com.ryankim.Dubbing", category: "studio")
 
@@ -48,13 +54,14 @@ struct DubSessionView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                BackHeader(title: "Dubbing studio") {
+                header {
                     Button("Finish") {
                         stopActivity()
                         onFinish(takes)
                     }
                     .dubFont(14, weight: .semibold)
                     .foregroundStyle(takes.isEmpty ? Palette.textSecondary : Palette.accentText)
+                    .frame(minHeight: 44)
                     .disabled(takes.isEmpty || activity != .idle)
                     .accessibilityIdentifier("finishDub")
                 }
@@ -67,10 +74,10 @@ struct DubSessionView: View {
                 lineCard
                 recordControls
                     .frame(maxWidth: .infinity)
-                if let errorMessage {
-                    Text(errorMessage)
-                        .dubFont(14, weight: .regular)
-                        .foregroundStyle(Palette.streak)
+                if microphone == .denied {
+                    IssueCard(title: "Microphone is off", issue: FlowIssue(error: DubFlowError.microphoneDenied), retry: nil)
+                } else if let issue {
+                    IssueCard(title: "That didn't work", issue: issue, retry: failedActivity.map { retryAction(for: $0) })
                 }
                 AdaptiveStack(rowAlignment: .center, spacing: 12) {
                     Button {
@@ -97,7 +104,10 @@ struct DubSessionView: View {
         .scrollIndicators(.hidden)
         .background(Palette.background)
         .toolbar(.hidden, for: .navigationBar)
-        .task { await player.seek(to: lineStart) }
+        .task {
+            refreshMicrophone()
+            await player.seek(to: lineStart)
+        }
         .onReceive(NotificationCenter.default.publisher(for: AVAudioSession.interruptionNotification)) { notification in
             guard
                 let rawType = notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
@@ -115,7 +125,15 @@ struct DubSessionView: View {
         .onChange(of: scenePhase) { _, phase in
             if phase != .active {
                 interrupt(because: "DubIt left the screen")
+            } else {
+                refreshMicrophone()
             }
+        }
+        .confirmationDialog("Leave the studio?", isPresented: $isConfirmingExit, titleVisibility: .visible) {
+            Button("Discard \(takes.count) \(takes.count == 1 ? "take" : "takes")", role: .destructive) { dismiss() }
+            Button("Keep dubbing", role: .cancel) {}
+        } message: {
+            Text("Your recorded takes aren't saved until you finish the dub.")
         }
         .onDisappear {
             stopActivity()
@@ -126,6 +144,51 @@ struct DubSessionView: View {
                 Self.logger.warning("Audio session deactivation failed: \(error.localizedDescription, privacy: .public)")
             }
         }
+    }
+
+    private func header<Trailing: View>(@ViewBuilder trailing: () -> Trailing) -> some View {
+        HStack(spacing: 12) {
+            Button {
+                if takes.isEmpty {
+                    dismiss()
+                } else {
+                    isConfirmingExit = true
+                }
+            } label: {
+                Image(systemName: "arrow.left")
+                    .dubFont(16, weight: .medium)
+                    .foregroundStyle(Palette.textPrimary)
+                    .frame(minWidth: 44, minHeight: 44)
+                    .contentShape(Rectangle())
+            }
+            .accessibilityLabel("Back")
+            Text("Dubbing studio")
+                .dubFont(16, weight: .semibold)
+                .foregroundStyle(Palette.textPrimary)
+            Spacer()
+            trailing()
+        }
+    }
+
+    private func retryAction(for activity: SessionActivity) -> () -> Void {
+        switch activity {
+        case .recording:
+            return { record() }
+        case .playingOriginal:
+            return { listenToOriginal() }
+        case .playingTake:
+            return {
+                if let take = takes[line.id] {
+                    playTake(take)
+                }
+            }
+        case .idle:
+            return {}
+        }
+    }
+
+    private func refreshMicrophone() {
+        microphone = MicrophoneAccess(AVAudioApplication.shared.recordPermission)
     }
 
     private var videoCard: some View {
@@ -266,6 +329,9 @@ struct DubSessionView: View {
                 .foregroundStyle(Palette.streak)
                 .accessibilityIdentifier("takeTrimNotice")
             }
+            if let measurement = measurements[line.id], takes[line.id] != nil {
+                TakeFeedbackView(measurement: measurement)
+            }
         }
         .padding(12)
         .background(Palette.surface, in: RoundedRectangle(cornerRadius: 16))
@@ -286,8 +352,9 @@ struct DubSessionView: View {
                     .frame(width: 78, height: 78)
                     .background(activity == .recording ? Color.red : Palette.accent, in: Circle())
             }
-            .disabled(activity == .playingOriginal || activity == .playingTake)
+            .disabled(activity == .playingOriginal || activity == .playingTake || microphone == .denied)
             .accessibilityLabel(activity == .recording ? "Stop recording" : "Record this line")
+            .accessibilityHint(microphone == .denied ? "Unavailable: microphone access is off" : "")
             .accessibilityIdentifier("recordLine")
             Text(recordHint)
                 .dubFont(14, weight: .regular)
@@ -330,6 +397,7 @@ struct DubSessionView: View {
         case .recording: "Recording… speak with the video"
         case .playingOriginal: "Listening to the original"
         case .playingTake: "Playing your take over the scene"
+        case .idle where microphone == .denied: "Turn the microphone on in Settings to record"
         case .idle: takes[line.id] == nil ? "Tap to record. You'll hear your cue first." : "Tap to record again"
         }
     }
@@ -368,7 +436,10 @@ struct DubSessionView: View {
             if let interruption {
                 throw DubFlowError.recordingInterrupted(interruption)
             }
-            takes[target.id] = RecordedTake(url: url, duration: duration)
+            let take = RecordedTake(url: url, duration: duration)
+            takes[target.id] = take
+            measurements[target.id] = nil
+            measurements[target.id] = await TakeMeasuring.measure(take: take, line: target, lines: setup.script.lines, sectionDuration: setup.section.duration)
         }
     }
 
@@ -385,15 +456,18 @@ struct DubSessionView: View {
     /// Runs one studio activity at a time and always returns the studio to idle when it ends.
     private func run(_ kind: SessionActivity, _ work: @escaping () async throws -> Void) {
         activityTask?.cancel()
-        errorMessage = nil
+        issue = nil
+        failedActivity = nil
         interruption = nil
         activity = kind
         activityTask = Task {
             do {
                 try await work()
             } catch {
-                errorMessage = error.localizedDescription
+                issue = FlowIssue(error: error)
+                failedActivity = kind
             }
+            refreshMicrophone()
             player.stop()
             takePlayer.stop()
             if kind == .recording {

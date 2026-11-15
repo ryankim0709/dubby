@@ -53,6 +53,7 @@ struct DubTabBar: View {
             tabLabel(title: title, systemImage: systemImage, isActive: selection == tab)
         }
         .buttonStyle(.plain)
+        .accessibilityAddTraits(selection == tab ? [.isSelected] : [])
     }
 
     private func tabLabel(title: String, systemImage: String, isActive: Bool) -> some View {

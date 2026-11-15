@@ -4,9 +4,10 @@ import SwiftUI
 private enum ExportPhase: Equatable {
     case filteringDialogue
     case mixing
+    case measuring
     case saving
-    case finished(video: URL, trimmed: [TakePlacement])
-    case failed(String)
+    case finished(video: URL, trimmed: [TakePlacement], measurements: [TakeMeasurement])
+    case failed(FlowIssue)
 }
 
 /// Mixes the takes into the scene, saves the dub to the library, and shows it.
@@ -23,7 +24,7 @@ struct DubResultView: View {
                 BackHeader(title: "Your dub") { EmptyView() }
                     .padding(.top, 8)
                 switch phase {
-                case .filteringDialogue, .mixing, .saving:
+                case .filteringDialogue, .mixing, .measuring, .saving:
                     VStack(spacing: 12) {
                         ProgressView()
                             .tint(Palette.accentText)
@@ -33,17 +34,11 @@ struct DubResultView: View {
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 60)
-                case .finished(let video, let trimmed):
-                    finished(video: video, trimmed: trimmed)
-                case .failed(let message):
-                    Text("Export failed")
-                        .dubFont(20, weight: .semibold)
-                        .foregroundStyle(Palette.textPrimary)
-                    Text(message)
-                        .dubFont(14, weight: .regular)
-                        .foregroundStyle(Palette.textSecondary)
-                    Button("Try again") { attempt += 1 }
-                        .buttonStyle(PrimaryButtonStyle(cornerRadius: 16))
+                    .accessibilityElement(children: .combine)
+                case .finished(let video, let trimmed, let measurements):
+                    finished(video: video, trimmed: trimmed, measurements: measurements)
+                case .failed(let issue):
+                    IssueCard(title: "The dub couldn't be exported", issue: issue, retry: { attempt += 1 })
                 }
             }
             .padding(.horizontal, 16)
@@ -59,12 +54,13 @@ struct DubResultView: View {
         switch phase {
         case .filteringDialogue: "Filtering the original dialogue…"
         case .mixing: "Mixing your voice into the scene…"
+        case .measuring: "Measuring your takes…"
         case .saving: "Saving to My Dubs…"
         case .finished, .failed: ""
         }
     }
 
-    private func finished(video: URL, trimmed: [TakePlacement]) -> some View {
+    private func finished(video: URL, trimmed: [TakePlacement], measurements: [TakeMeasurement]) -> some View {
         VStack(alignment: .leading, spacing: 16) {
             ResultPlayer(url: video)
                 .aspectRatio(16 / 9, contentMode: .fit)
@@ -96,6 +92,7 @@ struct DubResultView: View {
                 .foregroundStyle(Palette.streak)
                 .accessibilityIdentifier("dubTrimNotice")
             }
+            TakeSummaryView(measurements: measurements)
             ShareLink(item: video) {
                 Label("Share dub", systemImage: "square.and.arrow.up")
             }
@@ -135,6 +132,13 @@ struct DubResultView: View {
                 to: output
             )
 
+            phase = .measuring
+            var measurements: [TakeMeasurement] = []
+            for line in setup.script.lines.sorted(by: { $0.start < $1.start }) {
+                guard let take = takes[line.id] else { continue }
+                measurements.append(await TakeMeasuring.measure(take: take, line: line, lines: setup.script.lines, sectionDuration: section.duration))
+            }
+
             phase = .saving
             let id = UUID()
             let dub = SavedDub(
@@ -145,12 +149,17 @@ struct DubResultView: View {
                 totalLines: setup.script.lines(spokenBy: setup.characterID).count,
                 sceneSeconds: section.duration,
                 createdAt: .now,
-                videoFileName: "\(id.uuidString).mp4"
+                videoFileName: "\(id.uuidString).mp4",
+                takeMeasurements: measurements
             )
             _ = try DubLibrary.save(video: output, as: dub, in: DubLibrary.defaultFolder)
-            phase = .finished(video: DubLibrary.videoURL(for: dub, in: DubLibrary.defaultFolder), trimmed: placements.filter { $0.trimmedSeconds > DubTiming.noticeableTrim })
+            phase = .finished(
+                video: DubLibrary.videoURL(for: dub, in: DubLibrary.defaultFolder),
+                trimmed: placements.filter { $0.trimmedSeconds > DubTiming.noticeableTrim },
+                measurements: measurements
+            )
         } catch {
-            phase = .failed(error.localizedDescription)
+            phase = .failed(FlowIssue(error: error))
         }
     }
 }

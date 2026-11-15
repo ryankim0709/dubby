@@ -10,7 +10,20 @@ enum LoadState<Value> {
 /// Shows loading and failure states, and the content once loaded.
 struct LoadStateContent<Value, Content: View>: View {
     let state: LoadState<Value>
+    let retry: (() -> Void)?
     @ViewBuilder let content: (Value) -> Content
+
+    init(state: LoadState<Value>, @ViewBuilder content: @escaping (Value) -> Content) {
+        self.state = state
+        retry = nil
+        self.content = content
+    }
+
+    init(state: LoadState<Value>, retry: @escaping () -> Void, @ViewBuilder content: @escaping (Value) -> Content) {
+        self.state = state
+        self.retry = retry
+        self.content = content
+    }
 
     var body: some View {
         switch state {
@@ -19,8 +32,16 @@ struct LoadStateContent<Value, Content: View>: View {
                 .tint(Palette.accentText)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 40)
+                .accessibilityLabel("Loading")
         case .failed(let message):
-            EmptyStateView(systemImage: "exclamationmark.triangle", title: "Couldn't load this", message: message)
+            VStack(spacing: 12) {
+                EmptyStateView(systemImage: "exclamationmark.triangle", title: "Couldn't load this", message: message)
+                if let retry {
+                    Button("Try again", action: retry)
+                        .buttonStyle(OutlineCapsuleButtonStyle())
+                        .accessibilityIdentifier("retryLoad")
+                }
+            }
         case .loaded(let value):
             content(value)
         }
@@ -32,6 +53,7 @@ struct DiscoverView: View {
     let streakDays: Int
     let onDub: (LibraryClip) -> Void
     let onTalkToCoach: () -> Void
+    let onRetry: () -> Void
 
     var body: some View {
         ScrollView {
@@ -63,12 +85,12 @@ struct DiscoverView: View {
                         .dubFont(14, weight: .regular)
                         .foregroundStyle(Palette.textSecondary)
                 }
-                LoadStateContent(state: clips) { clips in
+                LoadStateContent(state: clips, retry: onRetry) { clips in
                     if clips.isEmpty {
                         EmptyStateView(
                             systemImage: "film.stack",
-                            title: "No scenes yet",
-                            message: "Add MP4 or MOV clips to the Media folder in the project, then build and run again."
+                            title: "No scenes in this build",
+                            message: "Scenes are the MP4 or MOV clips bundled from the Media folder. Add one there, then build and run again."
                         )
                     } else {
                         VStack(spacing: 16) {
