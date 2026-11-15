@@ -200,6 +200,11 @@ struct CoachSessionView: View {
                 BackHeader(title: session.character.name) { EmptyView() }
                     .padding(.top, 8)
                 avatarCard
+                if session.lastReply?.audio?.aiGenerated == true {
+                    Text("The coach's voice is AI-generated.")
+                        .dubFont(12, weight: .regular)
+                        .foregroundStyle(Palette.placeholder)
+                }
                 transcript
                 if session.replyFailure == nil, let reply = session.lastReply {
                     let citedCount = reply.citedEvidenceIds.count

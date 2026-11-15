@@ -65,6 +65,28 @@ nonisolated struct NextExercise: Codable, Hashable, Sendable {
     let evidence: ExerciseEvidence
 }
 
+/// The coach's voice for a reply, as LiveAvatar's LITE socket takes it.
+nonisolated struct ReplyAudio: Decodable, Hashable, Sendable {
+    static let supportedFormat = "pcm_s16le_24khz_mono"
+
+    let format: String
+    let base64: String
+    /// Whether the voice is synthetic, so the app can say so.
+    let aiGenerated: Bool
+
+    /// The raw PCM samples, after checking the format is the one the avatar socket accepts.
+    func pcm() throws -> Data {
+        let operation = "Getting the coach's voice"
+        guard format == Self.supportedFormat else {
+            throw CoachError.invalidResponse(operation: operation, reason: "the audio format \(format) isn't supported")
+        }
+        guard let data = Data(base64Encoded: base64) else {
+            throw CoachError.invalidResponse(operation: operation, reason: "the audio wasn't valid Base64")
+        }
+        return data
+    }
+}
+
 /// `/coach/reply`. A response from before the tutoring fields existed is just `{ text }`, which
 /// decodes with no source, no provenance, no cited evidence, and a basis of `none`.
 nonisolated struct CoachReply: Decodable, Hashable, Sendable {
@@ -74,9 +96,10 @@ nonisolated struct CoachReply: Decodable, Hashable, Sendable {
     let feedbackBasis: FeedbackBasis
     let citedEvidenceIds: [String]
     let exercise: NextExercise?
+    let audio: ReplyAudio?
 
     private enum CodingKeys: String, CodingKey {
-        case text, source, provenance, feedbackBasis, citedEvidenceIds, exercise
+        case text, source, provenance, feedbackBasis, citedEvidenceIds, exercise, audio
     }
 
     init(from decoder: any Decoder) throws {
@@ -87,6 +110,7 @@ nonisolated struct CoachReply: Decodable, Hashable, Sendable {
         feedbackBasis = try container.decodeIfPresent(FeedbackBasis.self, forKey: .feedbackBasis) ?? .none
         citedEvidenceIds = try container.decodeIfPresent([String].self, forKey: .citedEvidenceIds) ?? []
         exercise = try container.decodeIfPresent(NextExercise.self, forKey: .exercise)
+        audio = try container.decodeIfPresent(ReplyAudio.self, forKey: .audio)
     }
 }
 
@@ -237,7 +261,7 @@ nonisolated struct ProgressEvaluator: Decodable, Hashable, Sendable {
     let measurement: EvaluatorMeasurement
 }
 
-nonisolated struct UnavailableMetric: Decodable, Hashable, Sendable {
+nonisolated struct ProgressUnavailableMetric: Decodable, Hashable, Sendable {
     let metric: String
     let reason: String
 }
@@ -376,7 +400,7 @@ nonisolated struct ProgressSeries: Decodable, Hashable, Sendable {
     let rubricVersion: String
     let evaluator: ProgressEvaluator
     let pronunciationBasis: FeedbackBasis
-    let unavailableMetrics: [UnavailableMetric]
+    let unavailableMetrics: [ProgressUnavailableMetric]
     let volume: ProgressVolume
     let daily: [DailyProgress]
     let skills: [SkillTrend]

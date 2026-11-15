@@ -128,9 +128,10 @@ nonisolated struct CoachBackendClient: CoachTutorService {
     }
 
     func reply(characterID: String, language: SpokenLanguage, turns: [CoachTurn]) async throws -> CoachReply {
-        struct Body: Encodable { let characterId: String; let languageName: String; let locale: String; let turns: [CoachTurn] }
+        struct Body: Encodable { let characterId: String; let languageName: String; let locale: String; let audio: Bool; let turns: [CoachTurn] }
         let operation = "Getting the coach's reply"
-        let body = Body(characterId: characterID, languageName: language.name, locale: language.identifier, turns: turns)
+        // The avatar is rendered from the reply's audio, so the voice is always asked for.
+        let body = Body(characterId: characterID, languageName: language.name, locale: language.identifier, audio: true, turns: turns)
         let request = try ServiceRequest.json(method: "POST", url: baseURL.appending(path: "coach/reply"), body: body, headers: [:])
         let reply = try await send(request, as: CoachReply.self, operation: operation)
         guard !reply.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {

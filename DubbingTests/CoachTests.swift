@@ -3,22 +3,156 @@ import Testing
 @testable import Dubbing
 
 struct CoachTests {
-    @Test func speakTextMatchesTheWebSDKCommandShape() throws {
+    @Test func socketCommandsHaveTheLiteShape() throws {
         let eventID = UUID()
-        let data = try LiveAvatarCommand.speakText("Hola, ¿qué tal?", eventID: eventID)
-        let json = try #require(try JSONSerialization.jsonObject(with: data) as? [String: String])
-        #expect(json == ["event_id": eventID.uuidString.lowercased(), "event_type": "avatar.speak_text", "text": "Hola, ¿qué tal?"])
+        func object(_ frame: String) throws -> [String: String] {
+            try #require(try JSONSerialization.jsonObject(with: Data(frame.utf8)) as? [String: String])
+        }
+        let speak = try object(LiveAvatarSocketCommand.speak(audio: Data([1, 2, 3, 4]), eventID: eventID))
+        #expect(speak == ["type": "agent.speak", "event_id": eventID.uuidString.lowercased(), "audio": Data([1, 2, 3, 4]).base64EncodedString()])
+        #expect(try object(LiveAvatarSocketCommand.speakEnd(eventID: eventID))["type"] == "agent.speak_end")
+        #expect(try object(LiveAvatarSocketCommand.interrupt(eventID: eventID))["audio"] == nil)
+        #expect(try object(LiveAvatarSocketCommand.keepAlive(eventID: eventID))["type"] == "session.keep_alive")
     }
 
-    @Test func decodesTheAvatarEventsTheCoachFollowsAndSkipsTheRest() throws {
-        func decode(_ json: String) throws -> LiveAvatarEvent? {
-            try LiveAvatarEvent.decode(Data(json.utf8))
+    @Test func decodesTheSocketEventsTheCoachFollowsAndSkipsTheRest() throws {
+        func decode(_ json: String) throws -> LiveAvatarSocketEvent? {
+            try LiveAvatarSocketEvent.decode(json)
         }
-        #expect(try decode(#"{"event_id":"1","event_type":"avatar.speak_started","session_id":"s"}"#) == .avatarStartedSpeaking)
-        #expect(try decode(#"{"event_type":"avatar.speak_ended","session_id":"s","source_event_id":null}"#) == .avatarStoppedSpeaking)
-        #expect(try decode(#"{"event_type":"session.stopped","stop_reason":"IDLE_TIMEOUT"}"#) == .sessionStopped(reason: "IDLE_TIMEOUT"))
-        #expect(try decode(#"{"event_type":"user.transcription","text":"hi"}"#) == nil)
-        #expect(throws: DecodingError.self) { try decode(#"{"text":"no type"}"#) }
+        #expect(try decode(#"{"type":"session.state_updated","state":"connected","event_id":"1","source_event_id":null}"#) == .connected)
+        #expect(try decode(#"{"type":"session.state_updated","state":"disconnected"}"#) == .sessionDisconnected)
+        #expect(try decode(#"{"type":"session.state_updated","state":"new"}"#) == nil)
+        #expect(try decode(#"{"type":"agent.speak_started","source_event_id":"u"}"#) == .speakStarted)
+        #expect(try decode(#"{"type":"agent.speak_ended","source_event_id":"u"}"#) == .speakEnded)
+        #expect(try decode(#"{"type":"agent.speak_interrupted"}"#) == .speakInterrupted)
+        #expect(try decode(#"{"type":"error","error":{"type":"invalid_request_error","message":"bad audio","event_id":"e"}}"#) == .failed(type: "invalid_request_error", message: "bad audio"))
+        #expect(try decode(#"{"type":"agent.audio_buffer_appended"}"#) == nil)
+        #expect(try decode(#"{"type":"agent.state_updated","previous_state":"idle","new_state":"talking"}"#) == nil)
+        #expect(throws: DecodingError.self) { try decode(#"{"state":"no type"}"#) }
+    }
+
+    @Test func replyAudioIsSplitIntoBoundedOneSecondChunks() throws {
+        let chunks = try LiveAvatarAudio.chunks(of: Data(count: 120_000))
+        #expect(chunks.map(\.count) == [48_000, 48_000, 24_000])
+        #expect(throws: CoachError.self) { try LiveAvatarAudio.chunks(of: Data()) }
+        #expect(throws: CoachError.self) { try LiveAvatarAudio.chunks(of: Data(count: 7)) }
+        #expect(throws: CoachError.self) { try LiveAvatarAudio.chunks(of: Data(count: LiveAvatarAudio.maximumBytes + 2)) }
+        #expect(try LiveAvatarAudio.chunks(of: Data(count: LiveAvatarAudio.maximumBytes)).count == 60)
+    }
+
+    @Test func chunksAreSentNoMoreThanTheLeadAheadOfPlayback() {
+        let offsets = (0..<6).map { LiveAvatarAudio.sendOffset(ofChunk: $0) }
+        #expect(offsets == [.seconds(0), .seconds(0), .seconds(0), .seconds(1), .seconds(2), .seconds(3)])
+    }
+
+    @Test func replyAudioMustBeThePcmFormatTheSocketAccepts() throws {
+        let good = ReplyAudio(format: "pcm_s16le_24khz_mono", base64: Data([0, 1]).base64EncodedString(), aiGenerated: true)
+        #expect(try good.pcm() == Data([0, 1]))
+        #expect(throws: CoachError.self) { try ReplyAudio(format: "mp3", base64: "AAA=", aiGenerated: true).pcm() }
+        #expect(throws: CoachError.self) { try ReplyAudio(format: "pcm_s16le_24khz_mono", base64: "not base64!", aiGenerated: true).pcm() }
+    }
+
+    @Test func aReplyWithAudioDecodesItsVoice() throws {
+        let reply = try decodeReply(#"{"text":"Hi","audio":{"format":"pcm_s16le_24khz_mono","base64":"AAA=","aiGenerated":true}}"#)
+        #expect(reply.audio?.aiGenerated == true)
+        #expect(try decodeReply(#"{"text":"Hi"}"#).audio == nil)
+    }
+
+    // MARK: Avatar socket
+
+    private actor FakeTransport: AvatarSocketTransport {
+        private(set) var sent: [String] = []
+        private(set) var isClosed = false
+        private var pending: [String] = []
+        private var waiter: CheckedContinuation<String, any Error>?
+
+        func feed(_ frame: String) {
+            guard let waiter else {
+                pending.append(frame)
+                return
+            }
+            self.waiter = nil
+            waiter.resume(returning: frame)
+        }
+
+        func send(_ text: String) { sent.append(text) }
+
+        func close() {
+            isClosed = true
+            waiter?.resume(throwing: CoachError.avatarDisconnected)
+            waiter = nil
+        }
+
+        func receive() async throws -> String {
+            if !pending.isEmpty { return pending.removeFirst() }
+            if isClosed { throw CoachError.avatarDisconnected }
+            return try await withCheckedThrowingContinuation { waiter = $0 }
+        }
+
+        func sentTypes() throws -> [String] {
+            struct Frame: Decodable { let type: String }
+            return try sent.map { try JSONDecoder().decode(Frame.self, from: Data($0.utf8)).type }
+        }
+    }
+
+    private func connectedSocket(_ transport: FakeTransport) async -> LiveAvatarSocket {
+        let socket = LiveAvatarSocket(transport: transport)
+        await socket.start()
+        await transport.feed(#"{"type":"session.state_updated","state":"connected"}"#)
+        var events = socket.events.makeAsyncIterator()
+        _ = await events.next()
+        return socket
+    }
+
+    @Test func theSocketSendsNothingUntilTheServerSaysConnected() async {
+        let transport = FakeTransport()
+        let socket = LiveAvatarSocket(transport: transport)
+        await socket.start()
+        await #expect(throws: CoachError.avatarDisconnected) { try await socket.speak(Data(count: 4)) }
+        #expect(await transport.sent.isEmpty)
+        await socket.close()
+    }
+
+    @Test func aReplyIsSentAsChunksThenSealed() async throws {
+        let transport = FakeTransport()
+        let socket = await connectedSocket(transport)
+        try await socket.speak(Data(count: 120_000))
+        #expect(try await transport.sentTypes() == ["agent.speak", "agent.speak", "agent.speak", "agent.speak_end"])
+        await socket.close()
+    }
+
+    @Test func interruptingStopsTheChunksStillWaitingToBeSent() async throws {
+        let transport = FakeTransport()
+        let socket = await connectedSocket(transport)
+        let speaking = Task { try await socket.speak(Data(count: 6 * 48_000)) }
+        while try await transport.sentTypes().count < 3 { await Task.yield() }
+        try await socket.interrupt()
+        try await speaking.value
+        let types = try await transport.sentTypes()
+        #expect(types.prefix(3).allSatisfy { $0 == "agent.speak" })
+        #expect(types.contains("agent.interrupt"))
+        #expect(!types.contains("agent.speak_end"))
+        await socket.close()
+    }
+
+    @Test func closingInterruptsTheAvatarAndClosesTheTransport() async throws {
+        let transport = FakeTransport()
+        let socket = await connectedSocket(transport)
+        await socket.close()
+        #expect(try await transport.sentTypes() == ["agent.interrupt"])
+        #expect(await transport.isClosed)
+    }
+
+    @Test func aSocketThatEndsOnItsOwnIsReported() async {
+        let transport = FakeTransport()
+        let socket = LiveAvatarSocket(transport: transport)
+        await socket.start()
+        await transport.close()
+        var events = socket.events.makeAsyncIterator()
+        guard case .closed = await events.next() else {
+            Issue.record("Expected a closed event")
+            return
+        }
     }
 
     @Test func sendsOnlyTranscriptsThatHoldWords() {

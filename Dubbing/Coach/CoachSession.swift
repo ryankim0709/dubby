@@ -26,13 +26,15 @@ final class CoachSession {
     private(set) var exercise: CoachRemoteState<NextExercise>
     /// Why the coach's last reply couldn't be fetched, when the learner can try the same turn again.
     private(set) var replyFailure: CoachError?
-    /// The exact text last sent to the avatar to speak.
+    /// The reply text whose voice was last sent to the avatar.
     private(set) var lastSpokenText: String?
 
     private let backend: CoachBackendClient
     private let room = AvatarRoom()
     private let recorder = TakeRecorder()
     private var avatar: LiveAvatarClient?
+    private var socket: LiveAvatarSocket?
+    private var speechTask: Task<Void, Never>?
     private var transcriber: PreparedTranscriber?
     private var recordingURL: URL?
     private var turnTask: Task<Void, Never>?
@@ -40,6 +42,7 @@ final class CoachSession {
 
     private static let logger = Logger(subsystem: "com.ryankim.Dubbing", category: "coach")
     private static let keepAliveInterval = Duration.seconds(60)
+    private static let connectTimeout = Duration.seconds(20)
 
     init(character: CoachCharacter, language: SpokenLanguage, backend: CoachBackendClient, exercise: CoachRemoteState<NextExercise>) {
         self.character = character
@@ -48,22 +51,28 @@ final class CoachSession {
         self.exercise = exercise
     }
 
-    /// Starts the avatar and follows the room until it disconnects or the caller's task is cancelled.
+    /// Starts the avatar and follows the room and its socket until either ends or the caller's task is cancelled.
     func run() async {
+        let socket: LiveAvatarSocket
         do {
             let token = try await backend.sessionToken(characterID: character.id, language: language)
-            let avatar = LiveAvatarClient(sessionToken: token.sessionToken)
+            let avatar = LiveAvatarClient(sessionToken: token.sessionToken, sessionID: token.sessionId)
             self.avatar = avatar
-            try await room.connect(to: try await avatar.start())
-            connection = .live
+            let started = try await avatar.start()
+            socket = LiveAvatarSocket(transport: URLSessionSocketTransport(url: started.webSocketURL))
+            self.socket = socket
+            await socket.start()
+            try await room.connect(to: started)
         } catch {
             connection = .ended(error.localizedDescription)
             return
         }
         await withTaskGroup(of: Void.self) { group in
             group.addTask { await self.followRoom() }
-            group.addTask { await self.keepAlive() }
-            // The room ending (or the view going away) ends the keep-alive pings too.
+            group.addTask { await self.followSocket(socket) }
+            group.addTask { await self.keepAlive(socket) }
+            group.addTask { await self.expireIfNotConnected() }
+            // Either end of the call ending (or the view going away) ends the pings and the wait too.
             await group.next()
             group.cancelAll()
         }
@@ -74,7 +83,9 @@ final class CoachSession {
         guard !hasEnded else { return }
         hasEnded = true
         turnTask?.cancel()
+        speechTask?.cancel()
         discardRecording()
+        await socket?.close()
         if let avatar {
             do {
                 try await avatar.stop()
@@ -113,27 +124,49 @@ final class CoachSession {
             switch update {
             case .videoTrack(let track):
                 videoTrack = track
-            case .event(.avatarStartedSpeaking):
-                activity = .speaking
-            case .event(.avatarStoppedSpeaking):
-                if activity == .speaking { activity = .idle }
-            case .event(.sessionStopped(let reason)):
-                connection = .ended("The coach left the call (\(reason)).")
-            case .unreadableEvent(let reason):
-                errorMessage = "The coach sent something the app couldn't read: \(reason)"
             case .disconnected(let reason):
-                if case .live = connection {
+                if connection != .connecting {
                     connection = .ended(reason ?? CoachError.avatarDisconnected.localizedDescription)
                 }
             }
         }
     }
 
-    private func keepAlive() async {
+    private func followSocket(_ socket: LiveAvatarSocket) async {
+        for await event in socket.events {
+            switch event {
+            case .connected:
+                if connection == .connecting { connection = .live }
+            case .speakStarted:
+                activity = .speaking
+            case .speakEnded, .speakInterrupted:
+                if activity == .speaking { activity = .idle }
+            case .failed(_, let message):
+                errorMessage = "The avatar reported a problem: \(message)"
+            case .unreadable(let reason):
+                errorMessage = "The avatar sent something the app couldn't read: \(reason)"
+            case .sessionDisconnected:
+                connection = .ended("The coach left the call.")
+            case .closed(let reason):
+                if connection != .connecting {
+                    connection = .ended(reason ?? CoachError.avatarDisconnected.localizedDescription)
+                }
+            }
+        }
+    }
+
+    /// The call is only live once the avatar's socket reports it is connected.
+    private func expireIfNotConnected() async {
+        guard await pause(for: Self.connectTimeout) else { return }
+        if connection == .connecting {
+            connection = .ended("The coach didn't pick up. Check your connection and start the call again.")
+        }
+    }
+
+    private func keepAlive(_ socket: LiveAvatarSocket) async {
         while await pause(for: Self.keepAliveInterval) {
-            guard let avatar else { return }
             do {
-                try await avatar.keepAlive()
+                try await socket.keepAlive()
             } catch is CancellationError {
                 return
             } catch {
@@ -214,23 +247,39 @@ final class CoachSession {
         turns.append(CoachTurn(role: .coach, text: reply.text))
         lastReply = reply
         if let newExercise = reply.exercise { exercise = .loaded(newExercise) }
-        do {
-            // The avatar says the reply exactly as it is shown.
-            lastSpokenText = reply.text
-            try await room.speak(reply.text)
-            // The avatar's speak_started and speak_ended events move this along from here.
-            activity = .speaking
-        } catch is CancellationError {
+        guard let audio = reply.audio, let socket else {
             activity = .idle
+            errorMessage = "The coach's voice isn't available for this reply, so it's shown as text."
+            return
+        }
+        let pcm: Data
+        do {
+            pcm = try audio.pcm()
         } catch {
             fail(error)
+            return
+        }
+        // The avatar voices exactly the reply that is shown; the socket's speak_started and
+        // speak_ended events move the activity along from here.
+        lastSpokenText = reply.text
+        activity = .speaking
+        speechTask = Task {
+            do {
+                try await socket.speak(pcm)
+            } catch is CancellationError {
+                return
+            } catch {
+                fail(error)
+            }
         }
     }
 
     private func interruptCoach() {
+        speechTask?.cancel()
+        guard let socket else { return }
         turnTask = Task {
             do {
-                try await room.interrupt()
+                try await socket.interrupt()
                 activity = .idle
             } catch {
                 fail(error)
