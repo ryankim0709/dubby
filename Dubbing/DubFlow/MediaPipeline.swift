@@ -43,6 +43,13 @@ nonisolated enum MediaPipeline {
         return try await generator.image(at: mediaTime(seconds)).image
     }
 
+    @concurrent
+    static func previewPicture(for url: URL) async throws -> VideoPicture {
+        let seconds = try await loadDuration(of: url) / 2
+        let frame = try await thumbnail(for: url, at: seconds, maximumSize: CGSize(width: 640, height: 640))
+        return try VideoPicture(frame: frame, seconds: seconds)
+    }
+
     /// Writes the section's audio to an M4A file for transcription and voice analysis.
     @concurrent
     static func exportAudio(from source: URL, section: ClipSection, to output: URL) async throws {

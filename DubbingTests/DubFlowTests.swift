@@ -115,7 +115,7 @@ struct SceneCastTests {
     }
 }
 
-struct SpeakerStillTests {
+struct VideoPictureTests {
     @Test func blackBarsAtTheEdgesAreNotPicture() {
         // A 10×8 frame with two black rows above and below and a dark but visible picture between them.
         let width = 10, height = 8
@@ -123,10 +123,48 @@ struct SpeakerStillTests {
             let row = index / width
             return row < 2 || row >= 6 ? 12 : (index % width == 4 ? 200 : 30)
         }
-        #expect(SpeakerStill.pictureArea(luminance: luminance, width: width, height: height) == CGRect(x: 0, y: 2, width: 10, height: 4))
-        #expect(SpeakerStill.pictureArea(luminance: Array(repeating: 0, count: 6), width: 3, height: 2) == CGRect(x: 0, y: 0, width: 3, height: 2))
+        #expect(VideoPicture.pictureArea(luminance: luminance, width: width, height: height) == CGRect(x: 0, y: 2, width: 10, height: 4))
+        #expect(VideoPicture.pictureArea(luminance: Array(repeating: 0, count: 6), width: 3, height: 2) == CGRect(x: 0, y: 0, width: 3, height: 2))
     }
 
+    @Test(arguments: [CGSize(width: 220, height: 330), CGSize(width: 600, height: 300)])
+    func croppedPictureFillsBothPortraitAndLandscapeBounds(size: CGSize) throws {
+        let context = try #require(CGContext(
+            data: nil, width: 320, height: 180, bitsPerComponent: 8, bytesPerRow: 320,
+            space: CGColorSpaceCreateDeviceGray(), bitmapInfo: CGImageAlphaInfo.none.rawValue
+        ))
+        context.setFillColor(CGColor(gray: 0, alpha: 1))
+        context.fill(CGRect(x: 0, y: 0, width: 320, height: 180))
+        context.setFillColor(CGColor(gray: 1, alpha: 1))
+        context.fill(CGRect(x: 0, y: 20, width: 320, height: 140))
+        let picture = try VideoPicture(frame: #require(context.makeImage()), seconds: 0)
+        #expect(picture.image.width == 320)
+        #expect(picture.image.height == 138)
+        #expect(picture.area == CGRect(x: 0, y: 21, width: 320, height: 138))
+
+        let bounds = CGRect(origin: .zero, size: size)
+        let frame = picture.playerFrame(in: bounds)
+        let scale = frame.width / picture.sourceSize.width
+        let visiblePicture = CGRect(
+            x: frame.minX + picture.area.minX * scale,
+            y: frame.minY + picture.area.minY * scale,
+            width: picture.area.width * scale,
+            height: picture.area.height * scale
+        )
+        #expect(visiblePicture.contains(bounds))
+        #expect(abs(visiblePicture.midX - bounds.midX) < 0.001)
+        #expect(abs(visiblePicture.midY - bounds.midY) < 0.001)
+    }
+
+    @Test func loadsARealVideoFrameWithoutCroppingAnEntirelyBlackScene() async throws {
+        let picture = try await MediaPipeline.previewPicture(for: Synthetic.twoToneVideo())
+        #expect(picture.image.width == 64)
+        #expect(picture.image.height == 64)
+        #expect(picture.area == CGRect(x: 0, y: 0, width: 64, height: 64))
+    }
+}
+
+struct SpeakerStillTests {
     @Test func framingStaysInsideThePictureWithTheFaceHigh() {
         let picture = CGRect(x: 0, y: 140, width: 1_920, height: 800)
         let face = CGRect(x: 1_700, y: 300, width: 200, height: 240)

@@ -4,12 +4,24 @@ import SwiftUI
 struct LibrarySceneDetail: View {
     let clip: LibraryClip
     let onDub: () -> Void
-    @State private var isPreviewPresented = false
+    let onClose: () -> Void
+    @State private var playback: ScenePreviewPlayback
+    @State private var picture: LoadState<VideoPicture> = .loading
+    @State private var isVisible = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.scenePhase) private var scenePhase
+
+    init(clip: LibraryClip, onDub: @escaping () -> Void, onClose: @escaping () -> Void) {
+        self.clip = clip
+        self.onDub = onDub
+        self.onClose = onClose
+        _playback = State(initialValue: ScenePreviewPlayback(url: clip.url))
+    }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
-                VideoThumbnail(url: clip.url)
+                hero
                     .aspectRatio(4 / 5, contentMode: .fit)
                     .overlay {
                         LinearGradient(colors: [.clear, Palette.background], startPoint: .center, endPoint: .bottom)
@@ -29,14 +41,6 @@ struct LibrarySceneDetail: View {
                     Text("Choose up to 30 seconds of dialogue, pick who you'll play, and record their lines. Your finished dub is saved to Shelf.")
                         .dubFont(17, weight: .regular)
                         .foregroundStyle(Palette.textSecondary)
-                    Button {
-                        isPreviewPresented = true
-                    } label: {
-                        Label("Preview scene", systemImage: "play.fill")
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(SecondaryButtonStyle())
-                    .accessibilityIdentifier("previewLibraryScene")
                 }
                 .padding(.horizontal, 20)
                 .padding(.bottom, 24)
@@ -47,8 +51,16 @@ struct LibrarySceneDetail: View {
         .ignoresSafeArea(edges: .top)
         .screenBackground()
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.visible, for: .navigationBar)
         .toolbarBackground(.hidden, for: .navigationBar)
         .toolbar(.hidden, for: .tabBar)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button("Close scene", systemImage: "xmark", action: onClose)
+                    .labelStyle(.iconOnly)
+                    .accessibilityIdentifier("closeLibraryScene")
+            }
+        }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             Button("Dub this scene", action: onDub)
                 .buttonStyle(PrimaryButtonStyle(cornerRadius: Radius.control))
@@ -57,41 +69,117 @@ struct LibrarySceneDetail: View {
                 .padding(.vertical, 12)
                 .background(Palette.background)
         }
-        .sheet(isPresented: $isPreviewPresented) {
-            LibraryScenePreview(clip: clip)
+        .task(id: clip.url) {
+            do {
+                let frame = try await MediaPipeline.previewPicture(for: clip.url)
+                try Task.checkCancellation()
+                picture = .loaded(frame)
+                updatePlayback()
+            } catch is CancellationError {
+                return
+            } catch {
+                picture = .failed(error.localizedDescription)
+            }
+        }
+        .onAppear {
+            isVisible = true
+            updatePlayback()
+        }
+        .onDisappear {
+            isVisible = false
+            playback.player.pause()
+        }
+        .onChange(of: scenePhase) { updatePlayback() }
+        .onChange(of: reduceMotion) { updatePlayback() }
+    }
+
+    private var hero: some View {
+        Palette.surface
+            .overlay {
+                switch picture {
+                case .loading:
+                    ProgressView().tint(Palette.textPrimary)
+                case .loaded(let frame):
+                    Image(decorative: frame.image, scale: 1)
+                        .resizable()
+                        .scaledToFill()
+                case .failed(let message):
+                    EmptyStateView(systemImage: "exclamationmark.triangle", title: "Preview unavailable", message: message)
+                }
+            }
+            .overlay {
+                if case .loaded(let frame) = picture, !reduceMotion {
+                    ScenePreviewSurface(player: playback.player, picture: frame)
+                        .accessibilityHidden(true)
+                }
+            }
+            .clipped()
+    }
+
+    private func updatePlayback() {
+        if case .loaded = picture, isVisible, !reduceMotion, scenePhase == .active {
+            playback.player.play()
+        } else {
+            playback.player.pause()
         }
     }
 }
 
-private struct LibraryScenePreview: View {
-    let clip: LibraryClip
-    @State private var player: AVPlayer
-    @Environment(\.dismiss) private var dismiss
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+private final class ScenePreviewPlayback {
+    let player: AVQueuePlayer
+    // The player stops looping when AVPlayerLooper is released.
+    private let looper: AVPlayerLooper
 
-    init(clip: LibraryClip) {
-        self.clip = clip
-        let player = AVPlayer(url: clip.url)
+    init(url: URL) {
+        let player = AVQueuePlayer()
         player.isMuted = true
-        _player = State(initialValue: player)
+        self.player = player
+        looper = AVPlayerLooper(player: player, templateItem: AVPlayerItem(url: url))
     }
 
-    var body: some View {
-        NavigationStack {
-            VideoPlayer(player: player)
-                .aspectRatio(16 / 9, contentMode: .fit)
-                .frame(maxHeight: .infinity)
-                .screenBackground()
-                .navigationTitle(clip.title)
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .confirmationAction) {
-                        Button("Done") { dismiss() }
-                    }
-                }
-        }
-        .preferredColorScheme(.dark)
-        .onAppear { if !reduceMotion { player.play() } }
-        .onDisappear { player.pause() }
+    isolated deinit {
+        player.pause()
+    }
+}
+
+private struct ScenePreviewSurface: UIViewRepresentable {
+    let player: AVPlayer
+    let picture: VideoPicture
+
+    func makeUIView(context: Context) -> ScenePreviewLayerView {
+        ScenePreviewLayerView(picture: picture)
+    }
+
+    func updateUIView(_ view: ScenePreviewLayerView, context: Context) {
+        view.playerLayer.player = player
+        view.picture = picture
+        view.setNeedsLayout()
+    }
+
+    static func dismantleUIView(_ view: ScenePreviewLayerView, coordinator: ()) {
+        view.playerLayer.player = nil
+    }
+}
+
+private final class ScenePreviewLayerView: UIView {
+    let playerLayer = AVPlayerLayer()
+    var picture: VideoPicture
+
+    init(picture: VideoPicture) {
+        self.picture = picture
+        super.init(frame: .zero)
+        isUserInteractionEnabled = false
+        clipsToBounds = true
+        playerLayer.videoGravity = .resizeAspectFill
+        layer.addSublayer(playerLayer)
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("ScenePreviewLayerView is only created in code")
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        playerLayer.frame = picture.playerFrame(in: bounds)
     }
 }
