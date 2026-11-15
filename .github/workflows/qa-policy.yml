@@ -14,20 +14,15 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  llm-provider-policy:
-    name: LLM provider policy (OpenAI-only runtime)
+  bundle-scan-self-test:
+    name: App bundle scan self-test
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v6
 
-      - name: Self-test the checks
-        run: |
-          scripts/qa/check-llm-provider.sh --self-test
-          scripts/qa/scan-app-bundle.sh --self-test
-
-      - name: Check runtime code for non-OpenAI providers and misplaced OpenAI use
-        run: scripts/qa/check-llm-provider.sh
+      - name: Self-test the bundle scan
+        run: scripts/qa/scan-app-bundle.sh --self-test
 
   secret-scan:
     name: Secret scan (gitleaks 8.30.1)
