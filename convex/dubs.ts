@@ -176,14 +176,7 @@ export const scoreSheet = query({
       .query("dubTakes")
       .withIndex("by_dub", (q) => q.eq("dubId", dub._id))
       .collect()).sort((a, b) => a.lineIndex - b.lineIndex);
-    const summary = summarizeSheet(
-      takes.map((take) => ({
-        status: take.status,
-        lineScore: take.result?.lineScoreRaw ?? null,
-        wordAccuracy: take.result?.wordAccuracyRaw ?? null,
-        timingFit: take.result?.scores?.timingFit ?? null,
-      })),
-    );
+    const summary = summarizeSheet(takes.map(sheetLineInput));
     return {
       sheetVersion: DUB_SHEET_VERSION,
       dubId: dub._id,
@@ -265,6 +258,16 @@ export const completedDub = internalQuery({
     return { dub, takes, ownerSubject: owner.tokenIdentifier };
   },
 });
+
+/** A take's unrounded values on the score sheet. */
+function sheetLineInput(take: Doc<"dubTakes">) {
+  return {
+    status: take.status,
+    lineScore: take.result?.lineScoreRaw ?? null,
+    wordAccuracy: take.result?.wordAccuracyRaw ?? null,
+    timingFit: take.result?.scores?.timingFit ?? null,
+  };
+}
 
 type TakeForScoring = { take: Doc<"dubTakes">; dub: Doc<"dubs"> };
 type LineResult = Infer<typeof dubLineResultV>;
@@ -366,7 +369,14 @@ function tutoringSession(dub: Doc<"dubs">, takes: readonly Doc<"dubTakes">[]) {
   const first = graded[0];
   if (first === undefined) return null;
   const engine = first.result.provenance.engine;
+  const { dubScore, wordAccuracy, timingFit, linesDubbed, linesScored, linesUnscorable, linesFailed } = summarizeSheet(takes.map(sheetLineInput));
   return {
+    dub: {
+      sheetVersion: DUB_SHEET_VERSION,
+      sceneTitle: dub.sceneTitle,
+      characterName: dub.characterName,
+      scoreCard: { dubScore, wordAccuracy, timingFit, linesDubbed, linesScored, linesUnscorable, linesFailed },
+    },
     sessionId: dub._id,
     sceneId: dub.sceneKey,
     characterId: dub.characterKey,
@@ -399,6 +409,7 @@ function tutoringSession(dub: Doc<"dubs">, takes: readonly Doc<"dubTakes">[]) {
       },
       speakingDurationMs: Math.round(result.speakingDurationMs ?? 0),
       recordingDurationMs: result.recordingDurationMs,
+      sheet: { version: DUB_SHEET_VERSION, lineScore: result.lineScoreRaw, wordAccuracy: result.wordAccuracyRaw, timingFit: result.scores?.timingFit ?? null },
     })),
   };
 }

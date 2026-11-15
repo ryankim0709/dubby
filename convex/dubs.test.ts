@@ -122,7 +122,13 @@ describe("dub score sheet", () => {
       memory: await ctx.db.query("tutoringMemoryOutbox").collect(),
     }));
     expect(tutoring.assessments).toHaveLength(2);
-    expect(tutoring.memory.length).toBeGreaterThan(0);
+    // Memory holds the score card exactly as the sheet shows it, line by line.
+    const notes = tutoring.memory.map((row) => (row.document as { kind: string; content: string }));
+    const dubNote = notes.find((note) => note.kind === "dub")!.content;
+    expect(dubNote).toContain('scene "SYNTHETIC fixture scene", dubbing as Fixture hero.');
+    expect(dubNote).toContain("Score card (dub-v1, out of 100): dub score 79, words said 83, timing 70; 2 of 2 lines scored.");
+    expect(dubNote).toContain('"Don\'t try it.": line score 71, words said 67, timing 80; said "do" for "try".');
+    expect(notes.find((note) => note.kind === "trend")!.content).toContain("Dub scores out of 100, oldest first: 79 on ");
   });
 
   it("never sends an unsupported language to the provider or counts an unscorable line as zero", async () => {

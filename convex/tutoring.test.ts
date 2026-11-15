@@ -387,14 +387,16 @@ describe("coach reply evidence and post-check", () => {
 describe("memory derivation", () => {
   const report = buildTutoringReport(history, [], "x");
 
-  test("documents are deterministic, one per source, and carry no scores", async () => {
+  test("documents are deterministic, one per source, and carry the measured scores", async () => {
     const first = await deriveMemoryDocuments(history, report, learnerPreferences.parse({ goalNote: "Order food in Madrid" }));
     const second = await deriveMemoryDocuments([...history].reverse(), report, learnerPreferences.parse({ goalNote: "Order food in Madrid" }));
     expect(first).toEqual(second);
     expect(new Set(first.map((doc) => doc.id)).size).toBe(first.length);
     expect(first.filter((doc) => doc.kind === "attempt")).toHaveLength(5);
     expect(first.some((doc) => doc.kind === "difficulty" && doc.content.includes("underestimate"))).toBe(true);
-    for (const doc of first) expect(doc.content.replace(/\d{4}-\d{2}-\d{2}/g, "").replace(/seen on \d+ attempts/, "")).not.toMatch(/\d/);
+    const attempts = first.filter((doc) => doc.kind === "attempt");
+    expect(attempts.filter((doc) => doc.content.includes("Scores out of 100: ")).length).toBe(4);
+    expect(attempts.filter((doc) => doc.content.includes("could not be assessed")).length).toBe(1);
     expect(first.find((doc) => doc.kind === "preferences")!.content).toContain("Order food in Madrid");
   });
 
@@ -402,12 +404,12 @@ describe("memory derivation", () => {
     const documents = await deriveMemoryDocuments(history, report, null);
     const dubs = documents.filter((doc) => doc.kind === "dub");
     expect(dubs.map((doc) => doc.metadata.sessionId)).toEqual(["s1", "s2"]);
-    expect(dubs[0]!.content).toContain("on 2026-11-10");
-    expect(dubs[0]!.content).toContain("Some takes could not be assessed.");
+    expect(dubs[0]!.content).toMatch(/^Dub session on 2026-11-10 in en-US\. Measured averages out of 100: overall language score \d+, pronunciation \d+, words said \d+, fluency \d+, timing \d+\. Lines: /);
+    expect(dubs[0]!.content).toContain("could not be assessed");
     const trends = documents.filter((doc) => doc.kind === "trend");
     expect(trends).toHaveLength(1);
-    expect(trends[0]!.content).toMatch(/^Progress trend in en-US, judged by an acoustic pronunciation check from 2026-11-10 to 2026-11-1\d: Since the first practice day, /);
-    expect(trends[0]!.content).toMatch(/pronunciation is (improving|declining|steady)/);
+    expect(trends[0]!.content).toMatch(/^Progress trend in en-US, judged by an acoustic pronunciation check from 2026-11-10 to 2026-11-1\d: Practice so far: 2 dubs on 2 practice days\. /);
+    expect(trends[0]!.content).toMatch(/pronunciation from \d+ on 2026-11-10 to \d+ on 2026-11-1\d \((improving|declining|steady)\)/);
   });
 
   test("the namespace is derived from the subject with a secret and is stable and provider-safe", async () => {
@@ -476,8 +478,16 @@ function fakeSupermemory(): FakeMemory {
     const docs = state.documents.get(namespace) ?? new Map();
     state.documents.set(namespace, docs);
     if (method === "POST" && url.pathname.endsWith("/document")) {
-      docs.set(body.id, { content: body.content, metadata: body.metadata });
+      // Like the live service, adding with an ID that already exists appends to that document.
+      const existing = docs.get(body.id);
+      docs.set(body.id, { content: existing === undefined ? body.content : `${existing.content}\n\n---\n\n${body.content}`, metadata: body.metadata });
       return Response.json({ id: body.id, status: "queued" });
+    }
+    if (method === "PATCH" && url.pathname.includes("/document/")) {
+      const id = decodeURIComponent(url.pathname.split("/").pop() ?? "");
+      if (!docs.has(id)) return Response.json({ error: "Document not found" }, { status: 404 });
+      docs.set(id, { content: body.content, metadata: body.metadata });
+      return Response.json({ id, status: "queued" });
     }
     if (method === "DELETE" && url.pathname.endsWith("/document")) {
       for (const id of body.ids) docs.delete(id);
@@ -637,6 +647,20 @@ describe("convex tutoring functions", () => {
     expect((await t.withIdentity(alice).query(tutoringRefs.progress, {})).series[0]!.volume.attempts).toBe(1);
     await t.mutation(tutoringRefs.removeLearner, { subject: alice.tokenIdentifier });
     expect((await t.withIdentity(alice).query(tutoringRefs.progress, {})).series).toEqual([]);
+  });
+
+  test("a rewritten note replaces its earlier version in Supermemory", async () => {
+    const memory = fakeSupermemory();
+    const t = convexTest(schema, modules);
+    const second = session("s2", acousticEvaluator, [scored({ assessmentId: "as2", attemptId: "a2", recordedAt: "2026-11-11T10:00:00-08:00" }, lineB, good(2), 90)]);
+    await t.mutation(tutoringRefs.ingestDubbingSession, ingestArgs(alice.tokenIdentifier, first));
+    await drain(t);
+    await t.mutation(tutoringRefs.ingestDubbingSession, ingestArgs(alice.tokenIdentifier, second));
+    await drain(t);
+    const documents = [...memory.documents.get(await learnerNamespace(alice.tokenIdentifier, "test-secret"))!.values()];
+    const trend = documents.find((doc) => doc.content.startsWith("Progress trend"))!;
+    expect(trend.content).toContain("Practice so far: 2 dubs on 2 practice days.");
+    expect(documents.some((doc) => doc.content.includes("---"))).toBe(false);
   });
 
   test("memory search works for the caller only and is silent when memory is unavailable", async () => {

@@ -255,4 +255,11 @@ lineScore = round(0.70 × wordAccuracy + 0.30 × timingFit)
 
 ### Progress and memory
 
-When a sheet completes, its scored and unscorable line results are ingested into tutoring as one dubbing session. Progress series stay separated by evaluator and measurement, so transcript-only results are never compared with acoustic ones. Tutoring writes score-free memory notes to Supermemory from those results: one per line attempt, one per dub (its lines and the words that differed across it), one trend per progress series (whether each measured skill is improving, declining, or steady since the first practice day, and which words are now right or still giving trouble), and one per recurring difficulty. The coach searches them in hybrid mode, which returns the notes as written as well as any facts Supermemory has extracted from them.
+When a sheet completes, its scored and unscorable line results are ingested into tutoring as one dubbing session. Progress series stay separated by evaluator and measurement, so transcript-only results are never compared with acoustic ones. Tutoring writes memory notes to Supermemory from those results, carrying the scores Convex measured as whole numbers out of 100:
+
+- One per line attempt: the line, the scene and character, what was heard, its line score and component scores, and each word that was swapped, missed, or added.
+- One per dub: the scene and character, the dub's score card (dub score, words, timing, and line counts by outcome), and every line's result.
+- One trend per progress series, rewritten after each dub: practice volume, the dub scores oldest first, each measured skill from the first practice day to the latest with its direction, and which words are now right or still giving trouble.
+- One per recurring difficulty.
+
+The score card's numbers reach tutoring unrounded with the session, so memory states the same dub score the learner saw. The coach searches them in hybrid mode, which returns the notes as written as well as any facts Supermemory has extracted from them.

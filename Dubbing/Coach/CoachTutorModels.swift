@@ -208,8 +208,7 @@ nonisolated enum MemoryItemState: String, Hashable, Sendable {
     case other
 }
 
-/// One thing the coach remembers about the learner, as the backend's outbox holds it. It never
-/// carries a score.
+/// One thing the coach remembers about the learner, as the backend's outbox holds it.
 nonisolated struct MemoryItem: Decodable, Hashable, Sendable, Identifiable {
     let docId: String
     let kind: MemoryItemKind
