@@ -3,6 +3,7 @@ import SwiftUI
 struct ClubChallengePractice: View {
     let account: AccountModel
     let scene: CuratedScene
+    let scoring: DubScoringModel?
     @State private var stage: Stage = .characters
     @Environment(\.dismiss) private var dismiss
 
@@ -39,11 +40,11 @@ struct ClubChallengePractice: View {
                 case .studio(let setup):
                     DubSessionView(setup: setup) { stage = .result(setup, $0) }
                 case .result(let setup, let takes):
-                    DubResultView(setup: setup, takes: takes, account: account, onDone: { dismiss() })
+                    DubResultView(setup: setup, takes: takes, account: account, scoring: scoring, onDone: { dismiss() })
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Palette.background).foregroundStyle(Palette.textPrimary)
+            .screenBackground().foregroundStyle(Palette.textPrimary)
         }
         .tint(Palette.accentText).preferredColorScheme(.dark)
     }

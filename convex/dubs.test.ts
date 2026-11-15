@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api } from "./_generated/api";
+import { assessTranscript } from "./assessment/transcript";
 import type { Id } from "./_generated/dataModel";
 import { alice, drain, newBackend } from "./test.helpers";
 
@@ -122,6 +123,19 @@ describe("dub score sheet", () => {
       memory: await ctx.db.query("tutoringMemoryOutbox").collect(),
     }));
     expect(tutoring.assessments).toHaveLength(2);
+    expect(await a.query(api.dubs.history, {})).toEqual([
+      {
+        clientDubId: args.clientDubId,
+        capturedAt: args.capturedAt,
+        sceneTitle: "SYNTHETIC fixture scene",
+        characterName: "Fixture hero",
+        locale: "en-US",
+        evaluator: { rubricVersion: "language-v1", provider: "openai-whisper", configVersion: "whisper-transcript-v2" },
+        dubScore: 79,
+        wordAccuracy: 83,
+        timingFit: 70,
+      },
+    ]);
     // Memory holds the score card exactly as the sheet shows it, line by line.
     const notes = tutoring.memory.map((row) => (row.document as { kind: string; content: string }));
     const dubNote = notes.find((note) => note.kind === "dub")!.content;
@@ -167,3 +181,31 @@ describe("dub score sheet", () => {
     expect(await t.run(async (ctx) => await ctx.db.query("tutoringAssessments").collect())).toEqual([]);
   });
 });
+
+describe("transcript evaluator", () => {
+  const take = (locale: string, referenceText: string) => ({
+    assessmentId: "take",
+    attemptId: "take",
+    lineId: "line",
+    referenceVersion: 1,
+    locale,
+    recordedAt: "2026-11-15T12:00:00Z",
+    referenceText,
+    targetWindowMs: { startMs: 0, endMs: 2000 },
+    recordingDurationMs: 2000,
+  });
+  const heard = (...texts: string[]) => texts.map((word, index) => ({ text: word, start: index * 0.3, end: index * 0.3 + 0.25 }));
+
+  it("joins the pieces Whisper splits hyphenated and elided words into, and still catches a swapped word", () => {
+    const elided = assessTranscript(take("fr-FR", "Non merci, c'est tout."), heard("Non", "merci", "c", "est", "tout"));
+    expect(elided.response.scores?.wordAccuracy).toBe(100);
+    const hyphenated = assessTranscript(take("fr-FR", "Oui, asseyez-vous."), heard("Oui", "asseyez", "vous"));
+    expect(hyphenated.response.scores?.wordAccuracy).toBe(100);
+    const swapped = assessTranscript(take("fr-FR", "Excusez-moi, cette place est libre ?"), heard("Excusez", "moi", "cette", "plage", "est", "libre"));
+    expect(swapped.response.scores?.wordAccuracy).toBe(80);
+    expect(swapped.response.wordResults.filter((word) => word.textStatus !== "matched")).toEqual([
+      expect.objectContaining({ expected: "place", recognized: "plage", textStatus: "substituted" }),
+    ]);
+  });
+});
+

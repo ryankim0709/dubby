@@ -4,6 +4,8 @@ import SwiftUI
 struct MyDubsView: View {
     let dubs: LoadState<[SavedDub]>
     let folder: URL
+    let account: AccountModel
+    let onAccount: () -> Void
     let onDelete: (SavedDub) async throws -> Void
     let onRetry: () -> Void
     @State private var playing: SavedDub?
@@ -14,16 +16,28 @@ struct MyDubsView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                Text("My Dubs")
-                    .dubFont(24, weight: .semibold)
-                    .foregroundStyle(Palette.textPrimary)
-                    .padding(.top, 8)
+                profileHeader
+                AdaptiveStack(rowAlignment: .center, spacing: 8) {
+                    Text("Your shelf")
+                        .dubFont(24, weight: .bold)
+                        .foregroundStyle(Palette.textPrimary)
+                    Spacer()
+                    NavigationLink {
+                        PracticeProgressView(dubs: dubs, folder: folder, account: account, onAccount: onAccount, onRetry: onRetry)
+                    } label: {
+                        Label("Progress", systemImage: "chart.bar")
+                            .dubFont(14, weight: .semibold)
+                            .foregroundStyle(Palette.textSecondary)
+                            .frame(minHeight: 44)
+                    }
+                    .accessibilityIdentifier("tab-progress")
+                }
                 LoadStateContent(state: dubs, failureIdentifier: "myDubsLoadFailed", retry: onRetry) { dubs in
                     if dubs.isEmpty {
                         EmptyStateView(
                             systemImage: "film",
-                            title: "No dubs yet",
-                            message: "Dub a scene from Discover and it shows up here, ready to watch and share."
+                            title: "Nothing on this shelf yet",
+                            message: "Your finished scenes land here. Find your first role in Discover."
                         )
                         .accessibilityIdentifier("myDubsEmpty")
                     } else {
@@ -32,8 +46,8 @@ struct MyDubsView: View {
                             .foregroundStyle(Palette.textSecondary)
                             .overlay { StateCarriers(items: [StateCarrier(identifier: "myDubsCount", value: "\(dubs.count)")]) }
                         LazyVGrid(
-                            columns: adaptiveGridColumns(spacing: 8, isAccessibilitySize: dynamicTypeSize.isAccessibilitySize),
-                            spacing: 16
+                            columns: dynamicTypeSize.isAccessibilitySize ? [GridItem(.flexible())] : [GridItem(.adaptive(minimum: 104), spacing: 14)],
+                            spacing: 28
                         ) {
                             ForEach(dubs) { dub in
                                 Button {
@@ -58,13 +72,19 @@ struct MyDubsView: View {
                         .foregroundStyle(Palette.streak)
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.bottom, 16)
+            .padding(.horizontal, 20)
+            .padding(.bottom, 24)
             .containerIdentifier("myDubsScreen")
         }
         .scrollIndicators(.hidden)
-        .background(Palette.background)
-        .toolbar(.hidden, for: .navigationBar)
+        .screenBackground()
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button("Account", systemImage: "gearshape", action: onAccount)
+                    .accessibilityIdentifier("shelfAccount")
+            }
+        }
         .sheet(item: $playing) { dub in
             SavedDubPlayer(dub: dub, video: DubLibrary.videoURL(for: dub, in: folder))
         }
@@ -79,6 +99,41 @@ struct MyDubsView: View {
         } message: { dub in
             Text("\(dub.sceneTitle) as \(dub.characterName) will be removed from this iPhone.")
         }
+    }
+
+    private var profileHeader: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            HStack(spacing: 14) {
+                Image(systemName: "person.crop.circle.fill")
+                    .dubFont(58, weight: .light)
+                    .foregroundStyle(Palette.textSecondary)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(profileName)
+                        .dubFont(30, weight: .bold)
+                        .foregroundStyle(Palette.textPrimary)
+                    Text("A shelf full of scenes, in your voice.")
+                        .dubFont(15, weight: .regular)
+                        .foregroundStyle(Palette.textSecondary)
+                }
+            }
+            if case .loaded(let saved) = dubs {
+                HStack(spacing: 24) {
+                    Label("\(saved.count) dubs", systemImage: "film.stack")
+                    Label("\(PracticeStats.currentStreak(dates: saved.map(\.createdAt), today: .now, calendar: .current)) day streak", systemImage: "flame")
+                }
+                .dubFont(15, weight: .medium)
+                .foregroundStyle(Palette.textSecondary)
+                .monospacedDigit()
+            }
+        }
+        .padding(.top, 8)
+        .padding(.bottom, 8)
+    }
+
+    private var profileName: String {
+        if case .signedIn(let profile) = account.phase { return profile.displayName }
+        return "Your shelf"
     }
 
     private func delete(_ dub: SavedDub) {
@@ -99,33 +154,39 @@ private struct SavedDubCard: View {
     let video: URL
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 10) {
             VideoThumbnail(url: video)
-                .aspectRatio(16 / 9, contentMode: .fit)
+                .aspectRatio(2 / 3, contentMode: .fit)
                 .overlay {
-                    Image(systemName: "play.fill")
-                        .font(.system(size: 16))
-                        .foregroundStyle(Palette.textPrimary)
-                        .frame(width: 36, height: 36)
-                        .background(.black.opacity(0.45), in: Circle())
+                    LinearGradient(colors: [.clear, .black.opacity(0.85)], startPoint: .center, endPoint: .bottom)
                 }
-                .clipShape(RoundedRectangle(cornerRadius: 16))
-                .padding(.bottom, 8)
-            Text(dub.sceneTitle)
-                .dubFont(14, weight: .medium)
+                .overlay(alignment: .bottomLeading) {
+                    Text(dub.sceneTitle.uppercased())
+                        .displayFont(25)
+                        .foregroundStyle(.white)
+                        .lineLimit(4)
+                        .minimumScaleFactor(0.6)
+                        .padding(12)
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 5))
+                .overlay(alignment: .leading) {
+                    Rectangle().fill(.black.opacity(0.35)).frame(width: 5)
+                }
+            Text("as \(dub.characterName)")
+                .dubFont(14, weight: .semibold)
                 .foregroundStyle(Palette.textPrimary)
                 .lineLimit(1)
-            Text("as \(dub.characterName) · \(dub.createdAt.formatted(.relative(presentation: .named)))")
+            Text("\(dub.linesDubbed)/\(dub.totalLines) lines")
                 .dubFont(12, weight: .regular)
                 .foregroundStyle(Palette.textSecondary)
-                .lineLimit(1)
-            Text("\(dub.linesDubbed)/\(dub.totalLines) lines in your voice")
-                .dubFont(12, weight: .semibold)
-                .foregroundStyle(Palette.accentText)
+                .monospacedDigit()
+            LinearGradient(colors: [Palette.shelfWood, Palette.shelfWoodShadow], startPoint: .top, endPoint: .bottom)
+                .frame(height: 8)
+                .accessibilityHidden(true)
         }
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(.isButton)
+        .accessibilityLabel("\(dub.sceneTitle), as \(dub.characterName), \(dub.linesDubbed) of \(dub.totalLines) lines")
     }
 }
 

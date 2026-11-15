@@ -40,8 +40,11 @@ struct DubResultView: View {
     let setup: DubSetup
     let takes: [Int: RecordedTake]
     let account: AccountModel
+    /// Nil when the build has no backend.
+    let scoring: DubScoringModel?
     let onDone: () -> Void
     @State private var phase: ExportPhase = .filteringDialogue
+    @State private var savedDubID: UUID?
     @State private var attempt = 0
     @State private var exportTask: Task<Void, Never>?
     @State private var saveFailed = false
@@ -64,7 +67,7 @@ struct DubResultView: View {
                             .dubFont(16, weight: .medium)
                             .foregroundStyle(Palette.textPrimary)
                         Button("Cancel export", action: cancelExport)
-                            .buttonStyle(OutlineCapsuleButtonStyle())
+                            .buttonStyle(SecondaryButtonStyle())
                             .accessibilityIdentifier("cancelExport")
                     }
                     .frame(maxWidth: .infinity)
@@ -113,7 +116,7 @@ struct DubResultView: View {
             .containerIdentifier("exportScreen")
         }
         .scrollIndicators(.hidden)
-        .background(Palette.background)
+        .screenBackground()
         .toolbar(.hidden, for: .navigationBar)
         // Pinned so sharing and finishing stay reachable beside the measurements.
         .safeAreaInset(edge: .bottom, spacing: 0) {
@@ -128,11 +131,11 @@ struct DubResultView: View {
                         Button("Share to club") {
                             clubDraft = ClubMediaDraft(url: video, kind: .video, title: setup.clip.title, replyToMessageId: nil)
                         }
-                        .buttonStyle(OutlineCapsuleButtonStyle())
+                        .buttonStyle(SecondaryButtonStyle())
                         .accessibilityIdentifier("shareResultToClub")
                     }
                     Button("Done", action: onDone)
-                        .buttonStyle(OutlineCapsuleButtonStyle())
+                        .buttonStyle(SecondaryButtonStyle())
                         .accessibilityIdentifier("doneDub")
                 }
                 .padding(16)
@@ -186,13 +189,17 @@ struct DubResultView: View {
 
     private func finished(video: URL, trimmed: [TakePlacement], measurements: [TakeMeasurement]) -> some View {
         VStack(alignment: .leading, spacing: 16) {
+            Text("That’s a wrap")
+                .dubFont(34, weight: .bold)
+                .foregroundStyle(Palette.textPrimary)
+                .accessibilityAddTraits(.isHeader)
             ResultPlayer(url: video)
                 .aspectRatio(16 / 9, contentMode: .fit)
                 .clipShape(RoundedRectangle(cornerRadius: 16))
             Text("You're the main character.")
-                .dubFont(20, weight: .semibold)
+                .dubFont(22, weight: .bold)
                 .foregroundStyle(Palette.textPrimary)
-            Text("\(takes.count) of \(setup.script.lines(spokenBy: setup.characterID).count) lines in your voice, saved to My Dubs.")
+            Text("\(takes.count) of \(setup.script.lines(spokenBy: setup.characterID).count) lines in your voice, saved to your Shelf.")
                 .dubFont(14, weight: .regular)
                 .foregroundStyle(Palette.textSecondary)
             if setup.curated == nil { Label(
@@ -217,8 +224,19 @@ struct DubResultView: View {
                 .foregroundStyle(Palette.streak)
                 .accessibilityIdentifier("dubTrimNotice")
             }
+            DubScoreCard(state: scoringState, onRetry: retryScoring)
             TakeSummaryView(measurements: measurements)
         }
+    }
+
+    private var scoringState: DubScoringModel.State? {
+        guard let scoring else { return .notScored("This build has no backend, so dubs aren't scored.") }
+        return savedDubID.flatMap { scoring.state(for: $0) }
+    }
+
+    private func retryScoring() {
+        guard let savedDubID else { return }
+        scoring?.retry(dubID: savedDubID)
     }
 
     private func startExport() {
@@ -307,6 +325,9 @@ struct DubResultView: View {
                 saveFailed = true
                 throw error
             }
+            savedDubID = id
+            // Converts the takes for upload while they're on disk; sending and scoring continue in the background.
+            await scoring?.submit(dubID: id, setup: setup, takes: takes)
             phase = .finished(
                 video: history.videoURL(for: dub),
                 trimmed: placements.filter { $0.trimmedSeconds > DubTiming.noticeableTrim },

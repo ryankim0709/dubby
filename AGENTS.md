@@ -9,6 +9,7 @@ These instructions apply throughout this repository. Follow more specific nested
 - The repository contains a native SwiftUI app: `Dubbing/`, `DubbingTests/`, and the shared `Dubbing` Xcode scheme.
 - The project uses Swift 6, targets iOS 26.0+, and enables default MainActor isolation for the app target. Preserve these settings unless asked.
 - Read `README.md` for the selected development tools, cloud architecture, and integration status. Follow those choices; the reference chat's other stack suggestions are not adopted dependencies.
+- Erica's UI merged into `Dubbing/` on `main` is the approved final design. Preserve it when adding features, fixing bugs, or integrating older branches; redesigns require an explicit user request. Read `DESIGN.md` and `.cursor/rules/ui.mdc` before UI work.
 
 ## Focused rules
 
@@ -16,6 +17,7 @@ Read the applicable files before implementation; they contain instructions for C
 
 - `.cursor/rules/product.mdc`: MVP priorities and the user journey.
 - `.cursor/rules/swift.mdc`: native architecture, types, concurrency, and UI behavior.
+- `.cursor/rules/ui.mdc`: preservation of Erica's approved final UI, shared visual components, and UI verification.
 - `.cursor/rules/dubbing-pipeline.mdc`: media timing, audio composition, assessment, and external services.
 - `docs/grading-contract.md`: proposed line-attempt grading response, scoring rubric, and progress-tracking semantics.
 - `.agents/skills/impeccable/SKILL.md`: use this project-local Impeccable skill for UI design, alignment, and review. Follow its native iOS guidance, reuse established tokens and components, and verify rendered iPhone layouts.

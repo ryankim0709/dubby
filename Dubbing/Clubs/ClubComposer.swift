@@ -41,13 +41,13 @@ struct ClubComposer: View {
                             Text(state.isSending ? "Sharing…" : draft.kind == .video ? "Share to club" : "Send voice feedback")
                         }
                     }
-                    .buttonStyle(PrimaryButtonStyle(cornerRadius: 16))
+                    .buttonStyle(PrimaryButtonStyle(cornerRadius: Radius.control))
                     .disabled(state.isSending || caption.count > 300)
                     .accessibilityIdentifier("clubSend")
                 }
                 .padding(20)
             }
-            .background(Palette.background)
+            .screenBackground()
             .foregroundStyle(Palette.textPrimary)
             .navigationTitle(draft.kind == .video ? "Share your performance" : "Voice feedback")
             .navigationBarTitleDisplayMode(.inline)
@@ -137,14 +137,14 @@ struct ClubVoiceFeedback: View {
                         } label: {
                             Label(phase.isRecording ? "Stop recording" : "Record voice feedback", systemImage: phase.isRecording ? "stop.fill" : "mic.fill")
                         }
-                        .buttonStyle(PrimaryButtonStyle(cornerRadius: 16))
+                        .buttonStyle(PrimaryButtonStyle(cornerRadius: Radius.control))
                         .accessibilityIdentifier("clubRecordVoice")
                         if case .asking = phase { ProgressView("Requesting microphone access…") }
                         if MicrophoneAccess(AVAudioApplication.shared.recordPermission) == .denied { OpenSettingsButton() }
                         Spacer()
                     }
                     .padding(24)
-                    .background(Palette.background)
+                    .screenBackground()
                     .foregroundStyle(Palette.textPrimary)
                     .navigationTitle("Voice feedback")
                     .navigationBarTitleDisplayMode(.inline)

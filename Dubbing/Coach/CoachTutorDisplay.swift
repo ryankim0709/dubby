@@ -89,6 +89,8 @@ nonisolated extension MemoryItemKind {
         switch self {
         case .preference: "Preference"
         case .attemptNote: "Practice note"
+        case .dubNote: "Dub"
+        case .trend: "Trend"
         case .difficulty: "Trouble spot"
         case .other: "Note"
         }

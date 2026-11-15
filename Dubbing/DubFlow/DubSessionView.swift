@@ -78,18 +78,6 @@ struct DubSessionView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                header {
-                    Button("Finish") {
-                        stopActivity()
-                        onFinish(takes)
-                    }
-                    .dubFont(14, weight: .semibold)
-                    .foregroundStyle(takes.isEmpty ? Palette.textSecondary : Palette.accentText)
-                    .frame(minHeight: 44)
-                    .disabled(takes.isEmpty || activity != .idle || pending != nil)
-                    .accessibilityIdentifier("finishDub")
-                }
-                .padding(.top, 8)
                 videoCard
                 progress
                 if let cueLine {
@@ -118,13 +106,36 @@ struct DubSessionView: View {
                     )
                 }
             }
-            .padding(.horizontal, 16)
+            .padding(.horizontal, 20)
             .padding(.bottom, 16)
             .containerIdentifier("studioScreen")
         }
         .scrollIndicators(.hidden)
-        .background(Palette.background)
-        .toolbar(.hidden, for: .navigationBar)
+        .screenBackground()
+        .navigationTitle(characterName)
+        .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(true)
+        .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button("Back", systemImage: "chevron.backward") {
+                    if takes.isEmpty && pending == nil {
+                        dismiss()
+                    } else {
+                        isConfirmingExit = true
+                    }
+                }
+                .labelStyle(.iconOnly)
+                .accessibilityIdentifier("studioBack")
+            }
+            ToolbarItem(placement: .confirmationAction) {
+                Button("Finish") {
+                    stopActivity()
+                    onFinish(takes)
+                }
+                .disabled(takes.isEmpty || activity != .idle || pending != nil)
+                .accessibilityIdentifier("finishDub")
+            }
+        }
         // Pinned so recording and keeping stay reachable however much feedback is on screen.
         .safeAreaInset(edge: .bottom, spacing: 0) {
             controls
@@ -190,31 +201,6 @@ struct DubSessionView: View {
         }
     }
 
-    private func header<Trailing: View>(@ViewBuilder trailing: () -> Trailing) -> some View {
-        HStack(spacing: 12) {
-            Button {
-                if takes.isEmpty && pending == nil {
-                    dismiss()
-                } else {
-                    isConfirmingExit = true
-                }
-            } label: {
-                Image(systemName: "arrow.left")
-                    .dubFont(16, weight: .medium)
-                    .foregroundStyle(Palette.textPrimary)
-                    .frame(minWidth: 44, minHeight: 44)
-                    .contentShape(Rectangle())
-            }
-            .accessibilityLabel("Back")
-            .accessibilityIdentifier("studioBack")
-            Text("Dubbing studio")
-                .dubFont(16, weight: .semibold)
-                .foregroundStyle(Palette.textPrimary)
-            Spacer()
-            trailing()
-        }
-    }
-
     private func retryAction(for activity: SessionActivity) -> () -> Void {
         switch activity {
         case .recording:
@@ -240,6 +226,11 @@ struct DubSessionView: View {
         VStack(spacing: 0) {
             PlayerSurface(player: player.player)
                 .aspectRatio(16 / 9, contentMode: .fit)
+                .overlay {
+                    if activity == .idle {
+                        VideoThumbnail(url: setup.clip.url, time: lineStart + line.duration / 2)
+                    }
+                }
                 .overlay(alignment: .topLeading) {
                     if activity == .recording {
                         Label("REC", systemImage: "circle.fill")
@@ -247,7 +238,7 @@ struct DubSessionView: View {
                             .foregroundStyle(.white)
                             .padding(.horizontal, 8)
                             .frame(minHeight: 24)
-                            .background(Color.red, in: Capsule())
+                            .background(Palette.record, in: Capsule())
                             .padding(8)
                             .accessibilityIdentifier("recordingIndicator")
                     }
@@ -332,7 +323,7 @@ struct DubSessionView: View {
     private var lineCard: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("LINE \(index + 1) · \(characterName.uppercased())")
+                Text("Line \(index + 1) · \(characterName)")
                     .dubFont(14, weight: .regular)
                     .foregroundStyle(Palette.textSecondary)
                 Spacer()
@@ -347,7 +338,7 @@ struct DubSessionView: View {
                 }
             }
             Text(line.text)
-                .dubFont(20, weight: .semibold)
+                .dubFont(26, weight: .bold)
                 .foregroundStyle(Palette.textPrimary)
                 .padding(.top, 4)
             AdaptiveStack(rowAlignment: .center, spacing: 4) {
@@ -384,11 +375,58 @@ struct DubSessionView: View {
                 TakeFeedbackView(measurement: shownMeasurement)
             }
         }
-        .padding(12)
-        .background(Palette.surface, in: RoundedRectangle(cornerRadius: 16))
+        .padding(18)
+        .background(Palette.surface, in: RoundedRectangle(cornerRadius: Radius.card))
     }
 
     private var controls: some View {
+        VStack(spacing: 10) {
+            if pendingForLine == nil {
+                recordingControls
+            } else {
+                Text("How did that feel?")
+                    .dubFont(20, weight: .bold)
+                    .foregroundStyle(Palette.textPrimary)
+            }
+            if activity == .recording {
+                Button("Cancel recording") {
+                    isRecordingCancelled = true
+                    stopActivity()
+                }
+                .buttonStyle(SecondaryButtonStyle())
+                .accessibilityIdentifier("cancelRecording")
+            }
+            if let take = shownTake {
+                Button {
+                    if activity == .playingTake {
+                        stopActivity()
+                    } else {
+                        playTake(take)
+                    }
+                } label: {
+                    Label(activity == .playingTake ? "Stop" : "Play my take", systemImage: activity == .playingTake ? "stop.fill" : "play.fill")
+                }
+                .buttonStyle(SecondaryButtonStyle())
+                .disabled(activity == .recording || activity == .playingOriginal)
+                .accessibilityIdentifier("playTake")
+            }
+            if pendingForLine != nil {
+                AdaptiveStack(rowAlignment: .center, spacing: 12) {
+                    Button("Retry") { record() }
+                        .frame(maxWidth: .infinity)
+                        .buttonStyle(SecondaryButtonStyle())
+                        .disabled(activity != .idle || microphone == .denied)
+                        .accessibilityIdentifier("retryTake")
+                    Button("Keep take", action: keepPending)
+                        .buttonStyle(PrimaryButtonStyle(cornerRadius: Radius.control))
+                        .disabled(activity != .idle)
+                        .accessibilityIdentifier("keepTake")
+                }
+            }
+        }
+    }
+
+    private var recordingControls: some View {
         VStack(spacing: 10) {
             HStack(spacing: 12) {
                 Button {
@@ -418,41 +456,6 @@ struct DubSessionView: View {
                 .dubFont(14, weight: .regular)
                 .foregroundStyle(Palette.textPrimary)
                 .multilineTextAlignment(.center)
-            if activity == .recording {
-                Button("Cancel recording") {
-                    isRecordingCancelled = true
-                    stopActivity()
-                }
-                .buttonStyle(OutlineCapsuleButtonStyle())
-                .accessibilityIdentifier("cancelRecording")
-            }
-            AdaptiveStack(rowAlignment: .center, spacing: 8) {
-                if let take = shownTake {
-                    Button {
-                        if activity == .playingTake {
-                            stopActivity()
-                        } else {
-                            playTake(take)
-                        }
-                    } label: {
-                        Image(systemName: activity == .playingTake ? "stop.fill" : "play.fill")
-                        Text(activity == .playingTake ? "Stop" : "Play my take")
-                    }
-                    .buttonStyle(OutlineCapsuleButtonStyle())
-                    .disabled(activity == .recording || activity == .playingOriginal)
-                    .accessibilityIdentifier("playTake")
-                }
-                if pendingForLine != nil {
-                    Button("Keep take", action: keepPending)
-                        .buttonStyle(OutlineCapsuleButtonStyle())
-                        .disabled(activity != .idle)
-                        .accessibilityIdentifier("keepTake")
-                    Button("Record again") { record() }
-                        .buttonStyle(OutlineCapsuleButtonStyle())
-                        .disabled(activity != .idle || microphone == .denied)
-                        .accessibilityIdentifier("retryTake")
-                }
-            }
         }
     }
 
@@ -465,10 +468,12 @@ struct DubSessionView: View {
             }
         } label: {
             Image(systemName: activity == .recording ? "stop.fill" : "mic")
-                .font(.system(size: 30, weight: .medium))
-                .foregroundStyle(activity == .recording ? .white : Palette.onAccent)
+                .dubFont(30, weight: .medium)
+                .foregroundStyle(Palette.textPrimary)
                 .frame(width: 78, height: 78)
-                .background(activity == .recording ? Color.red : Palette.accent, in: Circle())
+                .background(Palette.record, in: Circle())
+                .padding(5)
+                .overlay { Circle().strokeBorder(Palette.record.opacity(0.4), lineWidth: 2) }
         }
         .disabled(activity == .playingOriginal || activity == .playingTake || microphone == .denied)
         .accessibilityLabel(activity == .recording ? "Stop recording" : "Record this line")

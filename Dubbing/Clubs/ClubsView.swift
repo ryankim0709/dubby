@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ClubsView: View {
     let account: AccountModel
+    let scoring: DubScoringModel?
     @State private var feed: LoadState<ClubFeed> = .loading
     @State private var scene: LoadState<CuratedScene> = .loading
     @State private var refreshID = UUID()
@@ -42,7 +43,7 @@ struct ClubsView: View {
                                     .padding(.leading, 12)
                                 }
                                 Button { reply = post } label: { Label("Voice feedback", systemImage: "mic") }
-                                    .buttonStyle(OutlineCapsuleButtonStyle())
+                                    .buttonStyle(SecondaryButtonStyle())
                                     .frame(minHeight: 44)
                                     .accessibilityIdentifier("clubReply-\(post.id)")
                                 Divider().overlay(Palette.divider).padding(.top, 12)
@@ -57,7 +58,7 @@ struct ClubsView: View {
             .frame(maxWidth: .infinity)
             .containerIdentifier("dubClubsScreen")
         }
-        .background(Palette.background).foregroundStyle(Palette.textPrimary).tint(Palette.accentText)
+        .screenBackground().foregroundStyle(Palette.textPrimary).tint(Palette.accentText)
         .toolbar(.hidden, for: .navigationBar)
         .refreshable { await refresh() }
         .task(id: refreshID) {
@@ -71,7 +72,7 @@ struct ClubsView: View {
         .onChange(of: scenePhase) { _, _ in refreshID = UUID() }
         .onChange(of: account.phase) { _, _ in feed = .loading; refreshID = UUID() }
         .fullScreenCover(isPresented: $isPractising, onDismiss: { refreshID = UUID() }) {
-            if case .loaded(let scene) = scene { ClubChallengePractice(account: account, scene: scene) }
+            if case .loaded(let scene) = scene { ClubChallengePractice(account: account, scene: scene, scoring: scoring) }
         }
         .sheet(isPresented: $isChoosingDub) {
             if case .loaded(let feed) = feed {
@@ -93,7 +94,7 @@ struct ClubsView: View {
             Text(challenge.prompt).font(.body).foregroundStyle(Palette.textSecondary)
             LoadStateContent(state: scene, failureIdentifier: "clubSceneFailed", retry: { Task { await loadScene() } }) { _ in
                 Button("Dub this challenge") { isPractising = true }
-                    .buttonStyle(PrimaryButtonStyle(cornerRadius: 16)).accessibilityIdentifier("clubStartChallenge")
+                    .buttonStyle(PrimaryButtonStyle(cornerRadius: Radius.control)).accessibilityIdentifier("clubStartChallenge")
             }
         }
     }
@@ -145,7 +146,7 @@ private struct ClubSavedDubPicker: View {
                     }
                 }.padding(20)
             }
-            .background(Palette.background).foregroundStyle(Palette.textPrimary)
+            .screenBackground().foregroundStyle(Palette.textPrimary)
             .navigationTitle("Share a dub").navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
         }

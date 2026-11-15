@@ -1,0 +1,328 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-15T21:24:27.876778+00:00",
+  "title": "Design System: Dubby",
+  "extensions": {
+    "colorMeta": {
+      "background": {
+        "role": "neutral",
+        "displayName": "Background",
+        "tonalRamp": [
+          "oklch(15% 0 0)",
+          "oklch(25% 0 0)",
+          "oklch(35% 0 0)",
+          "oklch(45% 0 0)",
+          "oklch(55% 0 0)",
+          "oklch(70% 0 0)",
+          "oklch(85% 0 0)",
+          "oklch(95% 0 0)"
+        ]
+      },
+      "background-glow": {
+        "role": "neutral",
+        "displayName": "Background Glow",
+        "tonalRamp": [
+          "oklch(15% 0 0)",
+          "oklch(25% 0 0)",
+          "oklch(35% 0 0)",
+          "oklch(45% 0 0)",
+          "oklch(55% 0 0)",
+          "oklch(70% 0 0)",
+          "oklch(85% 0 0)",
+          "oklch(95% 0 0)"
+        ]
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "Surface",
+        "tonalRamp": [
+          "oklch(15% 0 0)",
+          "oklch(25% 0 0)",
+          "oklch(35% 0 0)",
+          "oklch(45% 0 0)",
+          "oklch(55% 0 0)",
+          "oklch(70% 0 0)",
+          "oklch(85% 0 0)",
+          "oklch(95% 0 0)"
+        ]
+      },
+      "surface-raised": {
+        "role": "neutral",
+        "displayName": "Surface Raised",
+        "tonalRamp": [
+          "oklch(15% 0 0)",
+          "oklch(25% 0 0)",
+          "oklch(35% 0 0)",
+          "oklch(45% 0 0)",
+          "oklch(55% 0 0)",
+          "oklch(70% 0 0)",
+          "oklch(85% 0 0)",
+          "oklch(95% 0 0)"
+        ]
+      },
+      "hairline": {
+        "role": "neutral",
+        "displayName": "Hairline",
+        "tonalRamp": [
+          "oklch(15% 0 0)",
+          "oklch(25% 0 0)",
+          "oklch(35% 0 0)",
+          "oklch(45% 0 0)",
+          "oklch(55% 0 0)",
+          "oklch(70% 0 0)",
+          "oklch(85% 0 0)",
+          "oklch(95% 0 0)"
+        ]
+      },
+      "track": {
+        "role": "neutral",
+        "displayName": "Track",
+        "tonalRamp": [
+          "oklch(15% 0 0)",
+          "oklch(25% 0 0)",
+          "oklch(35% 0 0)",
+          "oklch(45% 0 0)",
+          "oklch(55% 0 0)",
+          "oklch(70% 0 0)",
+          "oklch(85% 0 0)",
+          "oklch(95% 0 0)"
+        ]
+      },
+      "text-primary": {
+        "role": "neutral",
+        "displayName": "Text Primary",
+        "tonalRamp": [
+          "oklch(15% 0 0)",
+          "oklch(25% 0 0)",
+          "oklch(35% 0 0)",
+          "oklch(45% 0 0)",
+          "oklch(55% 0 0)",
+          "oklch(70% 0 0)",
+          "oklch(85% 0 0)",
+          "oklch(95% 0 0)"
+        ]
+      },
+      "text-secondary": {
+        "role": "neutral",
+        "displayName": "Text Secondary",
+        "tonalRamp": [
+          "oklch(15% 0 0)",
+          "oklch(25% 0 0)",
+          "oklch(35% 0 0)",
+          "oklch(45% 0 0)",
+          "oklch(55% 0 0)",
+          "oklch(70% 0 0)",
+          "oklch(85% 0 0)",
+          "oklch(95% 0 0)"
+        ]
+      },
+      "placeholder": {
+        "role": "neutral",
+        "displayName": "Placeholder",
+        "tonalRamp": [
+          "oklch(15% 0 0)",
+          "oklch(25% 0 0)",
+          "oklch(35% 0 0)",
+          "oklch(45% 0 0)",
+          "oklch(55% 0 0)",
+          "oklch(70% 0 0)",
+          "oklch(85% 0 0)",
+          "oklch(95% 0 0)"
+        ]
+      },
+      "accent": {
+        "role": "primary",
+        "displayName": "Accent",
+        "tonalRamp": [
+          "oklch(15% 0 0)",
+          "oklch(25% 0 0)",
+          "oklch(35% 0 0)",
+          "oklch(45% 0 0)",
+          "oklch(55% 0 0)",
+          "oklch(70% 0 0)",
+          "oklch(85% 0 0)",
+          "oklch(95% 0 0)"
+        ]
+      },
+      "on-accent": {
+        "role": "neutral",
+        "displayName": "On Accent",
+        "tonalRamp": [
+          "oklch(15% 0 0)",
+          "oklch(25% 0 0)",
+          "oklch(35% 0 0)",
+          "oklch(45% 0 0)",
+          "oklch(55% 0 0)",
+          "oklch(70% 0 0)",
+          "oklch(85% 0 0)",
+          "oklch(95% 0 0)"
+        ]
+      },
+      "record": {
+        "role": "secondary",
+        "displayName": "Record",
+        "tonalRamp": [
+          "oklch(15% 0.08 30)",
+          "oklch(25% 0.08 30)",
+          "oklch(35% 0.08 30)",
+          "oklch(45% 0.08 30)",
+          "oklch(55% 0.08 30)",
+          "oklch(70% 0.08 30)",
+          "oklch(85% 0.04 30)",
+          "oklch(95% 0.04 30)"
+        ]
+      },
+      "holo": {
+        "role": "secondary",
+        "displayName": "Holo",
+        "tonalRamp": [
+          "oklch(15% 0.08 205)",
+          "oklch(25% 0.08 205)",
+          "oklch(35% 0.08 205)",
+          "oklch(45% 0.08 205)",
+          "oklch(55% 0.08 205)",
+          "oklch(70% 0.08 205)",
+          "oklch(85% 0.04 205)",
+          "oklch(95% 0.04 205)"
+        ]
+      },
+      "toggle-on": {
+        "role": "secondary",
+        "displayName": "Toggle On",
+        "tonalRamp": [
+          "oklch(15% 0.08 145)",
+          "oklch(25% 0.08 145)",
+          "oklch(35% 0.08 145)",
+          "oklch(45% 0.08 145)",
+          "oklch(55% 0.08 145)",
+          "oklch(70% 0.08 145)",
+          "oklch(85% 0.04 145)",
+          "oklch(95% 0.04 145)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "wordmark": {
+        "displayName": "Wordmark",
+        "purpose": "League Gothic branding; custom face scales relative to Large Title."
+      },
+      "script": {
+        "displayName": "Current dialogue",
+        "purpose": "Bold system type for the active recording line."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "System text scaled by the nearest native style through dubFont."
+      }
+    },
+    "shadows": [
+      {
+        "name": "poster",
+        "value": "black opacity 0.55; radius 24pt; x 0pt; y 14pt",
+        "purpose": "Diffuse depth under the poster deck."
+      }
+    ],
+    "motion": [
+      {
+        "name": "deck-focus",
+        "value": "SwiftUI spring(duration: 0.4, bounce: 0.15)",
+        "purpose": "Focused-poster changes; disabled under Reduce Motion."
+      },
+      {
+        "name": "native-zoom",
+        "value": "navigationTransition(.zoom(sourceID:in:))",
+        "purpose": "Scene-thumbnail to detail navigation using unique source IDs."
+      }
+    ],
+    "breakpoints": []
+  },
+  "components": [
+    {
+      "name": "Primary button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Native PrimaryButtonStyle; HTML is a visual specimen using native-point equivalents.",
+      "html": "<button class=\"ds-primary\">Dub this scene</button>",
+      "css": ".ds-primary { font: 600 17pt system-ui; color: #0F0F0F; background: #F2F2F2; border: 0; border-radius: 16pt; padding: 0 20pt; min-height: 52pt; width: 100%; } .ds-primary:active { transform: scale(.98); } .ds-primary:disabled { background: rgb(242 242 242 / .35); } .ds-primary:focus-visible { outline: auto; }"
+    },
+    {
+      "name": "Secondary button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Raised neutral alternative; caller determines width.",
+      "html": "<button class=\"ds-secondary\">Preview scene</button>",
+      "css": ".ds-secondary { font: 600 17pt system-ui; color: #F2F2F2; background: #2A2A2A; border: 0; border-radius: 16pt; padding: 0 16pt; min-height: 48pt; } .ds-secondary:active { opacity: .75; } .ds-secondary:focus-visible { outline: auto; }"
+    },
+    {
+      "name": "Metadata pill",
+      "kind": "chip",
+      "refersTo": "metadata-pill",
+      "description": "Noninteractive duration label over imagery.",
+      "html": "<span class=\"ds-pill\">0:20.0</span>",
+      "css": ".ds-pill { display: inline-flex; align-items: center; font: 600 13pt system-ui; color: #F2F2F2; background: rgb(0 0 0 / .45); border-radius: 999pt; padding: 0 10pt; min-height: 26pt; }"
+    },
+    {
+      "name": "Script panel",
+      "kind": "card",
+      "refersTo": "surface-card",
+      "description": "Flat neutral panel containing the current spoken line.",
+      "html": "<article class=\"ds-panel\"><p class=\"ds-context\">Line 1 \u00b7 Speaker 1</p><p class=\"ds-line\">Your voice belongs in the scene.</p></article>",
+      "css": ".ds-panel { padding: 18pt; border-radius: 18pt; background: #1C1C1C; font-family: system-ui; } .ds-context { color: #9A9A9A; font-size: 14pt; margin: 0 0 12pt; } .ds-line { color: #F2F2F2; font-size: 26pt; font-weight: 700; margin: 4pt 0 0; }"
+    },
+    {
+      "name": "Recording control",
+      "kind": "button",
+      "description": "Red microphone circle and outer ring. SVG is an illustrative microphone; the native app uses the SF Symbol mic.",
+      "html": "<button class=\"ds-record\" aria-label=\"Record this line\"><svg width=\"30\" height=\"30\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" aria-hidden=\"true\"><rect x=\"9\" y=\"2\" width=\"6\" height=\"13\" rx=\"3\"/><path d=\"M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M8 22h8\"/></svg></button>",
+      "css": ".ds-record { width: 88pt; height: 88pt; padding: 5pt; background: #FF4D3D; background-clip: content-box; color: #F2F2F2; border: 2pt solid rgb(255 77 61 / .4); border-radius: 50%; display: inline-grid; place-items: center; } .ds-record:focus-visible { outline: auto; }"
+    },
+    {
+      "name": "Native search",
+      "kind": "input",
+      "description": "Semantic preview of Discover searchable. Actual field styling, focus, sizing, and keyboard are owned by SwiftUI and iOS; this preview does not define replacement chrome.",
+      "html": "<input class=\"ds-search\" type=\"search\" aria-label=\"Search your scenes\" placeholder=\"Search your scenes\"/>",
+      "css": ".ds-search { color-scheme: dark; font-family: system-ui; } .ds-search:focus-visible { outline: auto; }"
+    },
+    {
+      "name": "Native sections",
+      "kind": "nav",
+      "description": "Semantic inventory of the system TabView; iOS supplies the Liquid Glass presentation and responsive placement. Create currently launches a cover, a known native-navigation deviation.",
+      "html": "<nav class=\"ds-nav\" aria-label=\"Dubby sections\"><button aria-current=\"page\">Discover</button><button>Feed</button><button>Create</button><button>Inbox</button><button>Shelf</button></nav>",
+      "css": ".ds-nav { color-scheme: dark; font-family: system-ui; } .ds-nav button { font: inherit; color: #9A9A9A; } .ds-nav button[aria-current] { color: #F2F2F2; } .ds-nav button:focus-visible { outline: auto; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Screening Room",
+    "overview": "Erica's approved reference supplies the identity: charcoal, a soft screen glow, white actions, and condensed titles printed over scene imagery. The interface gives the image room while keeping recording tasks legible and reachable. This is an existing-reference port, with no generated concept seed or catalog-world provenance.\n\nThe implemented native system is recorded from `Dubbing/Theme.swift`, `DiscoverView.swift`, `Library/LibrarySceneDetail.swift`, `DubFlow/SectionPickerView.swift`, `DubFlow/ScriptReviewView.swift`, `DubFlow/DubSessionView.swift`, `MyDubsView.swift`, and `ContentView.swift`. Erica's `erica-frontend/docs/style-guide.md` explains the authority; the main app's code determines the values and behavior here. This document records the system, not a finish-review verdict or a claim that every service is complete.",
+    "keyCharacteristics": [
+      "Scene imagery carries color; interface chrome stays neutral.",
+      "League Gothic belongs to printed artwork and the wordmark; system type carries tasks.",
+      "Native navigation, menus, sheets, and confirmation dialogs frame the workflow.",
+      "Real library and saved-dub data determine counts, frames, and availability."
+    ],
+    "rules": [
+      {
+        "name": "The Functional Hue Rule",
+        "body": "Keep selection white; reserve red for recording affordances and cyan for coaching.",
+        "section": "colors"
+      },
+      {
+        "name": "The Printed Art Rule",
+        "body": "Use League Gothic for artwork titles, role-card names, and the Dubby wordmark; use system type for interface headings, dialogue, and controls.",
+        "section": "typography"
+      }
+    ],
+    "dos": [
+      "Do reuse `Palette`, `Radius`, `dubFont`, `displayFont`, `.screenBackground()`, and the shared button styles.",
+      "Do let real video frames and saved covers carry color and place readable titles on scrims.",
+      "Do preserve native navigation, safe-area actions, Dynamic Type reflow, and meaningful accessibility labels.",
+      "Do show loading, empty, failed, and unavailable states from actual data."
+    ],
+    "donts": [
+      "Don't use League Gothic for interface headings, body text, or buttons.",
+      "Don't introduce decorative accent hues into selection or neutral task chrome.",
+      "Don't add invented scores, rankings, identities, or service activity to fill the layout.",
+      "Don't replace SF Symbols or native controls with emoji, glyph icons, or web-style navigation."
+    ]
+  }
+}

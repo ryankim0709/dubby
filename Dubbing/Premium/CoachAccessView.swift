@@ -57,14 +57,14 @@ struct CoachAccessView: View {
                         } else if !account.phase.isSignedIn {
                             EmptyStateView(systemImage: "person.crop.circle", title: "Sign in to meet your coach", message: "Your subscription follows your Dubby account.")
                             Button("Sign in") { isAccountPresented = true }
-                                .buttonStyle(PrimaryButtonStyle(cornerRadius: 16))
+                                .buttonStyle(PrimaryButtonStyle(cornerRadius: Radius.control))
                         } else {
                             subscriptionState
                         }
                     }
                     .padding(24)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(Palette.background)
+                    .screenBackground()
                     .foregroundStyle(Palette.textPrimary)
                     .toolbar {
                         ToolbarItem(placement: .cancellationAction) { Button("Close", action: onClose) }
@@ -103,11 +103,11 @@ struct CoachAccessView: View {
             Text("Talk to a coach with Dubby Premium.")
                 .dubFont(18, weight: .semibold)
             Button("View upgrade") { isPaywallPresented = true }
-                .buttonStyle(PrimaryButtonStyle(cornerRadius: 16))
+                .buttonStyle(PrimaryButtonStyle(cornerRadius: Radius.control))
         case .failed(let message):
             EmptyStateView(systemImage: "wifi.exclamationmark", title: "Couldn't check your subscription", message: message)
             Button("Try again") { refreshID = UUID() }
-                .buttonStyle(PrimaryButtonStyle(cornerRadius: 16))
+                .buttonStyle(PrimaryButtonStyle(cornerRadius: Radius.control))
         }
     }
 
@@ -209,7 +209,7 @@ private struct PremiumPaywall: View {
                             Text(isStartingCheckout ? "Opening checkout…" : "Upgrade with Whop")
                         }
                     }
-                    .buttonStyle(PrimaryButtonStyle(cornerRadius: 16))
+                    .buttonStyle(PrimaryButtonStyle(cornerRadius: Radius.control))
                     .disabled(isStartingCheckout)
                     .accessibilityIdentifier("premiumUpgrade")
                     Text("Checkout opens securely in Whop. Use the same Whop account to manage or cancel your subscription.")
@@ -218,7 +218,7 @@ private struct PremiumPaywall: View {
                 }
                 .padding(24)
             }
-            .background(Palette.background)
+            .screenBackground()
             .foregroundStyle(Palette.textPrimary)
             .navigationTitle("Dubby Premium")
             .navigationBarTitleDisplayMode(.inline)

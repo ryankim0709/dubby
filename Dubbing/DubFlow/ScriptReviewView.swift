@@ -49,16 +49,18 @@ struct ScriptReviewView: View {
                 progress
             }
         }
-        .background(Palette.background)
-        .toolbar(.hidden, for: .navigationBar)
+        .screenBackground()
+        .navigationTitle("Your scene")
+        .navigationBarTitleDisplayMode(.inline)
         .overlay { StateCarriers(items: [StateCarrier(identifier: "transcribeProgress", value: phase.stateValue)]) }
         .task(id: attempt) { await analyze() }
     }
 
     private var progress: some View {
         VStack(alignment: .leading, spacing: 20) {
-            BackHeader(title: "Building your script") { EmptyView() }
-                .padding(.top, 8)
+            Text("Building your script")
+                .dubFont(32, weight: .bold)
+                .foregroundStyle(Palette.textPrimary)
             VStack(alignment: .leading, spacing: 16) {
                 stepRow(index: 0, title: "Pulling the scene's audio")
                 #if targetEnvironment(simulator)
@@ -107,8 +109,6 @@ struct ScriptReviewView: View {
 
     private func failure(_ issue: FlowIssue) -> some View {
         VStack(alignment: .leading, spacing: 16) {
-            BackHeader(title: "Building your script") { EmptyView() }
-                .padding(.top, 8)
             IssueCard(
                 title: issue.opensSettings ? "Speech recognition is off" : "The script couldn't be built",
                 issue: issue,
@@ -160,6 +160,7 @@ private struct ScriptEditor: View {
     @State private var characterID = 0
     @State private var renamingSpeaker: Speaker?
     @State private var draftName = ""
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     init(request: TranscriptionRequest, analysis: LineAnalysis, onStart: @escaping (DubSetup) -> Void) {
         self.request = request
@@ -175,38 +176,44 @@ private struct ScriptEditor: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                BackHeader(title: "Your script") { EmptyView() }
-                    .padding(.top, 8)
-                Text("\(script.lines.count) lines from a \(request.section.duration.preciseClockString) scene")
-                    .dubFont(14, weight: .regular)
-                    .foregroundStyle(Palette.textSecondary)
-                speakersCard
-                VStack(spacing: 8) {
-                    ForEach(script.lines) { line in
-                        ScriptLineRow(line: line, speakers: script.speakers) { speakerID in
-                            script = script.reassigning(lineID: line.id, to: speakerID)
-                        }
-                    }
-                }
-                Text("Who are you becoming?")
-                    .dubFont(20, weight: .semibold)
+                Text("Choose your role")
+                    .dubFont(32, weight: .bold)
                     .foregroundStyle(Palette.textPrimary)
-                    .padding(.top, 8)
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 8)], spacing: 8) {
+                    .accessibilityAddTraits(.isHeader)
+                Text("\(request.clip.title) · \(request.section.duration.preciseClockString)")
+                    .dubFont(15, weight: .regular)
+                    .foregroundStyle(Palette.textSecondary)
+                LazyVGrid(columns: adaptiveGridColumns(spacing: 14, isAccessibilitySize: dynamicTypeSize.isAccessibilitySize), spacing: 14) {
                     ForEach(script.speakers) { speaker in
                         characterCard(speaker)
                     }
                 }
+                DisclosureGroup {
+                    speakersCard
+                    VStack(spacing: 8) {
+                        ForEach(script.lines) { line in
+                            ScriptLineRow(line: line, speakers: script.speakers) { speakerID in
+                                script = script.reassigning(lineID: line.id, to: speakerID)
+                            }
+                        }
+                    }
+                } label: {
+                    Label("Review dialogue and voices", systemImage: "text.alignleft")
+                        .dubFont(17, weight: .semibold)
+                        .foregroundStyle(Palette.textPrimary)
+                        .frame(minHeight: 44)
+                }
+                .tint(Palette.textSecondary)
             }
-            .padding(.horizontal, 16)
+            .padding(.horizontal, 20)
             .padding(.bottom, 16)
             .containerIdentifier("scriptScreen")
         }
         .scrollIndicators(.hidden)
         // Pinned so the primary action stays on screen beside a long script.
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            Button("Dub \(script.speaker(withID: characterID)?.name ?? "this character")'s lines") {
-                onStart(DubSetup(clip: request.clip, section: request.section, script: script, characterID: characterID))
+            Button("Dub as \(script.speaker(withID: characterID)?.name ?? "this character")") {
+                onStart(DubSetup(clip: request.clip, section: request.section, script: script, characterID: characterID, locale: request.language.identifier))
             }
             .buttonStyle(PrimaryButtonStyle(cornerRadius: 16))
             .disabled(characterLines.isEmpty)
@@ -265,7 +272,7 @@ private struct ScriptEditor: View {
                             }
                             .foregroundStyle(Palette.textPrimary)
                             .padding(.horizontal, 12)
-                            .frame(minHeight: 36)
+                            .frame(minHeight: 44)
                             .background(Palette.background, in: Capsule())
                         }
                         .accessibilityLabel("Rename \(speaker.name)")
@@ -285,37 +292,44 @@ private struct ScriptEditor: View {
         let lines = script.lines(spokenBy: speaker.id)
         let seconds = lines.reduce(0) { $0 + $1.duration }
         let isSelected = speaker.id == characterID
+        let previewTime = request.section.start + (lines.first.map { $0.start + $0.duration / 2 } ?? 0)
         return Button {
             characterID = speaker.id
         } label: {
-            VStack(alignment: .leading, spacing: 6) {
-                HStack {
-                    Circle()
-                        .fill(Palette.speakerColor(speaker.id))
-                        .frame(width: 12, height: 12)
-                    Spacer()
+            VideoThumbnail(url: request.clip.url, time: previewTime)
+                .aspectRatio(3.0 / 4.0, contentMode: .fit)
+                .overlay {
+                    LinearGradient(colors: [.clear, .black.opacity(0.9)], startPoint: .center, endPoint: .bottom)
+                }
+                .overlay(alignment: .bottomLeading) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(speaker.name.uppercased())
+                            .displayFont(34)
+                            .foregroundStyle(Palette.textPrimary)
+                        Text("\(lines.count) lines · \(Int(seconds.rounded())) sec")
+                            .dubFont(13, weight: .medium)
+                            .foregroundStyle(Palette.textPrimary)
+                    }
+                    .padding(14)
+                }
+                .overlay(alignment: .topTrailing) {
                     if isSelected {
-                        Image(systemName: "checkmark.circle")
-                            .foregroundStyle(Palette.accent)
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.title2)
+                            .foregroundStyle(Palette.onAccent, Palette.accent)
+                            .padding(12)
                     }
                 }
-                Text(speaker.name)
-                    .dubFont(16, weight: .medium)
-                    .foregroundStyle(Palette.textPrimary)
-                Text("\(lines.count) lines · \(Int(seconds.rounded())) sec")
-                    .dubFont(14, weight: .regular)
-                    .foregroundStyle(Palette.textSecondary)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(12)
-            .background(isSelected ? Color.clear : Palette.surface, in: RoundedRectangle(cornerRadius: 16))
-            .overlay {
-                if isSelected {
-                    RoundedRectangle(cornerRadius: 16).strokeBorder(Palette.accent, lineWidth: 2)
+                .clipShape(RoundedRectangle(cornerRadius: Radius.card))
+                .overlay {
+                    RoundedRectangle(cornerRadius: Radius.card)
+                        .strokeBorder(isSelected ? Palette.accent : Palette.hairline, lineWidth: isSelected ? 2 : 1)
                 }
-            }
         }
         .buttonStyle(.plain)
+        .accessibilityElement(children: .ignore)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityLabel("\(speaker.name), \(lines.count) lines, \(Int(seconds.rounded())) seconds")
         .accessibilityAddTraits(isSelected ? [.isSelected] : [])
         .accessibilityIdentifier("characterCard-\(speaker.id)")
     }
@@ -342,7 +356,7 @@ private struct ScriptLineRow: View {
                     }
                     .foregroundStyle(Palette.onAccent)
                     .padding(.horizontal, 10)
-                    .frame(minHeight: 24)
+                    .frame(minHeight: 44)
                     .background(Palette.speakerColor(line.speakerID), in: Capsule())
                 }
                 .accessibilityLabel("Speaker for this line")

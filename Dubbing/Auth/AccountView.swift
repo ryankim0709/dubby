@@ -29,7 +29,7 @@ struct AccountView: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 8)
         }
-        .background(Palette.background)
+        .screenBackground()
         .preferredColorScheme(.dark)
     }
 }
@@ -41,18 +41,17 @@ struct SignInView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
-                Text("dubby")
-                    .dubFont(32, weight: .semibold)
-                    .italic()
+                Text("DUB\(Text("BY").foregroundStyle(Palette.textSecondary))")
+                    .displayFont(44)
                     .foregroundStyle(Palette.accentText)
                     .accessibilityAddTraits(.isHeader)
                 AccountPanel(account: account)
             }
-            .padding(.horizontal, 16)
+            .padding(.horizontal, 24)
             .padding(.vertical, 24)
         }
         .scrollDismissesKeyboard(.interactively)
-        .background(Palette.background)
+        .screenBackground()
         .preferredColorScheme(.dark)
         .accessibilityIdentifier("signInPage")
     }
@@ -199,7 +198,7 @@ private struct AccountPanel: View {
             Button("Sign out") {
                 Task { await account.signOut() }
             }
-            .buttonStyle(OutlineCapsuleButtonStyle())
+            .buttonStyle(SecondaryButtonStyle())
             .accessibilityIdentifier("signOut")
         }
     }
@@ -211,7 +210,7 @@ private struct AccountPanel: View {
             Button("Try again") {
                 Task { await account.retry() }
             }
-            .buttonStyle(OutlineCapsuleButtonStyle())
+            .buttonStyle(SecondaryButtonStyle())
             .accessibilityIdentifier("accountRetry")
         }
     }

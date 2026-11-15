@@ -144,7 +144,7 @@ struct CoachPreferencesView: View {
             VStack(spacing: 12) {
                 EmptyStateView(systemImage: "exclamationmark.triangle", title: "Couldn't load your preferences", message: message)
                 Button("Try again") { Task { await preferences.load() } }
-                    .buttonStyle(OutlineCapsuleButtonStyle())
+                    .buttonStyle(SecondaryButtonStyle())
             }
             .padding(16)
             Spacer()
@@ -276,7 +276,7 @@ struct CoachPreferencesView: View {
         } header: {
             Text("What your coach remembers")
         } footer: {
-            Text("Short practice notes and your goal, so your coach can pick up where you left off. Scores and recordings aren't kept here.")
+            Text("Your dubs, their scores, and your goal, so your coach can pick up where you left off. Recordings aren't kept here.")
         }
         .listRowBackground(Palette.surface)
     }
