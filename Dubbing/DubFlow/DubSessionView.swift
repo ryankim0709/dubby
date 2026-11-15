@@ -16,11 +16,13 @@ private struct PendingTake {
     let lineID: Int
     let take: RecordedTake
     let measurement: TakeMeasurement
+    let envelope: [Float]
 }
 
 /// The real dubbing studio: hear each original line, then record yours along with the muted video.
 struct DubSessionView: View {
     let setup: DubSetup
+    let requiredKeptLines: Int
     let onFinish: ([Int: RecordedTake]) -> Void
     @State private var player: SegmentPlayer
     @State private var recorder = TakeRecorder()
@@ -29,6 +31,7 @@ struct DubSessionView: View {
     /// Kept takes, by line.
     @State private var takes: [Int: RecordedTake] = [:]
     @State private var measurements: [Int: TakeMeasurement] = [:]
+    @State private var envelopes: [Int: [Float]] = [:]
     @State private var pending: PendingTake?
     @State private var activity: SessionActivity = .idle
     @State private var activityTask: Task<Void, Never>?
@@ -45,9 +48,11 @@ struct DubSessionView: View {
 
     private static let logger = Logger(subsystem: "com.ryankim.Dubbing", category: "studio")
 
-    init(setup: DubSetup, onFinish: @escaping ([Int: RecordedTake]) -> Void) {
+    init(setup: DubSetup, initialTakes: [Int: RecordedTake], requiredKeptLines: Int, onFinish: @escaping ([Int: RecordedTake]) -> Void) {
         self.setup = setup
+        self.requiredKeptLines = requiredKeptLines
         self.onFinish = onFinish
+        _takes = State(initialValue: initialTakes)
         _player = State(initialValue: SegmentPlayer(url: setup.clip.url))
     }
 
@@ -60,6 +65,7 @@ struct DubSessionView: View {
     /// The take the studio plays and describes: the unkept one just recorded, else the kept one.
     private var shownTake: RecordedTake? { pendingForLine?.take ?? takes[line.id] }
     private var shownMeasurement: TakeMeasurement? { pendingForLine?.measurement ?? measurements[line.id] }
+    private var shownEnvelope: [Float]? { pendingForLine?.envelope ?? envelopes[line.id] }
 
     /// The line right before yours from someone else, so you know what you're answering.
     private var cueLine: ScriptLine? {
@@ -76,41 +82,54 @@ struct DubSessionView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                videoCard
-                progress
-                if let cueLine {
-                    cue(cueLine)
+        VStack(spacing: 0) {
+            videoCard
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    progress
+                    if requiredKeptLines > 1 && takes.count < requiredKeptLines {
+                        Text("Keep all \(requiredKeptLines) lines to finish this co-dub.")
+                            .dubFont(14, weight: .regular)
+                            .foregroundStyle(Palette.textSecondary)
+                    }
+                    if let cueLine {
+                        cue(cueLine)
+                    }
+                    lineCard
+                    comparison
+                    if let measurement = shownMeasurement {
+                        TakeCoachPanel(characterName: characterName, measurement: measurement)
+                            .id(shownTake?.url)
+                    }
+                    if microphone == .denied {
+                        IssueCard(
+                            title: "Microphone is off",
+                            issue: FlowIssue(error: DubFlowError.microphoneDenied),
+                            identifier: "microphonePermissionBanner",
+                            value: "denied",
+                            retryTitle: "Try again",
+                            retryIdentifier: "retry",
+                            retry: nil
+                        )
+                    } else if let issue {
+                        IssueCard(
+                            title: "That didn't work",
+                            issue: issue,
+                            identifier: "studioError",
+                            value: issue.code,
+                            retryTitle: "Try again",
+                            retryIdentifier: "retry",
+                            retry: failedActivity.map { retryAction(for: $0) }
+                        )
+                    }
                 }
-                lineCard
-                if microphone == .denied {
-                    IssueCard(
-                        title: "Microphone is off",
-                        issue: FlowIssue(error: DubFlowError.microphoneDenied),
-                        identifier: "microphonePermissionBanner",
-                        value: "denied",
-                        retryTitle: "Try again",
-                        retryIdentifier: "retry",
-                        retry: nil
-                    )
-                } else if let issue {
-                    IssueCard(
-                        title: "That didn't work",
-                        issue: issue,
-                        identifier: "studioError",
-                        value: issue.code,
-                        retryTitle: "Try again",
-                        retryIdentifier: "retry",
-                        retry: failedActivity.map { retryAction(for: $0) }
-                    )
-                }
+                .padding(.horizontal, 16)
+                .padding(.top, 16)
+                .padding(.bottom, 24)
+                .containerIdentifier("studioScreen")
             }
-            .padding(.horizontal, 20)
-            .padding(.bottom, 16)
-            .containerIdentifier("studioScreen")
+            .scrollIndicators(.hidden)
         }
-        .scrollIndicators(.hidden)
         .screenBackground()
         .navigationTitle(characterName)
         .navigationBarTitleDisplayMode(.inline)
@@ -132,7 +151,7 @@ struct DubSessionView: View {
                     stopActivity()
                     onFinish(takes)
                 }
-                .disabled(takes.isEmpty || activity != .idle || pending != nil)
+                .disabled(takes.count < requiredKeptLines || activity != .idle || pending != nil)
                 .accessibilityIdentifier("finishDub")
             }
         }
@@ -223,57 +242,50 @@ struct DubSessionView: View {
     }
 
     private var videoCard: some View {
-        VStack(spacing: 0) {
-            PlayerSurface(player: player.player)
-                .aspectRatio(16 / 9, contentMode: .fit)
-                .overlay {
-                    if activity == .idle {
-                        VideoThumbnail(url: setup.clip.url, time: lineStart + line.duration / 2)
-                    }
+        PlayerSurface(player: player.player, gravity: .resizeAspectFill)
+            .aspectRatio(16 / 9, contentMode: .fit)
+            .overlay {
+                if activity == .idle {
+                    VideoThumbnail(url: setup.clip.url, time: lineStart + line.duration / 2)
                 }
-                .overlay(alignment: .topLeading) {
-                    if activity == .recording {
-                        Label("REC", systemImage: "circle.fill")
-                            .dubFont(12, weight: .bold)
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 8)
-                            .frame(minHeight: 24)
-                            .background(Palette.record, in: Capsule())
-                            .padding(8)
-                            .accessibilityIdentifier("recordingIndicator")
-                    }
+                if activity == .recording, player.currentSeconds < lineStart {
+                    Text("\(Int((lineStart - player.currentSeconds).rounded(.up)))")
+                        .dubFont(84, weight: .heavy)
+                        .foregroundStyle(Palette.textPrimary)
+                        .shadow(color: .black.opacity(0.6), radius: 12, y: 4)
                 }
-            HStack(spacing: 8) {
-                Image(systemName: activity == .idle ? "play.circle" : "waveform.circle")
-                    .dubFont(14, weight: .regular)
-                    .foregroundStyle(Palette.textPrimary)
-                GeometryReader { proxy in
-                    Capsule()
-                        .fill(Palette.track)
-                        .overlay(alignment: .leading) {
-                            Capsule()
-                                .fill(Palette.accent)
-                                .frame(width: proxy.size.width * sceneFraction)
-                        }
-                }
-                .frame(height: 4)
-                Text("\(sceneSeconds.preciseClockString) / \(setup.section.duration.preciseClockString)")
-                    .dubFont(14, weight: .regular)
-                    .monospacedDigit()
-                    .foregroundStyle(Palette.textSecondary)
             }
-            .padding(8)
-            .background(Palette.surface)
-        }
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-    }
-
-    private var sceneSeconds: Double {
-        min(max(player.currentSeconds - setup.section.start, 0), setup.section.duration)
-    }
-
-    private var sceneFraction: Double {
-        setup.section.duration > 0 ? sceneSeconds / setup.section.duration : 0
+            .overlay(alignment: .topLeading) {
+                if activity != .idle {
+                    Label(activity == .recording ? "REC" : activity == .playingOriginal ? "ORIGINAL" : "YOUR TAKE", systemImage: activity == .recording ? "circle.fill" : "waveform")
+                        .dubFont(12, weight: .bold)
+                        .foregroundStyle(activity == .recording ? Palette.record : Palette.textPrimary)
+                        .padding(.horizontal, 10)
+                        .frame(minHeight: 26)
+                        .background(.black.opacity(0.55), in: Capsule())
+                        .padding(12)
+                        .accessibilityIdentifier("recordingIndicator")
+                }
+            }
+            .overlay(alignment: .bottom) {
+                if activity != .idle, player.currentSeconds >= lineStart {
+                    VStack(spacing: 2) {
+                        Text(activity == .playingOriginal ? characterName : "You")
+                            .dubFont(12, weight: .semibold)
+                        Text(line.text)
+                            .dubFont(17, weight: .semibold)
+                            .multilineTextAlignment(.center)
+                    }
+                    .foregroundStyle(Palette.textPrimary)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(.black.opacity(0.6), in: RoundedRectangle(cornerRadius: 10))
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 12)
+                    .accessibilityElement(children: .combine)
+                }
+            }
+            .background(.black)
     }
 
     private var lineFraction: Double {
@@ -282,25 +294,30 @@ struct DubSessionView: View {
     }
 
     private var progress: some View {
-        VStack(spacing: 12) {
-            AdaptiveStack(rowAlignment: .center, spacing: 4) {
-                Text("Your progress")
-                    .foregroundStyle(Palette.textSecondary)
+        VStack(spacing: 8) {
+            HStack {
+                Text("Line \(index + 1) of \(lines.count)")
+                    .dubFont(15, weight: .semibold)
+                    .foregroundStyle(Palette.textPrimary)
                 Spacer()
-                Text("\(takes.count) / \(lines.count) lines")
-                    .foregroundStyle(Palette.accentText)
+                Text("\(takes.count) kept")
+                    .dubFont(15, weight: .regular)
+                    .foregroundStyle(Palette.textSecondary)
+                    .monospacedDigit()
             }
-            .dubFont(14, weight: .regular)
-            HStack(spacing: 8) {
-                ForEach(lines) { item in
-                    Capsule()
-                        .fill(takes[item.id] != nil ? Palette.accent : Palette.segmentInactive)
-                        .overlay {
-                            if item.id == line.id {
-                                Capsule().strokeBorder(Palette.accentText, lineWidth: 1)
-                            }
-                        }
-                        .frame(height: 5)
+            HStack(spacing: 6) {
+                ForEach(Array(lines.enumerated()), id: \.element.id) { position, item in
+                    Button { move(by: position - index) } label: {
+                        Capsule()
+                            .fill(takes[item.id] != nil ? Palette.accent : position == index ? Palette.textSecondary : Palette.track)
+                            .frame(height: 5)
+                            .frame(maxWidth: .infinity, minHeight: 44)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(activity != .idle || pending != nil)
+                    .accessibilityLabel("Line \(position + 1)\(takes[item.id] == nil ? "" : ", kept")")
+                    .accessibilityAddTraits(position == index ? .isSelected : [])
                 }
             }
         }
@@ -323,7 +340,7 @@ struct DubSessionView: View {
     private var lineCard: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("Line \(index + 1) · \(characterName)")
+                Text("You · \(characterName)")
                     .dubFont(14, weight: .regular)
                     .foregroundStyle(Palette.textSecondary)
                 Spacer()
@@ -360,8 +377,6 @@ struct DubSessionView: View {
                 .disabled(activity == .recording || activity == .playingTake)
                 .accessibilityIdentifier("listenToOriginal")
             }
-            WaveformView(levels: line.envelope, playedFraction: lineFraction)
-                .frame(height: 72)
             if let overrun = shownMeasurement?.overrunSeconds {
                 Label(
                     String(format: "Your take runs %.1f s into the next line, so the dub cuts the last %.1f s. Try a slightly quicker read.", overrun, overrun),
@@ -371,11 +386,37 @@ struct DubSessionView: View {
                 .foregroundStyle(Palette.streak)
                 .accessibilityIdentifier("takeTrimNotice")
             }
-            if let shownMeasurement {
-                TakeFeedbackView(measurement: shownMeasurement)
+        }
+    }
+
+    private var comparison: some View {
+        VStack(spacing: 10) {
+            HStack(spacing: 10) {
+                Text(characterName)
+                    .dubFont(13, weight: .medium)
+                    .foregroundStyle(Palette.textSecondary)
+                    .frame(width: 64, alignment: .leading)
+                WaveformView(levels: line.envelope, playedFraction: lineFraction)
+                    .opacity(0.6)
+                    .frame(height: 40)
+            }
+            HStack(spacing: 10) {
+                Text("You")
+                    .dubFont(13, weight: .medium)
+                    .foregroundStyle(Palette.textPrimary)
+                    .frame(width: 64, alignment: .leading)
+                if let shownEnvelope {
+                    WaveformView(levels: shownEnvelope, playedFraction: activity == .playingTake ? lineFraction : 1)
+                        .frame(height: 40)
+                } else {
+                    Text(activity == .recording ? "Recording your take…" : "Record to see your take here")
+                        .dubFont(13, weight: .regular)
+                        .foregroundStyle(Palette.placeholder)
+                        .frame(maxWidth: .infinity, minHeight: 40)
+                }
             }
         }
-        .padding(18)
+        .padding(12)
         .background(Palette.surface, in: RoundedRectangle(cornerRadius: Radius.card))
     }
 
@@ -383,10 +424,6 @@ struct DubSessionView: View {
         VStack(spacing: 10) {
             if pendingForLine == nil {
                 recordingControls
-            } else {
-                Text("How did that feel?")
-                    .dubFont(20, weight: .bold)
-                    .foregroundStyle(Palette.textPrimary)
             }
             if activity == .recording {
                 Button("Cancel recording") {
@@ -503,7 +540,9 @@ struct DubSessionView: View {
         guard let pending else { return }
         takes[pending.lineID] = pending.take
         measurements[pending.lineID] = pending.measurement
+        envelopes[pending.lineID] = pending.envelope
         self.pending = nil
+        if index < lines.count - 1 { move(by: 1) }
     }
 
     private func listenToOriginal() {
@@ -544,7 +583,8 @@ struct DubSessionView: View {
             if let replaced = pending, replaced.lineID == target.id {
                 discardFile(at: replaced.take.url)
             }
-            pending = PendingTake(lineID: target.id, take: take, measurement: measurement)
+            let envelope = try await MediaPipeline.takeEnvelope(at: take.url)
+            pending = PendingTake(lineID: target.id, take: take, measurement: measurement, envelope: envelope)
         }
     }
 
@@ -604,5 +644,12 @@ struct DubSessionView: View {
         interruption = reason
         player.stop()
         takePlayer.stop()
+    }
+}
+
+extension MediaPipeline {
+    @concurrent
+    static func takeEnvelope(at url: URL) async throws -> [Float] {
+        ScriptBuilder.envelope(samples: try readMonoAudio(from: url).samples, barCount: 48)
     }
 }

@@ -4,11 +4,13 @@ import SwiftUI
 enum DubFlowLaunch: Identifiable {
     case chooseScene
     case scene(LibraryClip)
+    case social(SocialDubLaunch)
 
     var id: String {
         switch self {
         case .chooseScene: "choose"
         case .scene(let clip): clip.url.absoluteString
+        case .social(let launch): launch.setup.clip.workingDirectory.absoluteString
         }
     }
 }
@@ -18,6 +20,7 @@ struct DubFlowView: View {
     let clips: LoadState<[LibraryClip]>
     let account: AccountModel
     let scoring: DubScoringModel?
+    let completionRoom: CoDubRoom?
     let onRetry: () -> Void
     let onClose: () -> Void
     @State private var path: [DubFlowStep]
@@ -30,9 +33,14 @@ struct DubFlowView: View {
         self.onClose = onClose
         switch launch {
         case .chooseScene:
+            completionRoom = nil
             _path = State(initialValue: [])
         case .scene(let clip):
+            completionRoom = nil
             _path = State(initialValue: [.section(ImportedClip(clip: clip))])
+        case .social(let launch):
+            completionRoom = launch.completionRoom
+            _path = State(initialValue: [.studio(launch.setup)])
         }
     }
 
@@ -46,9 +54,9 @@ struct DubFlowView: View {
                     case .script(let request):
                         ScriptReviewView(request: request) { path.append(.studio($0)) }
                     case .studio(let setup):
-                        DubSessionView(setup: setup) { path.append(.result(setup, $0)) }
+                        DubSessionView(setup: setup, initialTakes: [:], requiredKeptLines: completionRoom == nil ? 1 : setup.script.lines(spokenBy: setup.characterID).count) { path.append(.result(setup, $0)) }
                     case .result(let setup, let takes):
-                        DubResultView(setup: setup, takes: takes, account: account, scoring: scoring, onDone: onClose)
+                        DubResultView(setup: setup, takes: takes, account: account, scoring: scoring, completionRoom: completionRoom, onDone: onClose, onKeepRecording: { path.removeLast() })
                     }
                 }
         }

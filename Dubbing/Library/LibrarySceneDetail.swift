@@ -1,58 +1,61 @@
-import AVKit
 import SwiftUI
 
 struct LibrarySceneDetail: View {
     let clip: LibraryClip
     let onDub: () -> Void
     let onClose: () -> Void
-    @State private var playback: ScenePreviewPlayback
-    @State private var picture: LoadState<VideoPicture> = .loading
     @State private var isVisible = false
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.scenePhase) private var scenePhase
-
-    init(clip: LibraryClip, onDub: @escaping () -> Void, onClose: @escaping () -> Void) {
-        self.clip = clip
-        self.onDub = onDub
-        self.onClose = onClose
-        _playback = State(initialValue: ScenePreviewPlayback(url: clip.url))
-    }
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 22) {
-                hero
+            VStack(alignment: .leading, spacing: 0) {
+                LibraryVideoPreview(clip: clip, isActive: isVisible)
                     .aspectRatio(4 / 5, contentMode: .fit)
                     .overlay {
                         LinearGradient(colors: [.clear, Palette.background], startPoint: .center, endPoint: .bottom)
                     }
-                    .overlay(alignment: .bottomLeading) {
-                        VStack(alignment: .leading, spacing: 12) {
-                            MetaPill(text: clip.durationSeconds.preciseClockString, systemImage: "film")
-                            Text(clip.title)
-                                .dubFont(32, weight: .bold)
-                                .foregroundStyle(Palette.textPrimary)
-                        }
-                        .padding(20)
-                    }
+                    .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 22) {
-                    Text("A scene. A character. Your voice.")
-                        .dubFont(22, weight: .bold)
-                    Text("Choose up to 30 seconds of dialogue, pick who you'll play, and record their lines. Your finished dub is saved to Shelf.")
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(clip.sceneTitle)
+                            .dubFont(32, weight: .bold)
+                            .foregroundStyle(Palette.textPrimary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Text([clip.sourceTitle, clip.languageName].compactMap { $0 }.joined(separator: " · "))
+                            .dubFont(15, weight: .medium)
+                            .foregroundStyle(Palette.textSecondary)
+                    }
+                    Text(clip.details?.synopsis ?? "Choose up to 30 seconds of dialogue, pick who you'll play, and record their lines. Your finished dub is saved to Shelf.")
                         .dubFont(17, weight: .regular)
-                        .foregroundStyle(Palette.textSecondary)
+                        .foregroundStyle(Palette.textPrimary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    facts
+                    if let details = clip.details, !details.characters.isEmpty {
+                        cast(details.characters)
+                    }
                 }
                 .padding(.horizontal, 20)
+                .padding(.top, 4)
                 .padding(.bottom, 24)
             }
-            .foregroundStyle(Palette.textPrimary)
         }
-        .scrollIndicators(.hidden)
         .ignoresSafeArea(edges: .top)
+        .scrollIndicators(.hidden)
         .screenBackground()
-        .navigationBarTitleDisplayMode(.inline)
+        .safeAreaInset(edge: .bottom) {
+            AdaptiveStack(rowAlignment: .center, spacing: 10) {
+                Button("Not now", action: onClose)
+                    .buttonStyle(SecondaryButtonStyle())
+                Button("Dub this scene", action: onDub)
+                    .buttonStyle(PrimaryButtonStyle(cornerRadius: Radius.control))
+                    .accessibilityIdentifier("dubScene-\(clip.sceneID)")
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 12)
+            .padding(.bottom, 8)
+            .background(Palette.background)
+        }
         .toolbar(.visible, for: .navigationBar)
-        .toolbarBackground(.hidden, for: .navigationBar)
         .toolbar(.hidden, for: .tabBar)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -61,125 +64,63 @@ struct LibrarySceneDetail: View {
                     .accessibilityIdentifier("closeLibraryScene")
             }
         }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            Button("Dub this scene", action: onDub)
-                .buttonStyle(PrimaryButtonStyle(cornerRadius: Radius.control))
-                .accessibilityIdentifier("dubScene-\(clip.sceneID)")
-                .padding(.horizontal, 20)
-                .padding(.vertical, 12)
-                .background(Palette.background)
-        }
-        .task(id: clip.url) {
-            do {
-                let frame = try await MediaPipeline.previewPicture(for: clip.url)
-                try Task.checkCancellation()
-                picture = .loaded(frame)
-                updatePlayback()
-            } catch is CancellationError {
-                return
-            } catch {
-                picture = .failed(error.localizedDescription)
-            }
-        }
-        .onAppear {
-            isVisible = true
-            updatePlayback()
-        }
-        .onDisappear {
-            isVisible = false
-            playback.player.pause()
-        }
-        .onChange(of: scenePhase) { updatePlayback() }
-        .onChange(of: reduceMotion) { updatePlayback() }
+        .toolbarBackground(.hidden, for: .navigationBar)
+        .navigationBarTitleDisplayMode(.inline)
+        .onAppear { isVisible = true }
+        .onDisappear { isVisible = false }
     }
 
-    private var hero: some View {
-        Palette.surface
-            .overlay {
-                switch picture {
-                case .loading:
-                    ProgressView().tint(Palette.textPrimary)
-                case .loaded(let frame):
-                    Image(decorative: frame.image, scale: 1)
-                        .resizable()
-                        .scaledToFill()
-                case .failed(let message):
-                    EmptyStateView(systemImage: "exclamationmark.triangle", title: "Preview unavailable", message: message)
-                }
+    private var facts: some View {
+        AdaptiveStack(rowAlignment: .center, spacing: 0) {
+            if let language = clip.languageName {
+                fact(value: language, label: "Language")
             }
-            .overlay {
-                if case .loaded(let frame) = picture, !reduceMotion {
-                    ScenePreviewSurface(player: playback.player, picture: frame)
+            fact(value: "\(Int(clip.durationSeconds.rounded()))s", label: "Length")
+            if let details = clip.details, !details.characters.isEmpty {
+                fact(value: "\(details.characters.reduce(0) { $0 + $1.lineCount })", label: "Lines")
+                fact(value: "\(details.characters.count)", label: "Roles")
+            }
+        }
+        .padding(.vertical, 14)
+        .background(Palette.surface, in: RoundedRectangle(cornerRadius: Radius.card))
+    }
+
+    private func fact(value: String, label: String) -> some View {
+        VStack(spacing: 2) {
+            Text(value)
+                .dubFont(16, weight: .semibold)
+                .foregroundStyle(Palette.textPrimary)
+            Text(label)
+                .dubFont(12, weight: .regular)
+                .foregroundStyle(Palette.textSecondary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 8)
+        .accessibilityElement(children: .combine)
+    }
+
+    private func cast(_ characters: [LibrarySceneDetails.Character]) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Cast")
+                .dubFont(17, weight: .semibold)
+                .foregroundStyle(Palette.textPrimary)
+            ForEach(characters) { character in
+                HStack(spacing: 12) {
+                    Image(systemName: "person.crop.circle")
+                        .dubFont(32, weight: .light)
+                        .foregroundStyle(Palette.textSecondary)
+                        .frame(width: 44, height: 44)
                         .accessibilityHidden(true)
+                    Text(character.name)
+                        .dubFont(16, weight: .semibold)
+                        .foregroundStyle(Palette.textPrimary)
+                    Spacer()
+                    Text("\(character.lineCount) lines")
+                        .dubFont(14, weight: .regular)
+                        .foregroundStyle(Palette.textSecondary)
                 }
+                .accessibilityElement(children: .combine)
             }
-            .clipped()
-    }
-
-    private func updatePlayback() {
-        if case .loaded = picture, isVisible, !reduceMotion, scenePhase == .active {
-            playback.player.play()
-        } else {
-            playback.player.pause()
         }
-    }
-}
-
-private final class ScenePreviewPlayback {
-    let player: AVQueuePlayer
-    // The player stops looping when AVPlayerLooper is released.
-    private let looper: AVPlayerLooper
-
-    init(url: URL) {
-        let player = AVQueuePlayer()
-        player.isMuted = true
-        self.player = player
-        looper = AVPlayerLooper(player: player, templateItem: AVPlayerItem(url: url))
-    }
-
-    isolated deinit {
-        player.pause()
-    }
-}
-
-private struct ScenePreviewSurface: UIViewRepresentable {
-    let player: AVPlayer
-    let picture: VideoPicture
-
-    func makeUIView(context: Context) -> ScenePreviewLayerView {
-        ScenePreviewLayerView(picture: picture)
-    }
-
-    func updateUIView(_ view: ScenePreviewLayerView, context: Context) {
-        view.playerLayer.player = player
-        view.picture = picture
-        view.setNeedsLayout()
-    }
-
-    static func dismantleUIView(_ view: ScenePreviewLayerView, coordinator: ()) {
-        view.playerLayer.player = nil
-    }
-}
-
-private final class ScenePreviewLayerView: UIView {
-    let playerLayer = AVPlayerLayer()
-    var picture: VideoPicture
-
-    init(picture: VideoPicture) {
-        self.picture = picture
-        super.init(frame: .zero)
-        isUserInteractionEnabled = false
-        clipsToBounds = true
-        playerLayer.videoGravity = .resizeAspectFill
-        layer.addSublayer(playerLayer)
-    }
-
-    required init?(coder: NSCoder) {
-        fatalError("ScenePreviewLayerView is only created in code")
-    }
-
-    override func layoutSubviews() {
-        super.layoutSubviews()
-        playerLayer.frame = picture.playerFrame(in: bounds)
     }
 }

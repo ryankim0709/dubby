@@ -8,15 +8,28 @@ struct MyDubsView: View {
     let onAccount: () -> Void
     let onDelete: (SavedDub) async throws -> Void
     let onRetry: () -> Void
+    @State private var filter: ShelfFilter = .all
     @State private var playing: SavedDub?
     @State private var pendingDelete: SavedDub?
     @State private var deleteFailure: String?
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
+    private enum ShelfFilter: String, CaseIterable, Identifiable {
+        case all = "All"
+        case coDubs = "Co-dubs"
+        case drafts = "Drafts"
+
+        var id: Self { self }
+    }
+
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 24) {
                 profileHeader
+                Picker("Show", selection: $filter) {
+                    ForEach(ShelfFilter.allCases) { Text($0.rawValue).tag($0) }
+                }
+                .pickerStyle(.segmented)
                 AdaptiveStack(rowAlignment: .center, spacing: 8) {
                     Text("Your shelf")
                         .dubFont(24, weight: .bold)
@@ -33,11 +46,11 @@ struct MyDubsView: View {
                     .accessibilityIdentifier("tab-progress")
                 }
                 LoadStateContent(state: dubs, failureIdentifier: "myDubsLoadFailed", retry: onRetry) { dubs in
-                    if dubs.isEmpty {
+                    if dubs.isEmpty || filter != .all {
                         EmptyStateView(
                             systemImage: "film",
                             title: "Nothing on this shelf yet",
-                            message: "Your finished scenes land here. Find your first role in Discover."
+                            message: filter == .all ? "Your finished scenes land here. Find your first role in Discover." : "You haven't saved any \(filter.rawValue.lowercased()) yet."
                         )
                         .accessibilityIdentifier("myDubsEmpty")
                     } else {
@@ -45,25 +58,7 @@ struct MyDubsView: View {
                             .dubFont(14, weight: .regular)
                             .foregroundStyle(Palette.textSecondary)
                             .overlay { StateCarriers(items: [StateCarrier(identifier: "myDubsCount", value: "\(dubs.count)")]) }
-                        LazyVGrid(
-                            columns: dynamicTypeSize.isAccessibilitySize ? [GridItem(.flexible())] : [GridItem(.adaptive(minimum: 104), spacing: 14)],
-                            spacing: 28
-                        ) {
-                            ForEach(dubs) { dub in
-                                Button {
-                                    playing = dub
-                                } label: {
-                                    SavedDubCard(dub: dub, video: DubLibrary.videoURL(for: dub, in: folder))
-                                }
-                                .buttonStyle(.plain)
-                                .accessibilityIdentifier("savedDub-\(dub.id.uuidString)")
-                                .accessibilityValue("\(dub.linesDubbed) of \(dub.totalLines)")
-                                .contextMenu {
-                                    Button("Delete", systemImage: "trash", role: .destructive) { pendingDelete = dub }
-                                }
-                                .accessibilityAction(named: "Delete") { pendingDelete = dub }
-                            }
-                        }
+                        shelves(dubs)
                     }
                 }
                 if let deleteFailure {
@@ -112,23 +107,70 @@ struct MyDubsView: View {
                     Text(profileName)
                         .dubFont(30, weight: .bold)
                         .foregroundStyle(Palette.textPrimary)
-                    Text("A shelf full of scenes, in your voice.")
+                    Text(account.phase.isSignedIn ? "@\(profileName)" : "Your dubs, in one place.")
                         .dubFont(15, weight: .regular)
                         .foregroundStyle(Palette.textSecondary)
                 }
             }
             if case .loaded(let saved) = dubs {
-                HStack(spacing: 24) {
-                    Label("\(saved.count) dubs", systemImage: "film.stack")
-                    Label("\(PracticeStats.currentStreak(dates: saved.map(\.createdAt), today: .now, calendar: .current)) day streak", systemImage: "flame")
+                AdaptiveStack(rowAlignment: .firstTextBaseline, spacing: 24) {
+                    stat(value: "\(saved.count)", label: "dubs")
+                    stat(value: "\(PracticeStats.currentStreak(dates: saved.map(\.createdAt), today: .now, calendar: .current))", label: "day streak")
                 }
-                .dubFont(15, weight: .medium)
-                .foregroundStyle(Palette.textSecondary)
-                .monospacedDigit()
             }
         }
         .padding(.top, 8)
         .padding(.bottom, 8)
+    }
+
+    private func stat(value: String, label: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 5) {
+            Text(value)
+                .dubFont(22, weight: .bold)
+                .foregroundStyle(Palette.textPrimary)
+                .monospacedDigit()
+            Text(label)
+                .dubFont(14, weight: .regular)
+                .foregroundStyle(Palette.textSecondary)
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    private func shelves(_ dubs: [SavedDub]) -> some View {
+        let perShelf = dynamicTypeSize.isAccessibilitySize ? 1 : 3
+        let rows = stride(from: 0, to: dubs.count, by: perShelf).map { Array(dubs[$0..<min($0 + perShelf, dubs.count)]) }
+        return VStack(spacing: 28) {
+            ForEach(rows, id: \.first?.id) { row in
+                VStack(spacing: 0) {
+                    HStack(alignment: .bottom, spacing: 14) {
+                        ForEach(row) { dub in
+                            Button { playing = dub } label: {
+                                SavedDubCard(dub: dub, video: DubLibrary.videoURL(for: dub, in: folder))
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("savedDub-\(dub.id.uuidString)")
+                            .accessibilityValue("\(dub.linesDubbed) of \(dub.totalLines)")
+                            .contextMenu {
+                                Button("Delete", systemImage: "trash", role: .destructive) { pendingDelete = dub }
+                            }
+                            .accessibilityAction(named: "Delete") { pendingDelete = dub }
+                        }
+                        ForEach(row.count..<perShelf, id: \.self) { _ in
+                            Color.clear.frame(maxWidth: .infinity)
+                        }
+                    }
+                    .padding(.horizontal, 14)
+                    VStack(spacing: 0) {
+                        Rectangle().fill(Palette.accent.opacity(0.25)).frame(height: 1)
+                        LinearGradient(colors: [Palette.shelfWood, Palette.shelfWoodShadow], startPoint: .top, endPoint: .bottom)
+                            .frame(height: 10)
+                    }
+                    .clipShape(RoundedRectangle(cornerRadius: 2))
+                    .shadow(color: .black.opacity(0.7), radius: 8, x: 0, y: 8)
+                    .accessibilityHidden(true)
+                }
+            }
+        }
     }
 
     private var profileName: String {
@@ -154,39 +196,44 @@ private struct SavedDubCard: View {
     let video: URL
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            VideoThumbnail(url: video)
-                .aspectRatio(2 / 3, contentMode: .fit)
-                .overlay {
-                    LinearGradient(colors: [.clear, .black.opacity(0.85)], startPoint: .center, endPoint: .bottom)
-                }
-                .overlay(alignment: .bottomLeading) {
+        VideoThumbnail(url: video)
+            .aspectRatio(2 / 3, contentMode: .fit)
+            .overlay {
+                LinearGradient(colors: [.clear, .black.opacity(0.75)], startPoint: .center, endPoint: .bottom)
+            }
+            .overlay(alignment: .bottomLeading) {
+                VStack(alignment: .leading, spacing: 0) {
                     Text(dub.sceneTitle.uppercased())
-                        .displayFont(25)
-                        .foregroundStyle(.white)
-                        .lineLimit(4)
-                        .minimumScaleFactor(0.6)
-                        .padding(12)
+                        .displayFont(20)
+                        .lineLimit(3)
+                        .minimumScaleFactor(0.8)
+                    Text("as \(dub.characterName)")
+                        .dubFont(11, weight: .semibold)
                 }
-                .clipShape(RoundedRectangle(cornerRadius: 5))
-                .overlay(alignment: .leading) {
-                    Rectangle().fill(.black.opacity(0.35)).frame(width: 5)
-                }
-            Text("as \(dub.characterName)")
-                .dubFont(14, weight: .semibold)
                 .foregroundStyle(Palette.textPrimary)
-                .lineLimit(1)
-            Text("\(dub.linesDubbed)/\(dub.totalLines) lines")
-                .dubFont(12, weight: .regular)
-                .foregroundStyle(Palette.textSecondary)
-                .monospacedDigit()
-            LinearGradient(colors: [Palette.shelfWood, Palette.shelfWoodShadow], startPoint: .top, endPoint: .bottom)
-                .frame(height: 8)
-                .accessibilityHidden(true)
-        }
-        .contentShape(Rectangle())
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(dub.sceneTitle), as \(dub.characterName), \(dub.linesDubbed) of \(dub.totalLines) lines")
+                .shadow(color: .black.opacity(0.5), radius: 3, y: 1)
+                .padding(.leading, 12)
+                .padding([.trailing, .bottom], 7)
+            }
+            .overlay(alignment: .leading) {
+                HStack(spacing: 0) {
+                    Rectangle().fill(.black.opacity(0.4)).frame(width: 5)
+                    Rectangle().fill(.white.opacity(0.18)).frame(width: 1)
+                }
+            }
+            .overlay(alignment: .topTrailing) {
+                Image(systemName: "lock.fill")
+                    .dubFont(11, weight: .bold)
+                    .foregroundStyle(Palette.textPrimary)
+                    .frame(width: 22, height: 22)
+                    .background(.black.opacity(0.5), in: Circle())
+                    .padding(6)
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 3))
+            .shadow(color: .black.opacity(0.6), radius: 6, x: 0, y: 5)
+            .contentShape(Rectangle())
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("\(dub.sceneTitle), as \(dub.characterName), \(dub.linesDubbed) of \(dub.totalLines) lines, private")
     }
 }
 

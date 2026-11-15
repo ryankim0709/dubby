@@ -57,6 +57,8 @@ import type * as projects from "../projects.js";
 import type * as sceneCasts from "../sceneCasts.js";
 import type * as sceneTranscription from "../sceneTranscription.js";
 import type * as scenes from "../scenes.js";
+import type * as social from "../social.js";
+import type * as socialTables from "../socialTables.js";
 import type * as takes from "../takes.js";
 import type * as tutoring from "../tutoring.js";
 import type * as tutoringCoaching from "../tutoringCoaching.js";
@@ -129,6 +131,8 @@ declare const fullApi: ApiFromModules<{
   sceneCasts: typeof sceneCasts;
   sceneTranscription: typeof sceneTranscription;
   scenes: typeof scenes;
+  social: typeof social;
+  socialTables: typeof socialTables;
   takes: typeof takes;
   tutoring: typeof tutoring;
   tutoringCoaching: typeof tutoringCoaching;

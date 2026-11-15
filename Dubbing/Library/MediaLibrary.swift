@@ -7,8 +7,47 @@ nonisolated struct LibraryClip: Hashable, Sendable, Identifiable {
     let title: String
     let durationSeconds: Double
     let origin: ClipOrigin
+    let details: LibrarySceneDetails?
 
     var id: URL { url }
+
+    init(url: URL, title: String, durationSeconds: Double, origin: ClipOrigin) {
+        self.init(url: url, title: title, durationSeconds: durationSeconds, origin: origin, details: nil)
+    }
+
+    init(url: URL, title: String, durationSeconds: Double, origin: ClipOrigin, details: LibrarySceneDetails?) {
+        self.url = url
+        self.title = title
+        self.durationSeconds = durationSeconds
+        self.origin = origin
+        self.details = details
+    }
+
+    var sceneTitle: String { title.components(separatedBy: " — ").last ?? title }
+    var sourceTitle: String { title.components(separatedBy: " — ").first ?? title }
+    var languageName: String? { details.map { Locale(identifier: "en").localizedString(forLanguageCode: Locale(identifier: $0.locale).language.languageCode?.identifier ?? $0.locale) ?? $0.locale } }
+}
+
+nonisolated struct LibrarySceneDetails: Codable, Hashable, Sendable {
+    struct Character: Codable, Hashable, Sendable, Identifiable {
+        let id: String
+        let name: String
+        let lineCount: Int
+    }
+
+    let locale: String
+    let synopsis: String?
+    let characters: [Character]
+}
+
+nonisolated struct LibrarySourceManifest: Decodable {
+    struct Clip: Decodable {
+        let filename: String
+        let title: String
+        let language: String
+    }
+
+    let clips: [Clip]
 }
 
 nonisolated enum MediaLibrary {
@@ -20,13 +59,21 @@ nonisolated enum MediaLibrary {
     static func loadClips(in bundle: Bundle) async throws -> [LibraryClip] {
         let candidates = videoExtensions.flatMap { bundle.urls(forResourcesWithExtension: $0, subdirectory: nil) ?? [] }
         let sceneFiles = CuratedSceneLoader.referencedFiles(manifestURLs: CuratedSceneLoader.manifestURLs(in: bundle))
+        let sources: [LibrarySourceManifest.Clip]
+        if let manifest = bundle.url(forResource: "scene-sources", withExtension: "json") {
+            sources = try JSONDecoder().decode(LibrarySourceManifest.self, from: Data(contentsOf: manifest)).clips
+        } else {
+            sources = []
+        }
         var clips: [LibraryClip] = []
         for url in rawClipURLs(candidates, excluding: sceneFiles) {
+            let source = sources.first { $0.filename == url.lastPathComponent }
             clips.append(LibraryClip(
                 url: url,
-                title: title(forFileName: url.deletingPathExtension().lastPathComponent),
+                title: source?.title ?? title(forFileName: url.deletingPathExtension().lastPathComponent),
                 durationSeconds: try await MediaPipeline.loadDuration(of: url),
-                origin: .bundled
+                origin: .bundled,
+                details: source.map { LibrarySceneDetails(locale: $0.language, synopsis: nil, characters: []) }
             ))
         }
         return sortedByTitle(clips)
@@ -58,7 +105,8 @@ extension ImportedClip {
             durationSeconds: clip.durationSeconds,
             origin: clip.origin,
             workingDirectory: FileManager.default.temporaryDirectory
-                .appending(path: "DubProjects/\(UUID().uuidString)", directoryHint: .isDirectory)
+                .appending(path: "DubProjects/\(UUID().uuidString)", directoryHint: .isDirectory),
+            locale: clip.details?.locale
         )
     }
 }

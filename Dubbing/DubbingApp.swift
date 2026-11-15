@@ -5,6 +5,8 @@ struct DubbingApp: App {
     @State private var account: AccountModel
     /// Nil when the build has no backend, so finished dubs aren't scored.
     @State private var scoring: DubScoringModel?
+    @State private var pendingCoDubCode: String?
+    @State private var linkIssue: String?
 
     init() {
         DisplayFont.register()
@@ -21,12 +23,19 @@ struct DubbingApp: App {
                 if account.isAvailable && !account.phase.isSignedIn {
                     SignInView(account: account)
                 } else {
-                    ContentView(account: account, scoring: scoring)
+                    ContentView(account: account, scoring: scoring, pendingCoDubCode: $pendingCoDubCode)
                 }
             }
             .task {
                 await account.start()
             }
+            .onOpenURL { url in
+                do { pendingCoDubCode = try CoDubLink.code(from: url.absoluteString) }
+                catch { linkIssue = error.localizedDescription }
+            }
+            .alert("Couldn't open invitation", isPresented: Binding(get: { linkIssue != nil }, set: { if !$0 { linkIssue = nil } })) {
+                Button("OK") { linkIssue = nil }
+            } message: { Text(linkIssue ?? "") }
         }
     }
 }
