@@ -1,16 +1,9 @@
 import SwiftUI
 
-/// The account sheet: username and password sign-in or sign-up, the signed-in state, and failures with a retry.
+/// The account sheet opened from the tabs: the signed-in learner and signing out.
 struct AccountView: View {
-    private enum CredentialMode: Hashable { case signIn, createAccount }
-
     let account: AccountModel
     let onClose: () -> Void
-
-    // Held here rather than in the form so typed values survive the busy and failed phases.
-    @State private var mode: CredentialMode = .signIn
-    @State private var username = ""
-    @State private var password = ""
 
     var body: some View {
         ScrollView {
@@ -31,10 +24,7 @@ struct AccountView: View {
                     .accessibilityLabel("Close")
                     .accessibilityIdentifier("accountClose")
                 }
-                content
-                Text("Dubbing, exporting, My Dubs, and your local progress work without an account. Your coach needs one to see your practice.")
-                    .dubFont(14, weight: .regular)
-                    .foregroundStyle(Palette.textSecondary)
+                AccountPanel(account: account)
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 8)
@@ -42,9 +32,44 @@ struct AccountView: View {
         .background(Palette.background)
         .preferredColorScheme(.dark)
     }
+}
 
-    @ViewBuilder
-    private var content: some View {
+/// The full-screen page a signed-out learner sees instead of the tabs.
+struct SignInView: View {
+    let account: AccountModel
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 24) {
+                Text("dub.it")
+                    .dubFont(32, weight: .semibold)
+                    .italic()
+                    .foregroundStyle(Palette.accentText)
+                    .accessibilityAddTraits(.isHeader)
+                AccountPanel(account: account)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 24)
+        }
+        .scrollDismissesKeyboard(.interactively)
+        .background(Palette.background)
+        .preferredColorScheme(.dark)
+        .accessibilityIdentifier("signInPage")
+    }
+}
+
+/// Every account state: the username and password form, progress, the signed-in learner, and failures with a retry.
+private struct AccountPanel: View {
+    private enum CredentialMode: Hashable { case signIn, createAccount }
+
+    let account: AccountModel
+
+    // Held here rather than in the form so typed values survive the busy and failed phases.
+    @State private var mode: CredentialMode = .signIn
+    @State private var username = ""
+    @State private var password = ""
+
+    var body: some View {
         if !account.isAvailable {
             EmptyStateView(
                 systemImage: "person.crop.circle.badge.exclamationmark",
@@ -74,8 +99,8 @@ struct AccountView: View {
         VStack(alignment: .leading, spacing: 12) {
             EmptyStateView(
                 systemImage: "person.crop.circle",
-                title: "Sign in to use coaching",
-                message: "Sign in so your coach can follow your practice across sessions."
+                title: "Welcome to dub.it",
+                message: "Sign in or create an account to start dubbing."
             )
             .accessibilityIdentifier("accountSignedOut")
             credentialsForm(errorMessage: errorMessage)

@@ -10,7 +10,17 @@ struct DubbingApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView(account: account)
+            ZStack {
+                // A build without a backend can't sign anyone in, so it opens the app signed out.
+                if account.isAvailable && !account.phase.isSignedIn {
+                    SignInView(account: account)
+                } else {
+                    ContentView(account: account)
+                }
+            }
+            .task {
+                await account.start()
+            }
         }
     }
 }

@@ -27,7 +27,9 @@ The app dubs real scenes end to end on the iPhone, with no sample data. Clips pl
 3. Dub one character in the studio. Each line's original audio plays as a reference, a 1.5-second cue plays before recording, and the video keeps rolling silently while you record so your take lines up with the actor's mouth.
 4. Export the scene with your takes mixed in, save it to My Dubs, and share it.
 
-Progress shows a streak and totals computed from saved dubs. DMs shows an empty state, because messaging needs accounts that don't exist yet.
+Progress shows a streak and totals computed from saved dubs. DMs shows an empty state until messaging is built.
+
+When the build has a Convex URL, the app opens on a sign-in page: learners sign in or create an account with a username and password, stored in Convex. The shared demo logins are `demo`/`demo` and `demo1`/`demo1`. Setup is in [docs/convex-backend.md](docs/convex-backend.md).
 
 Discover also opens a talking coach. You pick a scene character as your teacher and talk to them in the language you're practising; they answer as a talking video face. The coach's code is in place, but it hasn't run end to end yet because it needs provider keys, a Convex deployment, and an avatar per character. See [Talking coach](#talking-coach).
 
@@ -38,9 +40,9 @@ Known limits:
 - **Transcription depends on the device.** On an iPhone, iOS 26 `SpeechTranscriber` is used where Apple reports it supported, then `DictationTranscriber`, then `SFSpeechRecognizer`. Simulator dubbing uses the Convex/OpenAI transcript of the published library video instead, because Apple's speech service can report support but fail to load its model files. Local-only clips still need an iPhone.
 - **Backend script timing uses `whisper-1`.** It provides measured word timestamps, which the studio needs. OpenAI schedules this model to shut down on February 26, 2027; a replacement with word timings is needed before then. See [OpenAI's file transcription guide](https://developers.openai.com/api/docs/guides/speech-to-text).
 - **The coach hears words, not sounds.** It receives an on-device transcript of what you said, so it can coach wording and grammar but not pronunciation.
-- **Not yet built:** pronunciation scoring, character-voice conversion, drafts, and accounts.
+- **Not yet built:** pronunciation scoring, character-voice conversion, and drafts.
 
-Impeccable is installed locally in the repository. Capy is the selected coding tool. The Convex backend source for the coach is in `convex/`, but no Convex deployment is configured yet. Revyl and Supermemory are selected but not configured. The coach uses LiveAvatar (by HeyGen) for the avatar video and OpenAI for its replies and voice. Authentication, pronunciation-assessment, and voice-conversion providers have not been selected.
+Impeccable is installed locally in the repository. Capy is the selected coding tool. The Convex backend source for the coach is in `convex/`, but no Convex deployment is configured yet. Revyl and Supermemory are selected but not configured. The coach uses LiveAvatar (by HeyGen) for the avatar video and OpenAI for its replies and voice. Pronunciation-assessment and voice-conversion providers have not been selected.
 
 ## Selected stack
 
@@ -86,7 +88,7 @@ Capy helps us build the product, Convex operates its cloud services, Revyl verif
 │   ├── ContentView.swift             Tabs, clip and saved-dub loading, and the dub flow launch
 │   ├── TabBar.swift                  AppTab and the custom bottom tab bar
 │   ├── DiscoverView.swift            Scene cards for the bundled clips; LoadState helpers
-│   ├── MessagesView.swift            DMs empty state until accounts exist
+│   ├── MessagesView.swift            DMs empty state until messaging exists
 │   ├── PracticeProgressView.swift    Streak, week, totals, and recent dubs from saved dubs
 │   ├── MyDubsView.swift              Saved dubs, playback, and sharing
 │   ├── Theme.swift                   Color and typography tokens, adaptive layouts, shared UI
