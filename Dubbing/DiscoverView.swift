@@ -67,6 +67,8 @@ struct DiscoverView: View {
     let onAccount: () -> Void
     let onRetry: () -> Void
     @State private var query = ""
+    @State private var language: String?
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var openings: [LibrarySceneOpening] = []
     @Namespace private var zoomNamespace
 
@@ -81,7 +83,7 @@ struct DiscoverView: View {
             }
             .scrollIndicators(.hidden)
             .screenBackground()
-            .searchable(text: $query, prompt: "Search your scenes")
+            .searchable(text: $query, prompt: "Scenes, films, characters")
             .navigationBarTitleDisplayMode(.inline)
             .navigationDestination(for: LibrarySceneOpening.self) { opening in
                 LibrarySceneDetail(clip: opening.clip, onDub: { onDub(opening.clip) })
@@ -116,7 +118,12 @@ struct DiscoverView: View {
 
     @ViewBuilder
     private func library(_ clips: [LibraryClip]) -> some View {
-        let results = clips.filter { query.isEmpty || $0.title.localizedCaseInsensitiveContains(query) }
+        let inLanguage = clips.filter { language == nil || $0.languageName == language }
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        let results = inLanguage.filter { clip in
+            clip.title.localizedCaseInsensitiveContains(trimmed)
+                || clip.details?.characters.contains { $0.name.localizedCaseInsensitiveContains(trimmed) } == true
+        }
         if clips.isEmpty {
             EmptyStateView(systemImage: "film.stack", title: "Your next role is waiting", message: "Library scenes appear here when they are available. Try loading the library again.")
                 .accessibilityIdentifier("discoverEmpty")
@@ -124,9 +131,9 @@ struct DiscoverView: View {
             if results.isEmpty {
                 ContentUnavailableView.search(text: query)
             } else {
-                VStack(spacing: 16) {
+                LazyVGrid(columns: adaptiveGridColumns(spacing: 14, isAccessibilitySize: dynamicTypeSize.isAccessibilitySize), spacing: 22) {
                     ForEach(results) { clip in
-                        SceneCard(clip: clip) { open(clip, from: "search") }
+                        LibraryPosterCard(clip: clip) { open(clip, from: "search") }
                             .matchedTransitionSource(id: "search-\(clip.sceneID)", in: zoomNamespace)
                     }
                 }
@@ -134,39 +141,31 @@ struct DiscoverView: View {
             }
         } else {
             VStack(alignment: .leading, spacing: 32) {
-                HStack {
-                    Text("All scenes")
-                        .dubFont(17, weight: .semibold)
-                    Spacer()
-                    Text("\(clips.count) available")
-                        .dubFont(15, weight: .medium)
-                        .foregroundStyle(Palette.textSecondary)
-                }
-                .padding(.horizontal, 20)
-                .padding(.top, 4)
-                LibraryPosterDeck(clips: clips, namespace: zoomNamespace) { clip in
+                languageTabs(clips)
+                LibraryPosterDeck(clips: inLanguage, namespace: zoomNamespace) { clip in
                     open(clip, from: "deck")
                 }
                 VStack(alignment: .leading, spacing: 16) {
                     Text("Ready for your voice")
                         .dubFont(24, weight: .bold)
-                    ForEach(Array(clips.enumerated()), id: \.element.id) { index, clip in
+                    ForEach(Array(inLanguage.enumerated()), id: \.element.id) { index, clip in
                         Button { open(clip, from: "library") } label: {
-                            HStack(spacing: 14) {
+                            HStack(spacing: 16) {
                                 Text("\(index + 1)")
                                     .dubFont(34, weight: .heavy)
                                     .foregroundStyle(index == 0 ? Palette.textPrimary : Palette.placeholder)
-                                    .frame(width: 28)
+                                    .monospacedDigit()
+                                    .frame(width: 30, alignment: .leading)
                                 VideoThumbnail(url: clip.url)
                                     .frame(width: 52, height: 70)
                                     .clipShape(RoundedRectangle(cornerRadius: 10))
                                     .matchedTransitionSource(id: "library-\(clip.sceneID)", in: zoomNamespace)
                                 VStack(alignment: .leading, spacing: 5) {
-                                    Text(clip.title)
-                                        .dubFont(16, weight: .semibold)
+                                    Text(clip.sceneTitle)
+                                        .dubFont(17, weight: .semibold)
                                         .foregroundStyle(Palette.textPrimary)
                                         .multilineTextAlignment(.leading)
-                                    Text("\(clip.durationSeconds.preciseClockString) · Choose your moment")
+                                    Text([clip.sourceTitle, clip.languageName].compactMap { $0 }.joined(separator: " · "))
                                         .dubFont(14, weight: .regular)
                                         .foregroundStyle(Palette.textSecondary)
                                 }
@@ -174,12 +173,12 @@ struct DiscoverView: View {
                                 Image(systemName: "chevron.right")
                                     .foregroundStyle(Palette.textSecondary)
                             }
-                            .frame(minHeight: 80)
+                            .padding(.vertical, 12)
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
                         .accessibilityIdentifier("libraryScene-\(clip.sceneID)")
-                        if index < clips.count - 1 { Divider().overlay(Palette.divider) }
+                        if index < inLanguage.count - 1 { Divider().overlay(Palette.divider) }
                     }
                 }
                 .padding(.horizontal, 20)
@@ -211,6 +210,34 @@ struct DiscoverView: View {
         }
     }
 
+    private func languageTabs(_ clips: [LibraryClip]) -> some View {
+        let languages = Array(Set(clips.compactMap(\.languageName))).sorted()
+        return ScrollView(.horizontal) {
+            HStack(spacing: 22) {
+                languageTab("All", selection: nil)
+                ForEach(languages, id: \.self) { item in
+                    languageTab(item, selection: item)
+                }
+            }
+            .padding(.horizontal, 20)
+        }
+        .scrollIndicators(.hidden)
+        .padding(.top, 4)
+    }
+
+    private func languageTab(_ title: String, selection: String?) -> some View {
+        Button { language = selection } label: {
+            Text(title)
+                .dubFont(17, weight: language == selection ? .semibold : .medium)
+                .foregroundStyle(language == selection ? Palette.textPrimary : Palette.placeholder)
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(language == selection ? .isSelected : [])
+        .accessibilityIdentifier("sceneLanguage-\(selection ?? "all")")
+    }
+
     private func open(_ clip: LibraryClip, from section: String) {
         openings.append(LibrarySceneOpening(clip: clip, sourceID: "\(section)-\(clip.sceneID)"))
     }
@@ -218,29 +245,69 @@ struct DiscoverView: View {
 
 struct ScenePoster: View {
     let clip: LibraryClip
+    let isFocused: Bool
 
     var body: some View {
-        VideoThumbnail(url: clip.url)
+        LibraryVideoPreview(clip: clip, isActive: isFocused)
             .aspectRatio(2 / 3, contentMode: .fit)
             .overlay {
-                LinearGradient(colors: [.clear, .black.opacity(0.85)], startPoint: .center, endPoint: .bottom)
-            }
-            .overlay(alignment: .topLeading) {
-                MetaPill(text: clip.durationSeconds.preciseClockString, systemImage: "film")
-                    .padding(14)
+                LinearGradient(colors: [.clear, .black.opacity(0.55)], startPoint: .center, endPoint: .bottom)
             }
             .overlay(alignment: .bottomLeading) {
-                Text(clip.title.uppercased().replacingOccurrences(of: "-", with: "‑"))
-                    .displayFont(36)
-                    .foregroundStyle(.white)
+                Text(clip.sceneTitle.uppercased())
+                    .displayFont(30)
+                    .foregroundStyle(Palette.textPrimary)
                     .multilineTextAlignment(.leading)
-                    .lineLimit(4)
-                    .minimumScaleFactor(0.6)
-                    .padding(20)
+                    .lineLimit(3)
+                    .minimumScaleFactor(0.7)
+                    .shadow(color: .black.opacity(0.4), radius: 6, y: 2)
+                    .padding(14)
             }
             .clipShape(RoundedRectangle(cornerRadius: Radius.poster))
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("\(clip.title), \(clip.durationSeconds.preciseClockString)")
+            .accessibilityLabel("\(clip.sceneTitle), from \(clip.sourceTitle)")
+    }
+}
+
+private struct LibraryPosterCard: View {
+    let clip: LibraryClip
+    let onOpen: () -> Void
+
+    var body: some View {
+        Button(action: onOpen) {
+            VStack(alignment: .leading, spacing: 10) {
+                VideoThumbnail(url: clip.url)
+                    .aspectRatio(3 / 4, contentMode: .fit)
+                    .overlay {
+                        LinearGradient(colors: [.clear, .black.opacity(0.55)], startPoint: .center, endPoint: .bottom)
+                    }
+                    .overlay(alignment: .bottomLeading) {
+                        Text(clip.sceneTitle.uppercased())
+                            .displayFont(26)
+                            .foregroundStyle(Palette.textPrimary)
+                            .lineLimit(3)
+                            .minimumScaleFactor(0.8)
+                            .padding(12)
+                    }
+                    .overlay(alignment: .topLeading) {
+                        if let language = clip.languageName {
+                            MetaPill(text: language, systemImage: nil).padding(10)
+                        }
+                    }
+                    .clipShape(RoundedRectangle(cornerRadius: Radius.card))
+                Text(clip.sourceTitle)
+                    .dubFont(15, weight: .semibold)
+                    .foregroundStyle(Palette.textPrimary)
+                Text(clip.durationSeconds.preciseClockString)
+                    .dubFont(13, weight: .regular)
+                    .foregroundStyle(Palette.textSecondary)
+            }
+            .multilineTextAlignment(.leading)
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+        .accessibilityHint("Opens a preview")
+        .accessibilityIdentifier("searchScene-\(clip.sceneID)")
     }
 }
 
@@ -248,12 +315,19 @@ private struct LibraryPosterDeck: View {
     let clips: [LibraryClip]
     let namespace: Namespace.ID
     let onOpen: (LibraryClip) -> Void
-    @State private var focusedIndex = 0
+    @State private var focusedIndex: Int
     @State private var dragOffset: CGFloat = 0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private let cardWidth: CGFloat = 220
     private var step: CGFloat { cardWidth * 0.6 }
+
+    init(clips: [LibraryClip], namespace: Namespace.ID, onOpen: @escaping (LibraryClip) -> Void) {
+        self.clips = clips
+        self.namespace = namespace
+        self.onOpen = onOpen
+        _focusedIndex = State(initialValue: clips.count / 2)
+    }
 
     var body: some View {
         VStack(spacing: 22) {
@@ -265,7 +339,7 @@ private struct LibraryPosterDeck: View {
                         if index == focusedIndex { onOpen(clip) }
                         else { focus(index) }
                     } label: {
-                        ScenePoster(clip: clip)
+                        ScenePoster(clip: clip, isFocused: index == focusedIndex && dragOffset == 0)
                             .matchedTransitionSource(id: "deck-\(clip.sceneID)", in: namespace)
                     }
                     .buttonStyle(.plain)
@@ -296,12 +370,12 @@ private struct LibraryPosterDeck: View {
                 }
             }
             if clips.indices.contains(focusedIndex) {
-                VStack(spacing: 5) {
-                    Text(clips[focusedIndex].title)
+                VStack(spacing: 4) {
+                    Text(clips[focusedIndex].sourceTitle)
                         .dubFont(22, weight: .bold)
                         .foregroundStyle(Palette.textPrimary)
                         .multilineTextAlignment(.center)
-                    Text("Pick a scene. Make it yours.")
+                    Text([clips[focusedIndex].languageName, clips[focusedIndex].durationSeconds.preciseClockString].compactMap { $0 }.joined(separator: " · "))
                         .dubFont(15, weight: .medium)
                         .foregroundStyle(Palette.textSecondary)
                 }
@@ -318,7 +392,10 @@ private struct LibraryPosterDeck: View {
                 .accessibilityHidden(true)
             }
         }
-        .onChange(of: clips.map(\.id)) { focusedIndex = 0 }
+        .onChange(of: clips.map(\.id)) {
+            focusedIndex = clips.count / 2
+            dragOffset = 0
+        }
     }
 
     private func horizontalOffset(for position: Double) -> CGFloat {

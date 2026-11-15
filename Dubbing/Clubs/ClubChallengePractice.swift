@@ -8,7 +8,7 @@ struct ClubChallengePractice: View {
     @Environment(\.dismiss) private var dismiss
 
     private enum Stage {
-        case characters, preparing, studio(DubSetup), result(DubSetup, [Int: RecordedTake]), failed(String)
+        case characters, preparing, studio(DubSetup, [Int: RecordedTake]), result(DubSetup, [Int: RecordedTake]), failed(String)
     }
 
     var body: some View {
@@ -37,10 +37,10 @@ struct ClubChallengePractice: View {
                     .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() } } }
                     .navigationTitle("Bridge challenge").navigationBarTitleDisplayMode(.inline)
                 case .preparing: ProgressView("Preparing the scene…")
-                case .studio(let setup):
-                    DubSessionView(setup: setup, account: account) { stage = .result(setup, $0) }
+                case .studio(let setup, let takes):
+                    DubSessionView(setup: setup, account: account, initialTakes: takes, requiredKeptLines: 1) { stage = .result(setup, $0) }
                 case .result(let setup, let takes):
-                    DubResultView(setup: setup, takes: takes, account: account, scoring: scoring, onDone: { dismiss() })
+                    DubResultView(setup: setup, takes: takes, account: account, scoring: scoring, completionRoom: nil, onDone: { dismiss() }, onKeepRecording: { stage = .studio(setup, takes) })
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -53,7 +53,7 @@ struct ClubChallengePractice: View {
         stage = .preparing
         do {
             let setup = try await CuratedSceneStudio.makeSetup(scene: scene, characterID: character.id, barCount: 64, workingDirectory: CuratedSceneStudio.newWorkingDirectory())
-            stage = .studio(setup)
+            stage = .studio(setup, [:])
         } catch { stage = .failed(error.localizedDescription) }
     }
 }

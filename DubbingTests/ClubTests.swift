@@ -3,6 +3,15 @@ import Testing
 @testable import Dubbing
 
 struct ClubTests {
+    @Test func bundledChallengeLoadsWithItsPreparedAudio() async throws {
+        let manifest = try #require(CuratedSceneLoader.manifestURLs(in: .main).first {
+            $0.lastPathComponent == "tears-of-steel-bridge-manifest.json"
+        })
+        let scene = try await CuratedSceneLoader.loadScene(manifestURL: manifest)
+        #expect(scene.characters.map(\.id) == ["thom", "celia"])
+        #expect(scene.lines.count == 4)
+    }
+
     @Test func uploadValidationReadsTheMediaBeforeSharing() async throws {
         let video = try TestFixtures.twoToneVideo()
         let draft = ClubMediaDraft(url: video, kind: .video, title: "Synthetic performance", replyToMessageId: nil)

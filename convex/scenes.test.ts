@@ -102,6 +102,14 @@ describe("GET /scenes", () => {
           slug: "synthetic-fixture-scene",
           title: "SYNTHETIC TEST FIXTURE scene",
           durationSeconds: 10,
+          details: {
+            locale: "en-US",
+            synopsis: "A synthetic scene used only by tests.",
+            characters: [
+              { id: "fixture-a", name: "Fixture Character A", lineCount: 1 },
+              { id: "fixture-b", name: "Fixture Character B", lineCount: 0 },
+            ],
+          },
           video: { url: expect.any(String), sha256: expect.any(String), byteSize: 16, contentType: "video/mp4" },
         },
       ],

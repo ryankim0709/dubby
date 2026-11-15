@@ -8,8 +8,10 @@ import { SCHEMA_VERSION } from "./lib/config";
 import { ConfigurationError, requiredEnv } from "./lib/env";
 import { PASSWORD_JWKS_PATH, publicJwks } from "./lib/passwordAuth";
 import { logEvent } from "./lib/log";
+import { CastResponseError } from "./lib/sceneCast";
 import { TranscriptionResponseError } from "./lib/transcription";
 import { registerTutoringRoutes } from "./tutoringHttp";
+import { castPublishedScene } from "./sceneCasts";
 import { transcribePublishedScene } from "./sceneTranscription";
 import { registerBillingRoutes } from "./billingHttp";
 import { registerClubRoutes } from "./clubsHttp";
@@ -111,6 +113,40 @@ http.route({
   }),
 });
 
+// Frames are optional so a cached cast costs no upload: without them the reply is the cast, "processing", or
+// "framesNeeded". About one small JPEG every 1.5 s keeps a two-minute scene well under the request size limit.
+const castRequest = transcriptionRequest.extend({
+  frames: z.array(z.object({ seconds: z.number().finite().nonnegative(), jpegBase64: z.base64().min(1).max(200_000) })).max(100),
+});
+
+http.route({
+  path: "/scenes/speakers",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    let body: z.infer<typeof castRequest>;
+    try {
+      body = castRequest.parse(await request.json());
+    } catch (error) {
+      if (error instanceof SyntaxError || error instanceof z.ZodError) return json(400, { error: "A scene slug, checksum, supported locale and frames list are required." });
+      throw error;
+    }
+    try {
+      const result = await castPublishedScene(ctx, body);
+      return json(result.status === "ready" ? 200 : 202, result);
+    } catch (error) {
+      if (error instanceof ConvexError) {
+        const data = z.object({ code: z.string(), message: z.string() }).parse(error.data);
+        const status = data.code === "NOT_FOUND" ? 404 : data.code === "CONFLICT" ? 409 : 400;
+        return json(status, { error: data.message });
+      }
+      if (error instanceof ConfigurationError) return json(503, { error: error.message, code: "not_configured" });
+      if (error instanceof OpenAI.APIError) return json(502, { error: "OpenAI couldn't find the library scene's speakers. Try again shortly.", code: "provider_failed" });
+      if (error instanceof CastResponseError) return json(502, { error: error.message, code: "provider_failed" });
+      throw error;
+    }
+  }),
+});
+
 // The landing page is served from Vercel, a different origin, so the signup route answers CORS preflights.
 // It's public on purpose: anyone may join the waitlist, and it stores only what the form sends.
 const waitlistCors = {
@@ -204,6 +240,19 @@ http.route({
 });
 
 const audioPath = /^\/media\/attempts\/([^/]+)\/audio$/;
+http.route({
+  pathPrefix: "/social/media/",
+  method: "GET",
+  handler: httpAction(async (ctx, request) => {
+    if (!(await isSignedIn(ctx))) return unauthenticated("social.media");
+    const rawId = new URL(request.url).pathname.slice("/social/media/".length);
+    const asset = await ctx.runQuery(internal.social.media, { rawId });
+    if (asset === null) return json(404, { error: "This video isn't shared with your account" });
+    const blob = await ctx.storage.get(asset.storageId);
+    if (blob === null) return json(404, { error: "The shared video is missing" });
+    return new Response(blob, { headers: { "Content-Type": "video/mp4", "Cache-Control": "private, no-store" } });
+  }),
+});
 const rangeHeader = /^bytes=(\d*)-(\d*)$/;
 
 /** Streams a recording to its owner. Range requests are supported so AVPlayer can seek. */

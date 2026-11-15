@@ -2,11 +2,14 @@ import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 import { tutoringTables } from "./tutoringTables";
 import { assessmentContentFields, dubLineResultV, dubTakeStatusV, jobErrorV, jobStageV, jobStatusV, outcomeV } from "./lib/validators";
+import { castCharacterV, castSegmentV } from "./lib/sceneCast";
 import { timedWordV } from "./lib/transcription";
+import { socialTables } from "./socialTables";
 
 /** Tables follow docs/convex-backend.md and contract v1 section 4. Ids are Convex ids; times are epoch milliseconds. */
 export default defineSchema({
   ...tutoringTables,
+  ...socialTables,
 
   /** Landing-page signups. Emails are stored lowercased, so `by_email` finds repeat signups. */
   waitlist: defineTable({
@@ -23,9 +26,10 @@ export default defineSchema({
 
   users: defineTable({
     tokenIdentifier: v.string(),
+    username: v.optional(v.string()),
     timeZone: v.optional(v.string()),
     createdAt: v.number(),
-  }).index("by_token_identifier", ["tokenIdentifier"]),
+  }).index("by_token_identifier", ["tokenIdentifier"]).index("by_username", ["username"]),
 
   clubMembers: defineTable({
     ownerId: v.id("users"),
@@ -134,6 +138,17 @@ export default defineSchema({
     leaseExpiresAt: v.number(),
     durationSeconds: v.optional(v.number()),
     words: v.optional(v.array(timedWordV)),
+  }).index("by_video_locale", ["videoId", "locale"]),
+
+  /** Who speaks when in a published video, and each character's name and best frame, shared by every learner. */
+  sceneCasts: defineTable({
+    videoId: v.id("_storage"),
+    locale: v.string(),
+    status: v.union(v.literal("processing"), v.literal("ready"), v.literal("failed")),
+    leaseId: v.string(),
+    leaseExpiresAt: v.number(),
+    characters: v.optional(v.array(castCharacterV)),
+    segments: v.optional(v.array(castSegmentV)),
   }).index("by_video_locale", ["videoId", "locale"]),
 
   /** Immutable: a text or timing change inserts a new row with the next referenceVersion. */

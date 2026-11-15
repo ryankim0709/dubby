@@ -1,11 +1,34 @@
 import Foundation
 
+/// Where a clip comes from, which decides how its speakers are found.
+nonisolated enum ClipOrigin: Hashable, Sendable {
+    /// Bundled into the app; the device groups its lines by voice.
+    case bundled
+    /// A published library scene; the backend works out its cast from the whole clip.
+    case published
+}
+
 /// The clip being dubbed, plus the folder this dub writes its audio, takes, and exports into.
 nonisolated struct ImportedClip: Hashable, Sendable {
     let url: URL
     let title: String
     let durationSeconds: Double
+    let origin: ClipOrigin
     let workingDirectory: URL
+    let locale: String?
+
+    init(url: URL, title: String, durationSeconds: Double, origin: ClipOrigin, workingDirectory: URL) {
+        self.init(url: url, title: title, durationSeconds: durationSeconds, origin: origin, workingDirectory: workingDirectory, locale: nil)
+    }
+
+    init(url: URL, title: String, durationSeconds: Double, origin: ClipOrigin, workingDirectory: URL, locale: String?) {
+        self.url = url
+        self.title = title
+        self.durationSeconds = durationSeconds
+        self.origin = origin
+        self.workingDirectory = workingDirectory
+        self.locale = locale
+    }
 }
 
 /// The part of the clip being dubbed, in seconds from the clip's start.
@@ -16,7 +39,7 @@ nonisolated struct ClipSection: Hashable, Sendable {
     var duration: Double { end - start }
 }
 
-nonisolated struct TimeSpan: Hashable, Sendable {
+nonisolated struct TimeSpan: Codable, Hashable, Sendable {
     let start: Double
     let end: Double
 }
@@ -56,6 +79,12 @@ nonisolated struct LineDraft: Hashable, Sendable {
     let text: String
     let start: Double
     let end: Double
+}
+
+/// A section line, timed from the section start, and the cast character who speaks it.
+nonisolated struct CastLine: Hashable, Sendable {
+    let line: LineDraft
+    let character: Int
 }
 
 /// Everything measured from the section audio that speaker grouping needs.
@@ -146,15 +175,21 @@ nonisolated struct DubSetup: Hashable, Sendable {
     let curated: CuratedSceneSelection?
     /// The BCP-47 locale the lines are spoken in, which scoring grades against.
     let locale: String
+    let protectedAudioSpans: [TimeSpan]
 
     /// A dub of a raw clip, scripted by transcription.
     init(clip: ImportedClip, section: ClipSection, script: Script, characterID: Int, locale: String) {
+        self.init(clip: clip, section: section, script: script, characterID: characterID, locale: locale, protectedAudioSpans: [])
+    }
+
+    init(clip: ImportedClip, section: ClipSection, script: Script, characterID: Int, locale: String, protectedAudioSpans: [TimeSpan]) {
         self.clip = clip
         self.section = section
         self.script = script
         self.characterID = characterID
         self.locale = locale
         curated = nil
+        self.protectedAudioSpans = protectedAudioSpans
     }
 
     /// A dub of a curated scene; see `CuratedSceneStudio.makeSetup`.
@@ -165,6 +200,7 @@ nonisolated struct DubSetup: Hashable, Sendable {
         characterID = curated.speakerID
         self.curated = curated
         locale = curated.scene.locale
+        protectedAudioSpans = []
     }
 
     /// How a take that runs long is bounded in this dub.

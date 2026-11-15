@@ -11,12 +11,19 @@ export const ensure = mutation({
   returns: v.object({ userId: v.id("users"), created: v.boolean() }),
   handler: async (ctx) => {
     const { subject } = await requireLearner(ctx);
+    const identity = await ctx.auth.getUserIdentity();
+    const accountId = identity !== null && identity.issuer === process.env.CONVEX_SITE_URL ? ctx.db.normalizeId("passwordAccounts", identity.subject) : null;
+    const account = accountId === null ? null : await ctx.db.get(accountId);
+    const username = account?.username;
     const existing = await ctx.db
       .query("users")
       .withIndex("by_token_identifier", (q) => q.eq("tokenIdentifier", subject))
       .unique();
-    if (existing !== null) return { userId: existing._id, created: false };
-    const userId = await ctx.db.insert("users", { tokenIdentifier: subject, createdAt: Date.now() });
+    if (existing !== null) {
+      if (username !== undefined && existing.username !== username) await ctx.db.patch(existing._id, { username });
+      return { userId: existing._id, created: false };
+    }
+    const userId = await ctx.db.insert("users", { tokenIdentifier: subject, username, createdAt: Date.now() });
     logEvent({ operation: "users.ensure", status: "ok", userId });
     return { userId, created: true };
   },

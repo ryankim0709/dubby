@@ -7,6 +7,7 @@ These instructions apply throughout this repository. Follow more specific nested
 - Dubby is an entertainment-first iOS app for learning languages by dubbing short scenes, with pronunciation coaching.
 - Product reference: https://chatgpt.com/share/6af93b36-93b8-83e8-adf7-baf6326f35ac. The confirmed direction is Dubby. The `avatar-coach` branch adds a talking-character coach (a LiveAvatar video face that speaks Claude's replies); other avatar-tutor ideas stay out of scope.
 - The repository contains a native SwiftUI app: `Dubbing/`, `DubbingTests/`, and the shared `Dubbing` Xcode scheme.
+- Mobile development targets iPhone only. Design, implement, and verify iPhone layouts; do not add iPad work or require iPad checks unless the user explicitly expands the scope.
 - The project uses Swift 6, targets iOS 26.0+, and enables default MainActor isolation for the app target. Preserve these settings unless asked.
 - Read `README.md` for the selected development tools, cloud architecture, and integration status. Follow those choices; the reference chat's other stack suggestions are not adopted dependencies.
 - Erica's UI merged into `Dubbing/` on `main` is the approved final design. Preserve it when adding features, fixing bugs, or integrating older branches; redesigns require an explicit user request. Read `DESIGN.md` and `.cursor/rules/ui.mdc` before UI work.

@@ -173,7 +173,7 @@ struct PermissionStateTests {
 
 struct LaunchConfigurationTests {
     private func clip(_ name: String) -> LibraryClip {
-        LibraryClip(url: URL(filePath: "/bundle/\(name).mp4"), title: name, durationSeconds: 10)
+        LibraryClip(url: URL(filePath: "/bundle/\(name).mp4"), title: name, durationSeconds: 10, origin: .bundled)
     }
 
     @Test func readsOnlyTheDocumentedArguments() {

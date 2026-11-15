@@ -56,7 +56,7 @@ nonisolated enum CuratedSceneStudio {
         }
         let speakers = scene.characters.enumerated().map { Speaker(id: $0.offset, name: $0.element.displayName) }
         return DubSetup(
-            clip: ImportedClip(url: scene.videoURL, title: scene.title, durationSeconds: scene.durationSeconds, workingDirectory: workingDirectory),
+            clip: ImportedClip(url: scene.videoURL, title: scene.title, durationSeconds: scene.durationSeconds, origin: .bundled, workingDirectory: workingDirectory),
             script: Script(lines: selection.scriptLines(envelopes: envelopes), speakers: speakers),
             curated: selection
         )

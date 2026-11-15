@@ -220,15 +220,27 @@ nonisolated enum StudioAudioSession {
 /// A bare video surface with no system controls, so the flow can drive playback itself.
 struct PlayerSurface: UIViewRepresentable {
     let player: AVPlayer
+    let gravity: AVLayerVideoGravity
+
+    init(player: AVPlayer) {
+        self.init(player: player, gravity: .resizeAspect)
+    }
+
+    init(player: AVPlayer, gravity: AVLayerVideoGravity) {
+        self.player = player
+        self.gravity = gravity
+    }
 
     func makeUIView(context: Context) -> PlayerContainerView {
         let view = PlayerContainerView()
         view.playerLayer.player = player
+        view.playerLayer.videoGravity = gravity
         return view
     }
 
     func updateUIView(_ view: PlayerContainerView, context: Context) {
         view.playerLayer.player = player
+        view.playerLayer.videoGravity = gravity
     }
 }
 
@@ -238,6 +250,7 @@ final class PlayerContainerView: UIView {
     override init(frame: CGRect) {
         super.init(frame: frame)
         backgroundColor = .black
+        isUserInteractionEnabled = false
         playerLayer.videoGravity = .resizeAspect
         layer.addSublayer(playerLayer)
     }

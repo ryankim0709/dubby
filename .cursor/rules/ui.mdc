@@ -35,6 +35,6 @@ alwaysApply: false
 
 - Preserve Dynamic Type scaling, `AdaptiveStack` and adaptive grids, scrollable content, safe areas, 44-point minimum interactive targets, readable scrims, and meaningful VoiceOver labels. Use SF Symbols for icons.
 - Accessibility and functional fixes should stay within the approved system. If a necessary fix materially changes the design, explain the tradeoff and get the user's direction before implementing that change.
-- For UI changes, compare rendered affected screens with the current-main baseline on iPhone and iPad, including enlarged accessibility text and relevant loading/error/empty states. Verify real interactions; screenshots alone do not prove services work.
+- For UI changes, compare rendered affected screens with the current-main baseline on iPhone, including enlarged accessibility text and relevant loading/error/empty states. iPad work and checks are outside the mobile scope unless the user explicitly requests them. Verify real interactions; screenshots alone do not prove services work.
 - Follow `AGENTS.md` and `README.md#build-and-test` for manual build/test checks, device-only media verification, and reporting limits. Do not introduce CI, automated QA jobs, or PR verification agents.
 - Update `DESIGN.md` only when an explicitly approved design-system change needs recording; do not rewrite the system to justify an incidental feature change.
