@@ -227,7 +227,8 @@ Every finished dub gets one score sheet: the evidence for that dub, scored the s
 
 Each take is graded into the line-attempt response defined above, so progress, coaching, and memory treat it like any other graded attempt.
 
-- **Evaluator.** OpenAI `whisper-1` transcribes the take with word timings, without the script as a hint, so it can't fill in the word the learner meant. Provenance is `openai-whisper`, model `whisper-1`, config `whisper-transcript-v1`, measurement `transcript_only`.
+- **Evaluator.** OpenAI `whisper-1` transcribes the take with word timings, without the script as a hint, so it can't fill in the word the learner meant. Provenance is `openai-whisper`, model `whisper-1`, config `whisper-transcript-v2`, measurement `transcript_only`.
+- **Word matching.** Whisper's word list splits hyphenated and elided words ("asseyez-vous" into "asseyez" and "vous", "c'est" into "c" and "est"). Consecutive pieces that together spell a script word are joined back into that word, and words compare without hyphens and apostrophes. Config v1 scored those words as errors; its results are a separate progress series.
 - **Reference.** The line text from the dub's script is the reference. The line id is derived from the scene, the locale, and the normalized line text, so the same line in the same scene is one line across dubs.
 - **Scores.** `wordAccuracy` and `timingFit` use the formulas above. A transcript is not pronunciation or fluency evidence, so `pronunciation` and `fluency` are null with `insufficient_evidence`, `languageOverall` is null with `missing_components`, and every word's `pronunciationScore` is null.
 - **Word timings.** Whisper's word times are clipped to the recording. A word whose time span is empty after clipping has null timings rather than an invented span. `timingFit` is null with `insufficient_evidence` when no recognized word has a timing.

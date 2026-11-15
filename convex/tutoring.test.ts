@@ -13,6 +13,8 @@ import { dubbingSessionResults, recordsForSession, type TutoringRecord } from ".
 import { tutoringRefs } from "./tutoringRefs";
 import { buildEvidencePack, composeReply, replyProblems, templateReply, type EvidencePack } from "./tutoringReply";
 import { tutoringTables } from "./tutoringTables";
+import appSchema from "./schema";
+import { grantCoachPremium } from "./test.helpers";
 
 // Synthetic, contract-shaped grading results. Every fixture passes the contract schema before use.
 
@@ -649,6 +651,18 @@ describe("convex tutoring functions", () => {
     expect((await t.withIdentity(alice).query(tutoringRefs.progress, {})).series).toEqual([]);
   });
 
+  test("a drain that fills its batch schedules another, so a large change doesn't stall", async () => {
+    fakeSupermemory();
+    const t = convexTest(schema, modules);
+    const takes = Array.from({ length: 30 }, (_, index) =>
+      scored({ assessmentId: `bulk-as${index}`, attemptId: `bulk-a${index}`, recordedAt: "2026-11-10T10:00:00-08:00" }, lineA, good(4), 80),
+    );
+    await t.mutation(tutoringRefs.ingestDubbingSession, ingestArgs(alice.tokenIdentifier, session("bulk", acousticEvaluator, takes)));
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
+    // Thirty attempt notes, the dub note, and the trend note.
+    expect(await t.withIdentity(alice).query(tutoringRefs.memoryStatus, {})).toEqual({ pending: 0, failed: 0, done: 32 });
+  });
+
   test("a rewritten note replaces its earlier version in Supermemory", async () => {
     const memory = fakeSupermemory();
     const t = convexTest(schema, modules);
@@ -742,7 +756,8 @@ describe("coach and tutor HTTP routes", () => {
   });
 
   async function seededTutor() {
-    const t = convexTest(schema, modules);
+    const t = convexTest(appSchema, modules);
+    await grantCoachPremium(t, alice);
     await t.mutation(tutoringRefs.ingestDubbingSession, ingestArgs(alice.tokenIdentifier, seeded));
     return t;
   }

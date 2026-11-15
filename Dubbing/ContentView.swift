@@ -30,7 +30,7 @@ struct ContentView: View {
                 Color.clear
             }
             Tab("Inbox", systemImage: "tray.fill", value: AppTab.messages) {
-                NavigationStack { MessagesView() }
+                NavigationStack { MessagesView(account: account, scoring: scoring) }
             }
             Tab("Shelf", systemImage: "books.vertical.fill", value: AppTab.myDubs) {
                 NavigationStack {
@@ -43,12 +43,12 @@ struct ContentView: View {
         }
         .tint(Palette.textPrimary)
         .fullScreenCover(item: $launch, onDismiss: reloadDubs) { launch in
-            DubFlowView(launch: launch, clips: clips, scoring: scoring, tokens: AccountTokenProvider(account: account), onRetry: reloadClips, onClose: { self.launch = nil })
+            DubFlowView(launch: launch, clips: clips, account: account, scoring: scoring, onRetry: reloadClips, onClose: { self.launch = nil })
         }
         .fullScreenCover(isPresented: $isCoachPresented) {
             // The dub result screen has no coach entry yet. When it gains one it should pass a
             // CoachPracticeContext only once its lines carry backend line ids; ScriptLine.id is a local index today.
-            CoachView(practice: nil, tokens: AccountTokenProvider(account: account), onClose: { isCoachPresented = false })
+            CoachAccessView(account: account, onClose: { isCoachPresented = false })
         }
         .sheet(isPresented: $isAccountPresented) {
             AccountView(account: account, onClose: { isAccountPresented = false })

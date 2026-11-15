@@ -257,6 +257,19 @@
       link.textContent = "See the founding plan";
       box.append(link);
     }
+    if (config.whopWaitlistUrl) {
+      const note = document.createElement("p");
+      note.textContent = config.whopWaitlistSandbox
+        ? "Your email spot is saved. You can also try our free early-access waitlist on Whop. This optional hackathon demo uses Whop's sandbox and requires Whop sign-in."
+        : "Your email spot is saved. You can also join our free early-access waitlist on Whop with your Whop account.";
+      const whopLink = document.createElement("a");
+      whopLink.className = "btn btn-primary btn-small";
+      whopLink.href = config.whopWaitlistUrl;
+      whopLink.target = "_blank";
+      whopLink.rel = "noopener noreferrer";
+      whopLink.textContent = config.whopWaitlistSandbox ? "Join on Whop (sandbox demo)" : "Join on Whop";
+      box.append(note, whopLink);
+    }
     form.classList.add("is-done");
     form.replaceChildren(box);
     box.focus({ preventScroll: true });
@@ -313,7 +326,7 @@
           }),
         });
         const result = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(result.error || "Something went wrong.");
+        if (!response.ok || result.ok !== true) throw new Error(result.error || "The signup wasn't confirmed by the server.");
         showJoined(form, email, plan);
       } catch (error) {
         const offline = error instanceof TypeError;

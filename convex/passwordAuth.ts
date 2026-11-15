@@ -23,6 +23,9 @@ type Session = { token: string; username: string; expiresAt: number };
 const DEMO_ACCOUNTS: readonly { username: string; password: string }[] = [
   { username: "demo", password: "demo" },
   { username: "demo1", password: "demo1" },
+  { username: "maya", password: "maya" },
+  { username: "theo", password: "theo" },
+  { username: "jordan", password: "jordan" },
 ];
 
 async function issueSession(accountId: Id<"passwordAccounts">, username: string): Promise<Session> {

@@ -152,6 +152,14 @@ struct DubSessionView: View {
         }
         .task {
             refreshMicrophone()
+            if let curated = setup.curated {
+                do {
+                    let timeline = DubTimeline.curated(selection: curated, takes: [:], rules: .standard)
+                    player.player.replaceCurrentItem(with: try await DubRenderer.makePreviewItem(for: timeline))
+                } catch {
+                    issue = FlowIssue(error: error)
+                }
+            }
             await player.seek(to: lineStart)
         }
         .onReceive(NotificationCenter.default.publisher(for: AVAudioSession.interruptionNotification)) { notification in

@@ -39,9 +39,9 @@ private enum ExportPhase: Equatable {
 struct DubResultView: View {
     let setup: DubSetup
     let takes: [Int: RecordedTake]
+    let account: AccountModel
     /// Nil when the build has no backend.
     let scoring: DubScoringModel?
-    let tokens: any CoachAuthTokenProvider
     let onDone: () -> Void
     @State private var phase: ExportPhase = .filteringDialogue
     @State private var savedDubID: UUID?
@@ -50,6 +50,7 @@ struct DubResultView: View {
     @State private var attempt = 0
     @State private var exportTask: Task<Void, Never>?
     @State private var saveFailed = false
+    @State private var clubDraft: ClubMediaDraft?
 
     private static let logger = Logger(subsystem: "com.ryankim.Dubbing", category: "export")
     private let history = LocalDubHistory(folder: DubLibrary.defaultFolder)
@@ -128,6 +129,13 @@ struct DubResultView: View {
                     }
                     .buttonStyle(PrimaryButtonStyle(cornerRadius: 16))
                     .accessibilityIdentifier("shareDub")
+                    if setup.curated?.scene.id == "tears-of-steel-bridge" {
+                        Button("Share to club") {
+                            clubDraft = ClubMediaDraft(url: video, kind: .video, title: setup.clip.title, replyToMessageId: nil)
+                        }
+                        .buttonStyle(SecondaryButtonStyle())
+                        .accessibilityIdentifier("shareResultToClub")
+                    }
                     Button("Done", action: onDone)
                         .buttonStyle(SecondaryButtonStyle())
                         .accessibilityIdentifier("doneDub")
@@ -147,6 +155,7 @@ struct DubResultView: View {
             }
         }
         .onDisappear { exportTask?.cancel() }
+        .sheet(item: $clubDraft) { draft in ClubComposer(account: account, draft: draft, onShared: {}) }
         .fullScreenCover(isPresented: Binding(get: { tutor != nil }, set: { if !$0 { tutor = nil } })) {
             if let tutor {
                 LiveTutorView(session: tutor)
@@ -200,12 +209,13 @@ struct DubResultView: View {
             Text("\(takes.count) of \(setup.script.lines(spokenBy: setup.characterID).count) lines in your voice, saved to your Shelf.")
                 .dubFont(14, weight: .regular)
                 .foregroundStyle(Palette.textSecondary)
-            Label(
+            if setup.curated == nil { Label(
                 "Under your lines the original dialogue is filtered out rather than separated, so music and effects there sound thinner.",
                 systemImage: "waveform.badge.minus"
             )
             .dubFont(12, weight: .regular)
             .foregroundStyle(Palette.textSecondary)
+            }
             if !trimmed.isEmpty {
                 Label(
                     String(
@@ -245,7 +255,7 @@ struct DubResultView: View {
     private func startTutor() {
         guard let savedDubID else { return }
         do {
-            let backend = try CoachBackendClient.configured(in: .main, tokens: tokens)
+            let backend = try CoachBackendClient.configured(in: .main, tokens: AccountTokenProvider(account: account))
             tutorUnavailable = nil
             tutor = LiveTutorSession(clientDubID: savedDubID.uuidString.lowercased(), backend: backend)
         } catch {
@@ -292,6 +302,11 @@ struct DubResultView: View {
         let background = folder.appending(path: "mix-background-\(run).caf")
         let output = folder.appending(path: "dub-\(run).mp4")
         do {
+            if let curated = setup.curated {
+                try await advance(to: .mixing)
+                let timeline = DubTimeline.curated(selection: curated, takes: takes, rules: .standard)
+                _ = try await DubProduction.render(timeline, to: output)
+            } else {
             try await advance(to: .filteringDialogue)
             try await MediaPipeline.exportAudio(from: setup.clip.url, section: section, to: sceneAudio)
             try await MediaPipeline.renderDialogueSuppressed(from: sceneAudio, to: background)
@@ -305,6 +320,7 @@ struct DubResultView: View {
                 suppressionSpans: spans,
                 to: output
             )
+            }
 
             try await advance(to: .measuring)
             var measurements: [TakeMeasurement] = []

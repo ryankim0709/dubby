@@ -11,6 +11,8 @@ import { logEvent } from "./lib/log";
 import { TranscriptionResponseError } from "./lib/transcription";
 import { registerTutoringRoutes } from "./tutoringHttp";
 import { transcribePublishedScene } from "./sceneTranscription";
+import { registerBillingRoutes } from "./billingHttp";
+import { registerClubRoutes } from "./clubsHttp";
 import { parseWaitlistSignup } from "./waitlist";
 import { paidSignupFromEvent, verifyWhopSignature } from "./whop";
 
@@ -47,6 +49,8 @@ http.route({
 });
 
 registerTutoringRoutes(http);
+registerBillingRoutes(http);
+registerClubRoutes(http);
 
 /** Convex fetches this to validate password session tokens (auth.config.ts). */
 http.route({

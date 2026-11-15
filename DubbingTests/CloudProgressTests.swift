@@ -34,7 +34,7 @@ struct CloudProgressTests {
     }
 
     @Test func anAcousticSeriesShowsItsMeasuredNumbers() throws {
-        let summary = CloudSeriesSummary(try Self.progress(Self.series(measurement: "acoustic", basis: "acoustic")).series[0])
+        let summary = CloudSeriesSummary(try Self.progress(Self.series(measurement: "acoustic", basis: "acoustic")).series[0], history: [])
 
         #expect(summary.isAcoustic)
         #expect(summary.skills.map(\.metric) == [.pronunciation, .wordAccuracy])
@@ -45,7 +45,7 @@ struct CloudProgressTests {
 
     @Test func aTranscriptOnlySeriesNeverShowsPronunciationOrFluency() throws {
         let transcript = Self.series(measurement: "transcript_only", basis: "script_agreement", unavailable: #"[{"metric": "timingFit", "reason": "no word timings"}]"#)
-        let summary = CloudSeriesSummary(try Self.progress(transcript).series[0])
+        let summary = CloudSeriesSummary(try Self.progress(transcript).series[0], history: [])
 
         #expect(!summary.isAcoustic)
         #expect(summary.skills.map(\.metric) == [.wordAccuracy])
@@ -56,10 +56,25 @@ struct CloudProgressTests {
 
     @Test func seriesFromDifferentLocalesStayApart() throws {
         let both = try Self.progress(Self.series(measurement: "acoustic", basis: "acoustic"), Self.series(measurement: "acoustic", basis: "acoustic", locale: "fr-FR"))
-        let summaries = both.series.map(CloudSeriesSummary.init)
+        let summaries = both.series.map { CloudSeriesSummary($0, history: []) }
 
         #expect(summaries.count == 2)
         #expect(Set(summaries.map(\.id)).count == 2)
+    }
+
+    @Test func aSeriesChartsOnlyTheDubsItsOwnEvaluatorScored() throws {
+        let series = try Self.progress(Self.series(measurement: "transcript_only", basis: "script_agreement")).series[0]
+        let dub = { (id: String, configVersion: String, score: Double?) in
+            DubHistoryItem(
+                clientDubId: id, capturedAt: 1_763_000_000_000, sceneTitle: "SYNTHETIC scene", characterName: "Hero", locale: "es-ES",
+                evaluator: .init(rubricVersion: "language-v1", provider: "synthetic", configVersion: configVersion),
+                dubScore: score, wordAccuracy: nil, timingFit: nil
+            )
+        }
+        let summary = CloudSeriesSummary(series, history: [dub("same", "1", 77), dub("older-evaluator", "0", 50), dub("no-score", "1", nil)])
+
+        #expect(summary.dubScores.map(\.id) == ["same"])
+        #expect(summary.dubScores.first?.score == 77)
     }
 
     @Test func signedOutNeverLoadsCloudProgress() async throws {

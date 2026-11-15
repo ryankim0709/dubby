@@ -27,6 +27,41 @@ export default defineSchema({
     createdAt: v.number(),
   }).index("by_token_identifier", ["tokenIdentifier"]),
 
+  clubMembers: defineTable({
+    ownerId: v.id("users"),
+    whopUserId: v.string(),
+    displayName: v.string(),
+  }).index("by_owner", ["ownerId"]),
+
+  clubUploads: defineTable({
+    ownerId: v.id("users"),
+    requestId: v.string(),
+    fileId: v.string(),
+    kind: v.union(v.literal("video"), v.literal("voice")),
+    byteSize: v.number(),
+    createdAt: v.number(),
+    caption: v.optional(v.string()),
+    replyToMessageId: v.optional(v.union(v.string(), v.null())),
+    messageId: v.optional(v.string()),
+  }).index("by_owner_request", ["ownerId", "requestId"]),
+
+  premiumCheckouts: defineTable({
+    ownerId: v.id("users"),
+    planId: v.string(),
+    createdAt: v.number(),
+  }),
+
+  premiumMemberships: defineTable({
+    ownerId: v.id("users"),
+    checkoutId: v.id("premiumCheckouts"),
+    membershipId: v.string(),
+    active: v.boolean(),
+    expiresAt: v.union(v.number(), v.null()),
+    updatedAt: v.number(),
+  })
+    .index("by_owner", ["ownerId"])
+    .index("by_membership", ["membershipId"]),
+
   /** Username and password logins (passwordAuth.ts). A users row links to one through its token's subject, the account id. */
   passwordAccounts: defineTable({
     username: v.string(),

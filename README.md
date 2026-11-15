@@ -30,7 +30,7 @@ The app dubs real scenes end to end on the iPhone, with no sample data. Clips pl
 
 Progress shows a streak and totals computed from saved dubs. DMs shows an empty state until messaging is built.
 
-When the build has a Convex URL, the app opens on a sign-in page: learners sign in or create an account with a username and password, stored in Convex. The shared demo logins are `demo`/`demo` and `demo1`/`demo1`. Setup is in [docs/convex-backend.md](docs/convex-backend.md).
+When the build has a Convex URL, the app opens on a sign-in page: learners sign in or create an account with a username and password, stored in Convex. The shared demo logins use the username as the password: `demo`, `demo1`, `maya`, `theo`, and `jordan`. `scripts/seed-demo-progress.mjs` gives them weeks of scored dubs to show on the Progress tab. Setup is in [docs/convex-backend.md](docs/convex-backend.md).
 
 Discover also opens a talking coach. You pick a scene character as your teacher and talk to them in the language you're practising; they answer as a talking video face. The coach's code is in place, but it hasn't run end to end yet because it needs provider keys, a Convex deployment, and an avatar per character. See [Talking coach](#talking-coach).
 

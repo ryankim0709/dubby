@@ -120,6 +120,12 @@ nonisolated struct CoachBackendClient: CoachTutorService {
         return try ServiceRequest.decode(Response.self, from: data, operation: operation).characters
     }
 
+    func createCheckout() async throws -> WhopCheckout {
+        var request = URLRequest(url: baseURL.appending(path: "billing/checkout"))
+        request.httpMethod = "POST"
+        return try await send(request, as: WhopCheckout.self, operation: "Opening Whop checkout")
+    }
+
     func sessionToken(characterID: String, language: SpokenLanguage) async throws -> CoachSessionToken {
         struct Body: Encodable { let characterId: String; let language: String }
         let operation = "Starting the coach session"
