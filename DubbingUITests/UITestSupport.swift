@@ -1,7 +1,7 @@
 import XCTest
 
 enum DemoScene {
-    static let sceneID = "demo"
+    static let sceneID = ProcessInfo.processInfo.environment["DUBIT_QA_SCENE_ID"] ?? "demo"
     static let audioFixture = "qa-speech-fixture"
 }
 
