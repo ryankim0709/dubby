@@ -24,7 +24,7 @@ struct DubScoreCard: View {
                     .dubFont(14, weight: .regular)
                     .foregroundStyle(Palette.textSecondary)
                 Button("Try scoring again", action: onRetry)
-                    .buttonStyle(OutlineCapsuleButtonStyle())
+                    .buttonStyle(SecondaryButtonStyle())
                     .accessibilityIdentifier("retryScoring")
             case .notScored(let reason):
                 Text(reason)
