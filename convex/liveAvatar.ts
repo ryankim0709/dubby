@@ -1,7 +1,6 @@
 import { z } from "zod";
 
-// Shapes follow https://docs.liveavatar.com/openapi.json and the official web SDK
-// (github.com/heygen-com/liveavatar-web-sdk), checked 2026-11-15.
+// Shapes follow https://docs.liveavatar.com/openapi-lite.json (Create LITE Session Token), checked 2026-11-15.
 const apiBase = "https://api.liveavatar.com";
 // Every LiveAvatar response wraps its payload as {code, data, message}; the web SDK treats 1000 as success.
 const successCode = 1000;
@@ -21,29 +20,24 @@ const sessionTokenEnvelope = z.object({
 export type SessionTokenRequest = {
   apiKey: string;
   avatarId: string;
-  voiceId: string | undefined;
-  /** Two-letter language code for the avatar's speech, such as "es". */
-  language: string;
   isSandbox: boolean;
 };
 
 export type SessionToken = { sessionId: string; sessionToken: string };
 
 /**
- * Mints a FULL-mode session token. The app then starts, keeps alive, and stops the session with that
- * short-lived token, as the official web SDK does, so the account API key never leaves the backend.
- * No context is attached: without one the avatar's built-in LLM doesn't answer, and it only speaks
- * the text the app sends it.
+ * Mints a LITE-mode session token. In LITE mode LiveAvatar only renders avatar video from the audio the
+ * app sends it: it runs no speech recognition, no language model and no voice, so every word the avatar
+ * says is text our own coach model wrote and the speech model voiced. FULL mode always runs LiveAvatar's
+ * managed LLM, which the OpenAI-only rule rules out. The app then starts, keeps alive, and stops the
+ * session with this short-lived token, so the account API key never leaves the backend.
  */
 export async function createSessionToken(request: SessionTokenRequest): Promise<SessionToken> {
   const body = {
-    mode: "FULL",
+    mode: "LITE",
     avatar_id: request.avatarId,
     is_sandbox: request.isSandbox,
-    avatar_persona: {
-      ...(request.voiceId === undefined ? {} : { voice_id: request.voiceId }),
-      language: request.language,
-    },
+    video_settings: { quality: "high", encoding: "H264" },
   };
   const json = await postWithRetry("create session token", `${apiBase}/v1/sessions/token`, {
     "X-API-KEY": request.apiKey,

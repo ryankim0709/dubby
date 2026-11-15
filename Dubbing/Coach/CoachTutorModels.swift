@@ -65,26 +65,36 @@ nonisolated struct NextExercise: Codable, Hashable, Sendable {
     let evidence: ExerciseEvidence
 }
 
-/// The coach's voice for a reply, as LiveAvatar's LITE socket takes it.
+/// The coach's voice for a reply: raw PCM in one-second chunks that go to LiveAvatar's LITE socket unchanged.
 nonisolated struct ReplyAudio: Decodable, Hashable, Sendable {
-    static let supportedFormat = "pcm_s16le_24khz_mono"
-
     let format: String
-    let base64: String
+    let sampleRateHz: Int
+    let channels: Int
+    let chunks: [String]
+    let durationMs: Int
     /// Whether the voice is synthetic, so the app can say so.
     let aiGenerated: Bool
 
-    /// The raw PCM samples, after checking the format is the one the avatar socket accepts.
-    func pcm() throws -> Data {
+    /// The decoded chunks, after checking the format is the one the avatar socket accepts.
+    func pcmChunks() throws -> [Data] {
         let operation = "Getting the coach's voice"
-        guard format == Self.supportedFormat else {
-            throw CoachError.invalidResponse(operation: operation, reason: "the audio format \(format) isn't supported")
+        guard format == "pcm_s16le", sampleRateHz == 24_000, channels == 1 else {
+            throw CoachError.invalidResponse(operation: operation, reason: "the audio format \(format) at \(sampleRateHz) Hz with \(channels) channels isn't supported")
         }
-        guard let data = Data(base64Encoded: base64) else {
-            throw CoachError.invalidResponse(operation: operation, reason: "the audio wasn't valid Base64")
+        let decoded = try chunks.map { chunk in
+            guard let data = Data(base64Encoded: chunk) else {
+                throw CoachError.invalidResponse(operation: operation, reason: "an audio chunk wasn't valid Base64")
+            }
+            return data
         }
-        return data
+        try LiveAvatarAudio.validate(chunks: decoded)
+        return decoded
     }
+}
+
+/// Why a reply came without a voice. The text is still the checked reply.
+nonisolated struct ReplyAudioError: Decodable, Hashable, Sendable {
+    let code: String
 }
 
 /// `/coach/reply`. A response from before the tutoring fields existed is just `{ text }`, which
@@ -97,9 +107,10 @@ nonisolated struct CoachReply: Decodable, Hashable, Sendable {
     let citedEvidenceIds: [String]
     let exercise: NextExercise?
     let audio: ReplyAudio?
+    let audioError: ReplyAudioError?
 
     private enum CodingKeys: String, CodingKey {
-        case text, source, provenance, feedbackBasis, citedEvidenceIds, exercise, audio
+        case text, source, provenance, feedbackBasis, citedEvidenceIds, exercise, audio, audioError
     }
 
     init(from decoder: any Decoder) throws {
@@ -111,6 +122,7 @@ nonisolated struct CoachReply: Decodable, Hashable, Sendable {
         citedEvidenceIds = try container.decodeIfPresent([String].self, forKey: .citedEvidenceIds) ?? []
         exercise = try container.decodeIfPresent(NextExercise.self, forKey: .exercise)
         audio = try container.decodeIfPresent(ReplyAudio.self, forKey: .audio)
+        audioError = try container.decodeIfPresent(ReplyAudioError.self, forKey: .audioError)
     }
 }
 

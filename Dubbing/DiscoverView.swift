@@ -56,7 +56,9 @@ struct DiscoverView: View {
     let clips: LoadState<[LibraryClip]>
     let streakDays: Int
     let onDub: (LibraryClip) -> Void
+    let isSignedIn: Bool
     let onTalkToCoach: () -> Void
+    let onAccount: () -> Void
     let onRetry: () -> Void
 
     var body: some View {
@@ -74,6 +76,15 @@ struct DiscoverView: View {
                             .foregroundStyle(Palette.streak)
                             .accessibilityLabel("\(streakDays)-day streak")
                     }
+                    Button(action: onAccount) {
+                        Image(systemName: isSignedIn ? "person.crop.circle.fill" : "person.crop.circle")
+                            .dubFont(22, weight: .regular)
+                            .foregroundStyle(Palette.textPrimary)
+                            .frame(minWidth: 44, minHeight: 44)
+                            .contentShape(Rectangle())
+                    }
+                    .accessibilityLabel(isSignedIn ? "Account, signed in" : "Account, signed out")
+                    .accessibilityIdentifier("openAccount")
                 }
                 .padding(.top, 8)
                 Button(action: onTalkToCoach) {

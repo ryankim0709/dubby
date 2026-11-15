@@ -39,7 +39,7 @@ Known limits:
 - **The coach hears words, not sounds.** It receives an on-device transcript of what you said, so it can coach wording and grammar but not pronunciation.
 - **Not yet built:** pronunciation scoring, character-voice conversion, drafts, and accounts.
 
-Impeccable is installed locally in the repository. Capy is the selected coding tool. The Convex backend source for the coach is in `convex/`, but no Convex deployment is configured yet. Revyl and Supermemory are selected but not configured. The coach uses LiveAvatar (by HeyGen) for the avatar and Anthropic's Claude for its replies. Authentication, pronunciation-assessment, and voice-conversion providers have not been selected.
+Impeccable is installed locally in the repository. Capy is the selected coding tool. The Convex backend source for the coach is in `convex/`, but no Convex deployment is configured yet. Revyl and Supermemory are selected but not configured. The coach uses LiveAvatar (by HeyGen) for the avatar video and OpenAI for its replies and voice. Authentication, pronunciation-assessment, and voice-conversion providers have not been selected.
 
 ## Selected stack
 
@@ -47,12 +47,12 @@ Impeccable is installed locally in the repository. Capy is the selected coding t
 - **[Capy](https://docs.capy.ai/quickstart):** our AI coding agent for building features, fixing bugs, and running development checks.
 - **[Convex](https://www.convex.dev/):** our cloud backend for database records, file storage, server-side functions, and live updates to the app.
 - **[LiveAvatar](https://docs.liveavatar.com/) by HeyGen:** the coach's talking video face, streamed to the app over [LiveKit](https://github.com/livekit/client-sdk-swift). The app adds the LiveKit Swift SDK as a Swift package.
-- **[Claude](https://platform.claude.com/docs) by Anthropic:** writes the coach's replies, called from a Convex function through the Anthropic TypeScript SDK.
+- **[OpenAI](https://developers.openai.com/api/reference/typescript):** writes the coach's replies through the Responses API and voices them with its speech API, called from Convex functions through the official `openai` SDK. It is the only language-model vendor at runtime.
 - **[Revyl](https://revyl.com/):** cloud builds, browser-accessible app previews, and automated end-to-end testing of user flows, with screenshots, recordings, and logs for debugging and pull request validation.
 - **[Supermemory](https://supermemory.ai/docs/overview/what-is-supermemory):** long-term memory for the tutoring agent, retaining learner goals, preferences, and relevant practice context across sessions.
 - **[Impeccable](.agents/skills/impeccable/SKILL.md):** the project-local design skill for UI alignment, native iOS guidance, accessibility, and visual reviews.
 
-Capy helps us build the product, Convex operates its cloud services, Revyl verifies app behavior during development, and Supermemory will supply continuity for personalized tutoring. Supermemory provides memory and retrieval; Claude generates the talking coach's responses.
+Capy helps us build the product, Convex operates its cloud services, Revyl verifies app behavior during development, and Supermemory will supply continuity for personalized tutoring. Supermemory provides memory and retrieval; OpenAI generates the talking coach's responses.
 
 ## Project structure
 
@@ -63,11 +63,11 @@ Capy helps us build the product, Convex operates its cloud services, Revyl verif
 ├── .gitignore                        Local Xcode state, build output, node_modules, and local clips in Media/
 ├── docs/
 │   └── grading-contract.md           Proposed assessment API and learning-progress semantics
-├── package.json, package-lock.json   Convex backend dependencies (convex, Anthropic SDK, zod, TypeScript)
+├── package.json, package-lock.json   Convex backend dependencies (convex, OpenAI and Supermemory SDKs, zod, TypeScript, Vitest)
 ├── convex/
 │   ├── http.ts                       Coach HTTP routes: characters, LiveAvatar session tokens, replies
 │   ├── coachCharacters.ts            Coach catalog: name, avatar and voice env var names, persona
-│   ├── coachReply.ts                 Shared coaching prompt and the Claude call
+│   ├── coachReply.ts                 Shared coaching prompt, the OpenAI reply and speech calls
 │   ├── liveAvatar.ts                 LiveAvatar session-token request with retries
 │   └── tsconfig.json                 Typecheck settings for the Convex runtime
 ├── Config/
@@ -174,7 +174,7 @@ xcodebuild -project Dubbing.xcodeproj -scheme Dubbing \
   CODE_SIGNING_ALLOWED=NO build test
 ```
 
-The same build and test is scripted as `scripts/qa/ios-build-test.sh`, which selects the simulator, writes an `.xcresult` and a summary under `build/qa/`, and is what iOS CI and Revyl run. See the [QA guide](docs/qa/README.md) for its options, the Revyl and GitHub Actions routes, and the provider and secret checks.
+There are no automated CI or QA checks for the hackathon. The commands in this section are available for manual use; pull requests merge once their conflicts are resolved.
 
 Typecheck the Convex backend after `npm install`:
 
@@ -184,27 +184,29 @@ npm run typecheck
 
 Compilation performs Swift typechecking. `DubbingTests` uses Swift Testing and covers the coach's LiveAvatar message formats and line splitting, take placement and trim reporting, scene framing limits, voice grouping, the speech-band filter, streaks, the saved-dub library, and a real export against the synthetic fixture. The export test checks that the 1 kHz tone is filtered out under a take while the 80 Hz tone carries on. There is no separate linter or formatter configuration and no Revyl test suite yet.
 
-Recording, playback, interruptions, audio routes, and on-device transcription must also be verified on an actual iPhone; the Simulator cannot transcribe speech on the device. Revyl's cloud simulators provide repeatable UI checks; physical-device audio behavior needs separate verification.
+Recording, playback, interruptions, audio routes, and on-device transcription need an actual iPhone for manual verification; the Simulator cannot verify microphone quality or transcribe speech on the device.
 
-The planned Revyl suite will cover selecting a scene and character, reviewing the script, recording and retrying a line, keeping a take, and exporting and reopening a saved dub. Cloud assessment and tutoring checks will be added with those integrations, using isolated test accounts and synthetic practice data. Each run should identify the tested build and retain the validation result and failure evidence. Follow the [Revyl mobile quickstart](https://docs.revyl.com/devices/quickstart) when configuring the integration; the iOS build must be a simulator `.app` and use a runtime that meets the app's iOS 26.0 minimum.
+Revyl remains available for cloud builds and app previews. Its build configuration is in `.revyl/config.yaml`; no automated Revyl test plans are configured.
 
 ## Talking coach
 
-A learner picks a character as their teacher, such as Anakin or Obi-Wan for the Star Wars test clip. One coaching system powers every character. Each character is a LiveAvatar image avatar, a voice, and a persona prompt, defined in `convex/coachCharacters.ts`.
+A learner picks a character as their teacher, such as Anakin or Obi-Wan for the Star Wars test clip. One coaching system powers every character. Each character is a LiveAvatar image avatar, an OpenAI voice, and a persona prompt, defined in `convex/coachCharacters.ts`.
 
 One turn of the conversation:
 
 1. The learner taps the mic and speaks. The app records to a temporary file and transcribes it on the iPhone with the dub flow's `SpeechTranscription`, then deletes the file.
-2. The app sends the conversation so far to the backend's `POST /coach/reply`. The Convex function asks Claude (`claude-opus-5-5`, low effort) for a short spoken reply. The system prompt combines the shared coaching rules with the character's persona.
-3. The app sends the reply on the LiveKit `agent-control` topic as an `avatar.speak_text` command, and the avatar says it word for word. The avatar's `avatar.speak_started` and `avatar.speak_ended` events, on the `agent-response` topic, drive the button's state. The learner can tap to interrupt.
+2. The app sends the conversation so far to the backend's `POST /coach/reply`. The Convex function asks OpenAI (`gpt-6-luna` through the Responses API, no reasoning, `store: false`; override with `OPENAI_COACH_MODEL`) for a short spoken reply grounded in the learner's stored practice. The system prompt combines the shared coaching rules with the character's persona.
+3. With `audio: true` in the request, the reply also carries OpenAI speech as one-second chunks of 24 kHz mono 16-bit PCM (base64). The app forwards each chunk to the LiveAvatar LITE session's WebSocket as an `agent.speak` command, then sends `agent.speak_end`, and the avatar says the reply word for word. The session's `agent.speak_started` and `agent.speak_ended` events drive the button's state, and the learner can tap to interrupt with `agent.interrupt`. If speech generation fails, the reply still returns its text with `audio: null` and an `audioError` code. The exact shape is in the tutoring interface document, section 4.
 
-The learner's microphone is never published to the LiveKit room, and sessions are created without a LiveAvatar context. With no context, LiveAvatar's built-in LLM doesn't respond, so the avatar only says what Claude wrote.
+The learner's microphone is never published to the LiveKit room, and sessions are created in LiveAvatar's LITE mode, where LiveAvatar runs no speech recognition, language model or voice and only renders video from the audio the app sends it. The avatar therefore says only what OpenAI wrote and voiced. Voices are OpenAI's stock voices only; no custom or cloned voice is used. The learner's recordings never go to LiveAvatar or to speech generation.
+
+OpenAI's text-to-speech models (`gpt-4o-mini-tts`, `tts-1`, `tts-1-hd`) shut down on 2027-01-06, and the named replacement `gpt-realtime-2.1-mini` isn't a speech-endpoint model. The speech model stays configurable with `OPENAI_TTS_MODEL` until that migration is decided.
 
 ### Keys and sessions
 
-The LiveAvatar and Anthropic keys exist only as Convex environment variables. `POST /coach/session-token` uses the LiveAvatar key to mint a FULL-mode token for one session. The app then starts that session, keeps it alive every 60 seconds, and stops it with that token, the same flow as LiveAvatar's official web SDK. The app never holds a long-lived key.
+The LiveAvatar and OpenAI keys exist only as Convex environment variables. `POST /coach/session-token` uses the LiveAvatar key to mint a LITE-mode token for one session. The app then starts that session, keeps it alive every 60 seconds, and stops it with that token, the same flow as LiveAvatar's official web SDK. The app never holds a long-lived key.
 
-The routes have no user authentication yet. Anyone who has the deployment URL can spend LiveAvatar credits and Claude tokens, so add Convex auth before sharing a build outside the team.
+The coach routes require a signed-in learner except the public coach list, because they spend LiveAvatar credits and OpenAI tokens.
 
 ### Setting it up
 
@@ -212,15 +214,15 @@ These steps create accounts and avatars and can cost money, so the project owner
 
 1. Create a Convex project with `npx convex dev`. It logs in and deploys `convex/`.
 2. Set the deployment's environment variables in the Convex dashboard or with `npx convex env set`:
-   - `LIVEAVATAR_API_KEY` and `ANTHROPIC_API_KEY`.
-   - `LIVEAVATAR_AVATAR_ID_ANAKIN` and `LIVEAVATAR_VOICE_ID_ANAKIN`, and the matching `…_OBI_WAN` pair.
+   - `LIVEAVATAR_API_KEY` and `OPENAI_API_KEY`; optionally `OPENAI_COACH_MODEL` and `OPENAI_TTS_MODEL`. Tutoring memory also needs `SUPERMEMORY_API_KEY` and `TUTOR_MEMORY_NAMESPACE_SECRET`.
+   - `LIVEAVATAR_AVATAR_ID_ANAKIN`, and the matching `…_OBI_WAN` ID. Voices are OpenAI voices set in `convex/coachCharacters.ts`.
    - `LIVEAVATAR_SANDBOX=true` to test for free. Sandbox sessions use LiveAvatar's stock sandbox avatar for every character and end after about a minute.
-3. Create one image avatar per character. Each uses one avatar slot on the LiveAvatar plan. Image avatars come from a single clear, front-facing photo, either in the dashboard or with the alpha `POST /v1-alpha/avatars/image` endpoint. Use original artwork you're authorized to use. Don't use frames from the film or a real actor's likeness. Choose each voice separately, with `GET /v1/voices`.
+3. Create one image avatar per character. Each uses one avatar slot on the LiveAvatar plan. Image avatars come from a single clear, front-facing photo, either in the dashboard or with the alpha `POST /v1-alpha/avatars/image` endpoint. Use original artwork you're authorized to use. Don't use frames from the film or a real actor's likeness.
 4. Point the app at the deployment by setting the `COACH_BACKEND_URL` build setting to the Convex site URL (`https://<deployment>.convex.site`), either in the Dubbing target or on the `xcodebuild` command line. Until it's set, the coach screen says the backend isn't configured.
 
 ### Not verified yet
 
-- No real LiveAvatar session has run. Three behaviours need a sandbox test: that `avatar.speak_text` speaks with no context attached, that a session with no published microphone stays open, and how the two-letter `language` affects the voice.
+- No real LiveAvatar session has run with this backend's audio, and the OpenAI and Supermemory calls haven't run with real keys. The app's LITE WebSocket client is still to be built.
 - The coach's audio needs an actual iPhone. The app manages the audio session itself, so the recorder and LiveKit playback can share it. Recording during playback, interruptions, Bluetooth routes, and echo still need testing on a device.
 - The Convex functions typecheck but haven't been deployed or bundled by Convex.
 
@@ -245,7 +247,7 @@ A planned pronunciation-feedback flow is:
 4. Convex saves the assessment, and the app receives the updated result.
 5. The user retries or accepts the take. The iPhone composes the accepted takes into the scene and can upload the finished video for cloud history or sharing.
 
-Revyl will exercise user flows against development builds and test data, with replayable evidence for failures and pull request checks. Its integration complements the existing Swift tests and physical-device checks.
+Revyl provides development builds and app previews. Automated QA and pull request checks are disabled for the hackathon.
 
 ### Long-term tutoring memory
 

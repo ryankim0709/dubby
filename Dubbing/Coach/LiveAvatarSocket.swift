@@ -11,15 +11,14 @@ nonisolated enum LiveAvatarAudio {
     /// the avatar's video from being asked to render much more audio than has played.
     static let leadSeconds = 2
 
-    /// Splits a reply into one-second chunks, the last one shorter.
-    static func chunks(of pcm: Data) throws -> [Data] {
+    /// Checks a reply's chunks before any is sent: at least one, each a non-empty run of whole
+    /// samples no longer than a second, and no more than `maximumBytes` altogether.
+    static func validate(chunks: [Data]) throws {
         let operation = "Playing the coach's voice"
-        guard !pcm.isEmpty else { throw CoachError.invalidResponse(operation: operation, reason: "the audio was empty") }
-        guard pcm.count.isMultiple(of: 2) else { throw CoachError.invalidResponse(operation: operation, reason: "the audio wasn't whole 16-bit samples") }
-        guard pcm.count <= maximumBytes else { throw CoachError.invalidResponse(operation: operation, reason: "the audio was longer than \(maximumBytes / bytesPerSecond) seconds") }
-        return stride(from: 0, to: pcm.count, by: chunkBytes).map { start in
-            Data(pcm[(pcm.startIndex + start)..<(pcm.startIndex + min(start + chunkBytes, pcm.count))])
-        }
+        guard !chunks.isEmpty, chunks.allSatisfy({ !$0.isEmpty }) else { throw CoachError.invalidResponse(operation: operation, reason: "the audio was empty") }
+        guard chunks.allSatisfy({ $0.count.isMultiple(of: 2) }) else { throw CoachError.invalidResponse(operation: operation, reason: "the audio wasn't whole 16-bit samples") }
+        guard chunks.allSatisfy({ $0.count <= chunkBytes }) else { throw CoachError.invalidResponse(operation: operation, reason: "an audio chunk was longer than a second") }
+        guard chunks.reduce(0, { $0 + $1.count }) <= maximumBytes else { throw CoachError.invalidResponse(operation: operation, reason: "the audio was longer than \(maximumBytes / bytesPerSecond) seconds") }
     }
 
     /// When, after the first chunk is sent, a chunk should go out: each second of audio waits
@@ -146,12 +145,12 @@ actor LiveAvatarSocket {
         receiveTask = Task { await receiveFrames() }
     }
 
-    /// Sends one reply's audio as paced chunks and seals the utterance. Returns early, without
-    /// sealing, when the utterance is interrupted or the task is cancelled.
-    func speak(_ pcm: Data) async throws {
+    /// Sends one reply's chunks, paced, and seals the utterance. Returns early, without sealing,
+    /// when the utterance is interrupted; a cancelled task throws `CancellationError`.
+    func speak(chunks: [Data]) async throws {
         guard isConnected else { throw CoachError.avatarDisconnected }
         guard !isSending else { throw CoachError.avatarBusy }
-        let chunks = try LiveAvatarAudio.chunks(of: pcm)
+        try LiveAvatarAudio.validate(chunks: chunks)
         isSending = true
         defer { isSending = false }
         let utterance = generation

@@ -249,12 +249,12 @@ final class CoachSession {
         if let newExercise = reply.exercise { exercise = .loaded(newExercise) }
         guard let audio = reply.audio, let socket else {
             activity = .idle
-            errorMessage = "The coach's voice isn't available for this reply, so it's shown as text."
+            errorMessage = CoachConversation.voiceUnavailableMessage(for: reply.audioError)
             return
         }
-        let pcm: Data
+        let chunks: [Data]
         do {
-            pcm = try audio.pcm()
+            chunks = try audio.pcmChunks()
         } catch {
             fail(error)
             return
@@ -265,7 +265,7 @@ final class CoachSession {
         activity = .speaking
         speechTask = Task {
             do {
-                try await socket.speak(pcm)
+                try await socket.speak(chunks: chunks)
             } catch is CancellationError {
                 return
             } catch {
