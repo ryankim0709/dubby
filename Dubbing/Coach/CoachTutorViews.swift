@@ -144,7 +144,7 @@ struct CoachPreferencesView: View {
             VStack(spacing: 12) {
                 EmptyStateView(systemImage: "exclamationmark.triangle", title: "Couldn't load your preferences", message: message)
                 Button("Try again") { Task { await preferences.load() } }
-                    .buttonStyle(OutlineCapsuleButtonStyle())
+                    .buttonStyle(.dubSecondary)
             }
             .padding(16)
             Spacer()
@@ -222,6 +222,7 @@ struct CoachPreferencesView: View {
                 Button(preferences.phase == .saving ? "Saving…" : "Save preferences") {
                     Task { await preferences.save() }
                 }
+                .buttonStyle(.dubPrimary)
                 .disabled(!preferences.canSave)
                 .accessibilityIdentifier("savePreferences")
                 if let notice = preferences.notice {
