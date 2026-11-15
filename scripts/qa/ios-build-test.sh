@@ -23,7 +23,7 @@
 #   QA_COMMIT_SHA     commit to record in the summary when there is no .git
 #                     (Revyl uploads a workspace archive without .git)
 #
-# Outputs in QA_OUT_DIR: summary.txt, resolve.log, build.log, test.log,
+# Outputs in QA_OUT_DIR: summary.txt, resolve.log, build.log, test.log, bundle-scan.log,
 # build.xcresult, test.xcresult, Dubbing.app, Dubbing.app.zip.
 # Exit codes: 0 success, 1 build or test failure, 2 environment or usage error.
 
@@ -38,7 +38,8 @@ case "$MODE" in
     ;;
 esac
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 PROJECT="Dubbing.xcodeproj"
 SCHEME="Dubbing"
 TEST_TARGET="DubbingTests"
@@ -70,7 +71,7 @@ fi
 
 mkdir -p "$OUT_DIR"
 rm -rf "$OUT_DIR/build.xcresult" "$OUT_DIR/test.xcresult" "$OUT_DIR/Dubbing.app" "$OUT_DIR/Dubbing.app.zip" \
-  "$OUT_DIR/summary.txt" "$OUT_DIR/resolve.log" "$OUT_DIR/build.log" "$OUT_DIR/test.log"
+  "$OUT_DIR/summary.txt" "$OUT_DIR/bundle-scan.log" "$OUT_DIR/resolve.log" "$OUT_DIR/build.log" "$OUT_DIR/test.log"
 
 # Prints "<ios version>|<device name>|<udid>" for every available iOS simulator.
 list_ios_devices() {
@@ -143,6 +144,7 @@ BUILD_RESULT="not run"
 TEST_RESULT="not run"
 TEST_DETAILS=""
 APP_NOTE=""
+BUNDLE_SCAN="not run"
 EXIT_CODE=0
 
 # Prints totals and failing test names from an .xcresult, falling back to the log.
@@ -175,6 +177,7 @@ write_summary() {
     echo "Configuration:  $CONFIGURATION"
     echo "Build:          $BUILD_RESULT"
     echo "Tests:          $TEST_RESULT"
+    echo "Bundle scan:    $BUNDLE_SCAN"
     [ -z "$TEST_DETAILS" ] || printf '%s\n' "$TEST_DETAILS" | sed 's/^/  /'
     [ -z "$APP_NOTE" ] || printf '%s\n' "$APP_NOTE"
     echo "Overall:        $([ "$EXIT_CODE" -eq 0 ] && echo PASS || echo FAIL)"
@@ -265,7 +268,16 @@ if [ "$EXIT_CODE" -eq 0 ] && { [ "$MODE" = "all" ] || [ "$MODE" = "test" ]; }; t
 fi
 
 if [ "$BUILD_RESULT" != "not run" ] && [ "${BUILD_RESULT#FAILED}" = "$BUILD_RESULT" ]; then
-  stage_app || EXIT_CODE=1
+  if stage_app; then
+    if "$SCRIPT_DIR/scan-app-bundle.sh" "$OUT_DIR/Dubbing.app" 2>&1 | tee "$OUT_DIR/bundle-scan.log"; then
+      BUNDLE_SCAN="PASSED (no provider keys or direct LLM endpoints in the app)"
+    else
+      BUNDLE_SCAN="FAILED (see bundle-scan.log)"
+      EXIT_CODE=1
+    fi
+  else
+    EXIT_CODE=1
+  fi
 fi
 
 finish
