@@ -9,11 +9,18 @@ the steps below are what the owner does once.
 
 1. **Create a Convex project** and a development deployment (`npx convex dev` once logged in, or the
    dashboard). Production needs its own deployment and a deploy key for CI; neither is created by code.
-2. **Choose the auth provider.** The recommended provider is Clerk (native Sign in with Apple, a free
-   development instance, and an official Swift integration). In Clerk, create the Convex JWT template,
-   then set `CLERK_JWT_ISSUER_DOMAIN` on the Convex deployment to that template's issuer domain
-   (for example `https://example.clerk.accounts.dev`). The backend accepts any identity Convex
-   validates; changing providers means changing only `convex/auth.config.ts`.
+2. **Turn on sign-in.** The app signs in with a username and password (`convex/passwordAuth.ts`). The
+   backend signs its own session tokens and serves the public key at `/.well-known/jwks.json`, which
+   `convex/auth.config.ts` points Convex at. Set the signing key, then create the shared demo logins
+   (`demo`/`demo` and `demo1`/`demo1`):
+
+   ```sh
+   npx convex env set PASSWORD_AUTH_PRIVATE_KEY "$(node scripts/generate-password-auth-key.mjs)"
+   npx convex run passwordAuth:seedDemoAccounts
+   ```
+
+   The backend accepts any identity Convex validates, so the Clerk provider (`CLERK_JWT_ISSUER_DOMAIN`)
+   still works for other clients; changing providers means changing only `convex/auth.config.ts`.
 3. **Set provider keys** on the deployment only for the features you turn on (table below).
 4. **Seed the catalog** from a scene manifest (see Scene catalog). Pushing code never seeds data or
    runs migrations.
@@ -25,6 +32,7 @@ spending route then rejects, because no auth provider exists to produce an ident
 
 | Variable | Needed for | Secret |
 | --- | --- | --- |
+| `PASSWORD_AUTH_PRIVATE_KEY` | Username and password sign-in: signs session tokens and backs the public key route. Unset: sign-in fails and `/.well-known/jwks.json` answers 503. Replacing it signs everyone out. | yes |
 | `CLERK_JWT_ISSUER_DOMAIN` | Signing in with Clerk. Unset means no Clerk provider. | no |
 | `OPENAI_API_KEY` | The only LLM key. Used by runtime LLM workloads through `convex/lib/openai.ts`. Unset: routes that need it answer 503. | yes |
 | `ANTHROPIC_API_KEY` | Read only by the not-yet-migrated coach reply until Tutoring's change lands, then retired. | yes |
