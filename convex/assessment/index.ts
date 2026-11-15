@@ -1,6 +1,7 @@
 // Public surface of the pronunciation-assessment adapter. See docs/assessment.md.
 export { assessAttempt, computeLanguageOverall, computeTimingFit, BOUNDARY_TOLERANCE_MS } from "./assess";
-export type { AssessAttemptInput, AssessmentEvidence, AssessmentOutcome } from "./assess";
+export { EVALUATOR_CONFIG_VERSION } from "./assess";
+export type { AssessAttemptInput, AssessmentEvidence, AssessmentOutcome, AssessmentProvenance } from "./assess";
 export { buildAzureRequest, inspectWav, MAX_ASSESSED_AUDIO_MS, AZURE_PROVIDER_NAME } from "./azure";
 export type { AzureRequestOptions, AzureRequestSpec, WavInfo } from "./azure";
 export { requestAzureAssessment } from "./azureClient";

@@ -24,6 +24,7 @@ const scored = () => ({
   locale: "en-US",
   recordedAt: "2026-11-14T18:00:00-08:00",
   status: "scored",
+  measurement: "acoustic",
   referenceText: "You underestimate my power.",
   recognizedText: "You underestimate power.",
   scores: { languageOverall: 80, pronunciation: 82, wordAccuracy: 75, fluency: 80, timingFit: 90 } as Record<string, number | null>,
@@ -51,6 +52,7 @@ const unscorable = () => ({
   locale: "en-US",
   recordedAt: "2026-11-14T18:00:00Z",
   status: "unscorable",
+  measurement: "acoustic",
   reason: "no_speech",
   referenceText: "You underestimate my power.",
   recognizedText: null,
@@ -182,4 +184,41 @@ test("coaching and unscorable shape rules are enforced", () => {
   assert.deepEqual(issuesOf(missing).sort(), ["reason is not a known unscorable reason", "recordedAt must be an RFC 3339 timestamp"]);
 
   assert.deepEqual(issuesOf(null), ["response must be an object"]);
+});
+
+test("transcript_only results carry no pronunciation, fluency or word pronunciation scores", () => {
+  const response = scored() as Record<string, unknown> & ReturnType<typeof scored>;
+  response.measurement = "transcript_only";
+  const found = issuesOf(response);
+  assert.ok(found.includes("scores.pronunciation must be null unless measurement is acoustic"));
+  assert.ok(found.includes("scores.fluency must be null unless measurement is acoustic"));
+  assert.ok(found.includes("wordResults[0].pronunciationScore must be null unless measurement is acoustic"));
+
+  response.scores.pronunciation = null;
+  response.scores.fluency = null;
+  response.scores.languageOverall = null;
+  response.unavailableMetrics = [
+    { metric: "pronunciation", reason: "insufficient_evidence" },
+    { metric: "fluency", reason: "insufficient_evidence" },
+    { metric: "languageOverall", reason: "missing_components" },
+  ];
+  response.wordResults = [
+    word(0, "You", "You", "matched", null, 200, 420, "insufficient_evidence"),
+    word(1, "underestimate", "underestimate", "matched", null, 430, 1550, "insufficient_evidence"),
+    word(2, "my", null, "omitted", null, null, null, "omitted_word"),
+    word(3, "power", "power", "matched", null, 2000, 2900, "insufficient_evidence"),
+  ];
+  assert.deepEqual(issuesOf(response), []);
+});
+
+test("a missing or unknown measurement is rejected and treated as transcript_only", () => {
+  const missing = scored() as Record<string, unknown>;
+  delete missing.measurement;
+  const found = issuesOf(missing);
+  assert.ok(found.includes("measurement must be acoustic or transcript_only"));
+  assert.ok(found.includes("scores.pronunciation must be null unless measurement is acoustic"));
+
+  const unknown = scored() as Record<string, unknown>;
+  unknown.measurement = "llm_opinion";
+  assert.ok(issuesOf(unknown).includes("measurement must be acoustic or transcript_only"));
 });

@@ -55,6 +55,12 @@ requestAzureAssessment(options, { locale, referenceText, wav }): Promise<{ httpS
 
 `AssessmentOutcome = { response, evidence }`. `response` is the contract response without `coaching`, with `status` `scored` or `unscorable`. The backend adds `coaching` (Tutoring) and must run `validateAssessmentResponse` on the complete object before persisting or returning it.
 
+`AssessmentOutcome` also carries `provenance` for storage next to the assessment: `{ evaluator, measurement, modelVersion: null, evaluatorConfigVersion }`. Azure does not disclose a model version in its REST response, so none is recorded.
+
+### Measurement
+
+Every response carries `measurement: "acoustic" | "transcript_only"`, and so do `evidence` and `provenance`. The Azure path always emits `acoustic`. A `transcript_only` result (recognized text only, including any transcription or language-model output) must have null `pronunciation`, null `fluency` and a null `pronunciationScore` on every word; `wordAccuracy` and `timingFit` may be present. `validateAssessmentResponse` rejects a missing or unknown `measurement` and applies the `transcript_only` rules to it, and consumers treat a missing or unknown value as `transcript_only`. A transcript is never pronunciation or fluency evidence.
+
 ### Errors
 
 `assessAttempt` throws `AssessmentError` with a `kind`. Each one fails the job; none is converted into `unscorable` or a score. Keep the recording so the job can be retried.
@@ -115,9 +121,9 @@ NFKC; curly apostrophes folded to `'`; em and en dashes act as separators; punct
 
 ## Swift (`Dubbing/Assessment/`)
 
-- `AssessmentContract.swift`: `Codable` models. Required-but-nullable keys use explicit `decode`, so a missing key is a decode failure, not a silent `nil`.
+- `AssessmentContract.swift`: `Codable` models. `AssessmentResponse.measurement` decodes a missing or unknown value as `.transcriptOnly`, and the validator then rejects acoustic scores. Required-but-nullable keys use explicit `decode`, so a missing key is a decode failure, not a silent `nil`.
 - `AssessmentValidation.swift`: `AssessmentContract.decode(_:recordingDurationMs:)` and `AssessmentResponse.validate(recordingDurationMs:)`, mirroring the TypeScript validator. It does not re-tokenize the reference text, so the backend alone checks that the alignment covers every reference token.
-- `AssessmentState.swift`: `AssessmentState` is `.unavailable(.notConfigured)`, `.queued`, `.processing`, `.scored(response)`, `.unscorable(response)` or `.failed(AssessmentFailure)`. `AssessmentState.terminal(from:)` turns backend JSON into a terminal state; a malformed response becomes `.failed(.invalidResponse)`, never a score. `AssessmentFailure.Kind` mirrors the backend error kinds plus `transport` and `invalidResponse`.
+- `AssessmentState.swift`: `AssessmentState` is `.unavailable(reason)` (`.notConfigured`, or `.syntheticInput` for a take recorded through the QA audio fixture, which is never submitted for assessment), `.queued`, `.processing`, `.scored(response)`, `.unscorable(response)` or `.failed(AssessmentFailure)`. `AssessmentState.terminal(from:)` turns backend JSON into a terminal state; a malformed response becomes `.failed(.invalidResponse)`, never a score. `AssessmentFailure.Kind` mirrors the backend error kinds plus `transport` and `invalidResponse`.
 - `AssessmentService.swift`: `PronunciationAssessing.assess(_:) -> AsyncStream<AssessmentState>` is what the backend transport conforms to. It sends identifiers and the WAV only; the backend resolves the reference text and window. `UnavailableAssessmentService` yields `.unavailable(.notConfigured)` and finishes; use it whenever no backend is configured. Nothing in the models accepts an on-device transcript as a measurement.
 - `AssessmentAudioEncoder.swift`: `encode(from:to:)` converts a take to 16 kHz mono 16-bit PCM WAV at a different URL, leaving the original untouched. Takes over 30 s throw `tooLong` instead of being truncated.
 

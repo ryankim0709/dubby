@@ -74,6 +74,11 @@ extension AssessmentResponse {
             return
         }
 
+        if measurement == .transcriptOnly {
+            if scores.pronunciation != nil { issues.append("scores.pronunciation must be null unless measurement is acoustic") }
+            if scores.fluency != nil { issues.append("scores.fluency must be null unless measurement is acoustic") }
+        }
+
         var measured = Set<AssessmentMetric>()
         for metric in AssessmentMetric.allCases {
             guard let value = scores[metric] else { continue }
@@ -132,6 +137,7 @@ extension AssessmentResponse {
                 if !(score.isFinite && (0...100).contains(score)) { issues.append("\(path).pronunciationScore must be null or a number from 0 through 100") }
                 if word.pronunciationUnavailableReason != nil { issues.append("\(path).pronunciationUnavailableReason must be absent when pronunciationScore is present") }
                 if word.textStatus == .omitted { issues.append("\(path).pronunciationScore must be null for an omission") }
+                if measurement == .transcriptOnly { issues.append("\(path).pronunciationScore must be null unless measurement is acoustic") }
             } else if word.pronunciationUnavailableReason == nil {
                 issues.append("\(path).pronunciationUnavailableReason is required when pronunciationScore is null")
             }

@@ -9,6 +9,18 @@ nonisolated enum AssessmentStatus: String, Codable, Sendable {
     case unscorable
 }
 
+/// How pronunciation and fluency were obtained. Only `acoustic` means a speech-assessment service measured the audio.
+/// A missing or unknown value decodes as `transcriptOnly`, so the app never claims an acoustic measurement it was not told about.
+nonisolated enum AssessmentMeasurement: String, Codable, Sendable {
+    case acoustic
+    case transcriptOnly = "transcript_only"
+
+    init(from decoder: any Decoder) throws {
+        let raw = try? decoder.singleValueContainer().decode(String.self)
+        self = raw.flatMap(Self.init(rawValue:)) ?? .transcriptOnly
+    }
+}
+
 nonisolated enum UnscorableReason: String, Codable, Sendable {
     case noSpeech = "no_speech"
     case excessiveNoise = "excessive_noise"
@@ -219,6 +231,8 @@ nonisolated struct AssessmentResponse: Codable, Equatable, Sendable {
     /// RFC 3339 capture time copied from validated attempt metadata.
     var recordedAt: String
     var status: AssessmentStatus
+    /// For `transcriptOnly`, pronunciation, fluency and every word pronunciationScore must be null.
+    var measurement: AssessmentMeasurement
     /// Present only when status is unscorable.
     var reason: UnscorableReason?
     var referenceText: String
@@ -240,6 +254,7 @@ nonisolated struct AssessmentResponse: Codable, Equatable, Sendable {
         locale = try container.decode(String.self, forKey: .locale)
         recordedAt = try container.decode(String.self, forKey: .recordedAt)
         status = try container.decode(AssessmentStatus.self, forKey: .status)
+        measurement = try container.decodeIfPresent(AssessmentMeasurement.self, forKey: .measurement) ?? .transcriptOnly
         reason = try container.decodeIfPresent(UnscorableReason.self, forKey: .reason)
         referenceText = try container.decode(String.self, forKey: .referenceText)
         recognizedText = try container.decode(String?.self, forKey: .recognizedText)
@@ -260,6 +275,7 @@ nonisolated struct AssessmentResponse: Codable, Equatable, Sendable {
         try container.encode(locale, forKey: .locale)
         try container.encode(recordedAt, forKey: .recordedAt)
         try container.encode(status, forKey: .status)
+        try container.encode(measurement, forKey: .measurement)
         try container.encodeIfPresent(reason, forKey: .reason)
         try container.encode(referenceText, forKey: .referenceText)
         try container.encode(recognizedText, forKey: .recognizedText)
@@ -270,7 +286,7 @@ nonisolated struct AssessmentResponse: Codable, Equatable, Sendable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case schemaVersion, rubricVersion, assessmentId, attemptId, lineId, referenceVersion, locale, recordedAt, status, reason
+        case schemaVersion, rubricVersion, assessmentId, attemptId, lineId, referenceVersion, locale, recordedAt, status, measurement, reason
         case referenceText, recognizedText, scores, unavailableMetrics, wordResults, coaching
     }
 }

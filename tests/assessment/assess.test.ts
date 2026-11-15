@@ -27,8 +27,17 @@ function errorKind(run: () => unknown): AssessmentErrorKind {
 }
 
 test("the contract example scores 88 overall with a 90 timing fit and passes the full validator", () => {
-  const { response, evidence } = assess(exampleWords, {}, { accuracy: 82, fluency: 80 });
+  const outcome = assess(exampleWords, {}, { accuracy: 82, fluency: 80 });
+  const { response, evidence } = outcome;
   assert.equal(response.status, "scored");
+  assert.equal(response.measurement, "acoustic");
+  assert.equal(evidence.measurement, "acoustic");
+  assert.deepEqual(outcome.provenance, {
+    evaluator: "azure-speech-pronunciation-assessment",
+    measurement: "acoustic",
+    modelVersion: null,
+    evaluatorConfigVersion: "azure-rest-short-audio-v1",
+  });
   assert.deepEqual(response.status === "scored" && response.scores, {
     languageOverall: 88,
     pronunciation: 82,

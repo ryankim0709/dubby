@@ -8,6 +8,7 @@ import { SUPPORTED_LOCALES, tokenize } from "./normalize";
 import {
   AssessmentValidationError,
   FOCUS_KINDS,
+  MEASUREMENTS,
   METRICS,
   PRONUNCIATION_UNAVAILABLE_REASONS,
   RUBRIC_VERSION,
@@ -44,6 +45,9 @@ export function validateAssessmentResponse(value: unknown, options: ValidationOp
   if (!Number.isInteger(r.referenceVersion) || (r.referenceVersion as number) < 1) bad("referenceVersion", "must be a positive integer");
   if (typeof r.recordedAt !== "string" || !RFC3339.test(r.recordedAt) || Number.isNaN(Date.parse(r.recordedAt))) bad("recordedAt", "must be an RFC 3339 timestamp");
   if (r.recognizedText !== null && typeof r.recognizedText !== "string") bad("recognizedText", "must be a string or null");
+  if (!oneOf(MEASUREMENTS, r.measurement)) bad("measurement", "must be acoustic or transcript_only");
+  // A missing or unknown value is read as transcript_only, so it gets no acoustic scores.
+  const transcriptOnly = r.measurement !== "acoustic";
 
   const coaching = r.coaching;
   let focusLimit = Number.POSITIVE_INFINITY;
@@ -77,7 +81,7 @@ export function validateAssessmentResponse(value: unknown, options: ValidationOp
       bad("coaching", "must have empty strengths and focus when unscorable");
     }
   } else if (r.status === "scored") {
-    checkScored(r, options, bad, checkCoaching);
+    checkScored(r, options, bad, checkCoaching, transcriptOnly);
   } else {
     bad("status", "must be scored or unscorable");
   }
@@ -91,6 +95,7 @@ function checkScored(
   options: ValidationOptions,
   bad: (path: string, problem: string) => void,
   checkCoaching: (referenceCount: number | null) => void,
+  transcriptOnly: boolean,
 ): void {
   const scores = r.scores;
   const measured = new Set<Metric>();
@@ -108,6 +113,12 @@ function checkScored(
     if (!allComponents && measured.has("languageOverall")) bad("scores.languageOverall", "must be null when a component is missing");
     if (allComponents && !measured.has("languageOverall")) bad("scores.languageOverall", "must be present when every component is measured");
     if (!components.some((metric) => measured.has(metric))) bad("scores", "scored responses need at least one language measurement");
+  }
+
+  if (transcriptOnly && isRecord(scores)) {
+    for (const metric of ["pronunciation", "fluency"] as const) {
+      if (scores[metric] !== null) bad(`scores.${metric}`, "must be null unless measurement is acoustic");
+    }
   }
 
   const nullMetrics = new Map<string, string>();
@@ -131,7 +142,7 @@ function checkScored(
     }
   }
 
-  const referenceCount = checkWords(r, options, bad, nullMetrics.has("wordAccuracy"), isRecord(scores) ? scores.wordAccuracy : null);
+  const referenceCount = checkWords(r, options, bad, nullMetrics.has("wordAccuracy"), isRecord(scores) ? scores.wordAccuracy : null, transcriptOnly);
   checkCoaching(referenceCount);
 }
 
@@ -142,6 +153,7 @@ function checkWords(
   bad: (path: string, problem: string) => void,
   wordAccuracyUnavailable: boolean,
   wordAccuracy: unknown,
+  transcriptOnly: boolean,
 ): number | null {
   if (!Array.isArray(r.wordResults)) {
     bad("wordResults", "must be an array");
@@ -179,6 +191,7 @@ function checkWords(
       if (!oneOf(PRONUNCIATION_UNAVAILABLE_REASONS, reason)) bad(`${path}.pronunciationUnavailableReason`, "is required when pronunciationScore is null");
     } else {
       if (!isScore(word.pronunciationScore)) bad(`${path}.pronunciationScore`, "must be null or a number from 0 through 100");
+      if (transcriptOnly) bad(`${path}.pronunciationScore`, "must be null unless measurement is acoustic");
       if (reason !== undefined) bad(`${path}.pronunciationUnavailableReason`, "must be absent when pronunciationScore is present");
       if (status === "omitted") bad(`${path}.pronunciationScore`, "must be null for an omission");
     }

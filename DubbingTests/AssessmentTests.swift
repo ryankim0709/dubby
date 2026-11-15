@@ -9,7 +9,7 @@ struct AssessmentContractTests {
     {
       "schemaVersion": 1, "rubricVersion": "language-v1", "assessmentId": "assessment_001", "attemptId": "take_003",
       "lineId": "scene_001_line_02", "referenceVersion": 1, "locale": "en-US", "recordedAt": "2026-11-14T18:00:00-08:00",
-      "status": "scored", "referenceText": "You underestimate my power.", "recognizedText": "You underestimate power.",
+      "status": "scored", "measurement": "acoustic", "referenceText": "You underestimate my power.", "recognizedText": "You underestimate power.",
       "scores": {"languageOverall": 80, "pronunciation": 82, "wordAccuracy": 75, "fluency": 80, "timingFit": 90},
       "unavailableMetrics": [],
       "wordResults": [
@@ -26,7 +26,7 @@ struct AssessmentContractTests {
     {
       "schemaVersion": 1, "rubricVersion": "language-v1", "assessmentId": "assessment_002", "attemptId": "take_004",
       "lineId": "scene_001_line_02", "referenceVersion": 1, "locale": "en-US", "recordedAt": "2026-11-14T18:00:00.250Z",
-      "status": "unscorable", "reason": "no_speech", "referenceText": "You underestimate my power.", "recognizedText": null,
+      "status": "unscorable", "measurement": "acoustic", "reason": "no_speech", "referenceText": "You underestimate my power.", "recognizedText": null,
       "scores": null, "unavailableMetrics": [], "wordResults": [],
       "coaching": {"summary": "We couldn't hear speech. Move closer and try again.", "strengths": [], "focus": []}
     }
@@ -132,6 +132,29 @@ struct AssessmentContractTests {
 
         let badTime = try edited(Self.unscorableJSON) { $0["recordedAt"] = "yesterday" }
         #expect(try issues(badTime).contains("recordedAt must be an RFC 3339 timestamp"))
+    }
+
+    @Test func transcriptOnlyResultsMayNotCarryAcousticScores() throws {
+        let data = try edited(Self.scoredJSON) { $0["measurement"] = "transcript_only" }
+        let found = try issues(data)
+        #expect(found.contains("scores.pronunciation must be null unless measurement is acoustic"))
+        #expect(found.contains("scores.fluency must be null unless measurement is acoustic"))
+        #expect(found.contains("wordResults[0].pronunciationScore must be null unless measurement is acoustic"))
+    }
+
+    @Test func aMissingOrUnknownMeasurementIsTreatedAsTranscriptOnly() throws {
+        let missing = try edited(Self.scoredJSON) { $0.removeValue(forKey: "measurement") }
+        #expect(try JSONDecoder().decode(AssessmentResponse.self, from: missing).measurement == .transcriptOnly)
+        #expect(try issues(missing).contains("scores.pronunciation must be null unless measurement is acoustic"))
+
+        let unknown = try edited(Self.scoredJSON) { $0["measurement"] = "llm_opinion" }
+        #expect(try JSONDecoder().decode(AssessmentResponse.self, from: unknown).measurement == .transcriptOnly)
+        #expect(try JSONDecoder().decode(AssessmentResponse.self, from: Data(Self.scoredJSON.utf8)).measurement == .acoustic)
+    }
+
+    @Test func syntheticInputIsAnUnavailableTerminalState() {
+        #expect(AssessmentState.unavailable(.syntheticInput).isTerminal)
+        #expect(AssessmentState.unavailable(.syntheticInput) != .unavailable(.notConfigured))
     }
 
     @Test func terminalStateTurnsMalformedResponsesIntoExplicitFailures() throws {

@@ -9,6 +9,7 @@ import { NORMALIZATION_VERSION, SUPPORTED_LOCALES, tokenize } from "./normalize"
 import { AssessmentError, RUBRIC_VERSION, SCHEMA_VERSION } from "./types";
 import type {
   AssessmentResponseWithoutCoaching,
+  Measurement,
   ResponseEnvelope,
   Scores,
   UnscorableReason,
@@ -48,13 +49,27 @@ export interface AssessmentEvidence {
   counts: { matched: number; substituted: number; omitted: number; inserted: number };
   /** Reference indices grouped by the alignment outcome. mispronounced lists matched words the engine flagged ErrorType=Mispronunciation (accuracy below 60). */
   words: { mispronounced: number[]; substituted: number[]; omitted: number[]; inserted: number };
+  /** Always "acoustic" on the Azure path. */
+  measurement: Measurement;
   timing: { spokenStartMs: number; spokenEndMs: number; spokenDurationMs: number; targetDurationMs: number; deltaMs: number } | null;
   unscorableReason: UnscorableReason | null;
 }
 
+/** Evaluator provenance for storage next to the assessment (grading contract, "Persistence, versions, and progress"). */
+export interface AssessmentProvenance {
+  evaluator: string;
+  measurement: Measurement;
+  /** Azure does not disclose a model version in the REST response, so none is invented. */
+  modelVersion: null;
+  evaluatorConfigVersion: string;
+}
+
+export const EVALUATOR_CONFIG_VERSION = "azure-rest-short-audio-v1";
+
 export interface AssessmentOutcome {
   response: AssessmentResponseWithoutCoaching;
   evidence: AssessmentEvidence;
+  provenance: AssessmentProvenance;
 }
 
 const roundHalfUp = (value: number): number => Math.floor(value + 0.5 + 1e-9);
@@ -140,7 +155,14 @@ export function assessAttempt(input: AssessAttemptInput): AssessmentOutcome {
     recordedAt: input.recordedAt,
     referenceText: input.referenceText,
     recognizedText,
+    measurement: "acoustic",
   });
+  const provenance: AssessmentProvenance = {
+    evaluator: AZURE_PROVIDER_NAME,
+    measurement: "acoustic",
+    modelVersion: null,
+    evaluatorConfigVersion: EVALUATOR_CONFIG_VERSION,
+  };
   const unscorable = (reason: UnscorableReason, recognizedText: string | null, recognitionStatus: string, partial?: Partial<AssessmentEvidence>): AssessmentOutcome => ({
     response: { ...envelope(recognizedText), status: "unscorable", reason, scores: null, unavailableMetrics: [], wordResults: [] },
     evidence: {
@@ -151,9 +173,11 @@ export function assessAttempt(input: AssessAttemptInput): AssessmentOutcome {
       counts: { matched: 0, substituted: 0, omitted: 0, inserted: 0 },
       words: { mispronounced: [], substituted: [], omitted: [], inserted: 0 },
       timing: null,
+      measurement: "acoustic",
       unscorableReason: reason,
       ...partial,
     },
+    provenance,
   });
 
   if (!SUPPORTED_LOCALES.includes(input.locale)) return unscorable("unsupported_locale", null, "not_requested");
@@ -280,7 +304,9 @@ export function assessAttempt(input: AssessAttemptInput): AssessmentOutcome {
       counts: { matched: alignment.matched, substituted: alignment.substituted, omitted: alignment.omitted, inserted: alignment.inserted },
       words: { mispronounced, substituted, omitted, inserted: alignment.inserted },
       timing: { spokenStartMs, spokenEndMs, spokenDurationMs, targetDurationMs, deltaMs: spokenDurationMs - targetDurationMs },
+      measurement: "acoustic",
       unscorableReason: null,
     },
+    provenance,
   };
 }

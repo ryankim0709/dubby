@@ -60,6 +60,15 @@ export interface Coaching {
 export type UnscorableReason = "no_speech" | "excessive_noise" | "insufficient_speech" | "unsupported_locale";
 export const UNSCORABLE_REASONS: readonly UnscorableReason[] = ["no_speech", "excessive_noise", "insufficient_speech", "unsupported_locale"];
 
+/**
+ * How pronunciation and fluency were obtained. "acoustic" means a speech-assessment service measured the audio.
+ * "transcript_only" means only recognized text was available (including any LLM or transcription output), so
+ * pronunciation, fluency and every word pronunciationScore must be null. A missing or unknown value is read as
+ * "transcript_only" by consumers.
+ */
+export type Measurement = "acoustic" | "transcript_only";
+export const MEASUREMENTS: readonly Measurement[] = ["acoustic", "transcript_only"];
+
 export interface ResponseEnvelope {
   schemaVersion: 1;
   rubricVersion: "language-v1";
@@ -72,6 +81,7 @@ export interface ResponseEnvelope {
   recordedAt: string;
   referenceText: string;
   recognizedText: string | null;
+  measurement: Measurement;
 }
 
 export interface ScoredResponse extends ResponseEnvelope {

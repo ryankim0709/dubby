@@ -4,6 +4,8 @@ import Foundation
 nonisolated enum AssessmentUnavailability: Equatable, Sendable {
     /// No assessment backend is configured for this build.
     case notConfigured
+    /// The take came from a QA audio fixture rather than the microphone, so no acoustic assessment of it would mean anything.
+    case syntheticInput
 }
 
 /// A failed assessment job. These are never shown as unscorable audio or as a low score; the original recording is kept so the learner can retry.
