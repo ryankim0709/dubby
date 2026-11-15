@@ -87,6 +87,7 @@ struct FeedbackBasisLabel: View {
         .background(Palette.surface, in: RoundedRectangle(cornerRadius: 12))
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("feedbackBasis")
+        .accessibilityValue(display.basis.rawValue)
     }
 }
 
@@ -163,18 +164,26 @@ struct CoachPreferencesView: View {
                     ForEach(PracticeChallenge.allCases, id: \.self) { Text($0.title).tag($0) }
                 }
                 .pickerStyle(.segmented)
-                Picker("Session length", selection: $preferences.draft.sessionMinutes) {
-                    Text("No preference").tag(SessionMinutes?.none)
-                    ForEach(SessionMinutes.allCases, id: \.self) { Text($0.title).tag(SessionMinutes?.some($0)) }
-                }
+            }
+            .listRowBackground(Palette.surface)
+            Section {
+                Toggle("Remember my practice", isOn: Binding(
+                    get: { preferences.draft.memory == .on },
+                    set: { preferences.draft.memory = $0 ? .on : .off }
+                ))
+                .accessibilityIdentifier("memoryToggle")
+            } footer: {
+                Text("Turning this off and saving deletes what your coach remembers and stops it saving more.")
             }
             .listRowBackground(Palette.surface)
             Section {
                 if let practice {
+                    let isSkipped = preferences.draft.avoidLineIds.contains(practice.lineID)
                     Toggle("Skip the line I'm practising", isOn: Binding(
-                        get: { preferences.draft.avoidLineIds.contains(practice.lineID) },
+                        get: { isSkipped },
                         set: { preferences.draft.setAvoiding(lineID: practice.lineID, isAvoiding: $0) }
                     ))
+                    .disabled(!isSkipped && !preferences.draft.canAvoidMoreLines)
                 }
                 ForEach(preferences.draft.avoidLineIds, id: \.self) { lineID in
                     HStack {
@@ -228,23 +237,32 @@ struct CoachPreferencesView: View {
         .scrollContentBackground(.hidden)
         .tint(Palette.accentText)
         .confirmationDialog("Forget your coaching memory?", isPresented: $isConfirmingForget, titleVisibility: .visible) {
-            Button("Forget everything", role: .destructive) { Task { await memory.forget() } }
+            Button("Forget everything", role: .destructive) {
+                Task {
+                    await memory.forget()
+                    await preferences.syncMemoryMode()
+                }
+            }
         } message: {
-            Text("Your coach will forget the practice notes and goal it saved. Your attempts, scores, and saved preferences stay.")
+            Text("Your coach will forget the practice notes and goal it saved, and stop remembering until you turn memory back on. Your attempts, scores, and other preferences stay.")
         }
     }
 
     private var memorySection: some View {
         Section {
-            switch memory.status {
+            switch memory.snapshot {
             case .loading:
                 ProgressView().tint(Palette.accentText)
             case .signedOut:
                 Text("Sign in to see what your coach remembers.")
             case .failed(let message):
                 Text(message).foregroundStyle(Palette.streak)
-            case .loaded(let status):
-                Text(status.summary)
+            case .loaded(let snapshot):
+                Text(snapshot.status.summary)
+                    .accessibilityIdentifier("memoryStatus")
+                ForEach(snapshot.items) { item in
+                    MemoryItemRow(item: item)
+                }
             }
             if let notice = memory.notice {
                 Text(notice).foregroundStyle(Palette.textSecondary)
@@ -253,21 +271,46 @@ struct CoachPreferencesView: View {
                 Text(forgetError).foregroundStyle(Palette.streak)
             }
             Button("Forget my coaching memory", role: .destructive) { isConfirmingForget = true }
-                .disabled(memory.isForgetting || memory.status.isEmptyLoaded)
+                .disabled(memory.isForgetting || memory.snapshot.isEmptyLoaded)
                 .accessibilityIdentifier("forgetMemory")
         } header: {
-            Text("Coaching memory")
+            Text("What your coach remembers")
         } footer: {
-            Text("Your coach saves short practice notes and your goal so it can pick up where you left off. Scores and recordings aren't stored there.")
+            Text("Short practice notes and your goal, so your coach can pick up where you left off. Scores and recordings aren't kept here.")
         }
         .listRowBackground(Palette.surface)
     }
 }
 
-private extension CoachRemoteState where Value == CoachMemoryStatus {
-    /// True once the status loaded and holds nothing, so there is nothing to forget.
+private struct MemoryItemRow: View {
+    let item: MemoryItem
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(item.kind.title)
+                .dubFont(12, weight: .semibold)
+                .foregroundStyle(Palette.accentText)
+            Text(item.text)
+                .dubFont(14, weight: .regular)
+                .foregroundStyle(Palette.textPrimary)
+                .fixedSize(horizontal: false, vertical: true)
+            switch item.state {
+            case .pending:
+                Text("Saving…").dubFont(12, weight: .regular).foregroundStyle(Palette.textSecondary)
+            case .failed:
+                Text("Couldn't be saved").dubFont(12, weight: .regular).foregroundStyle(Palette.streak)
+            case .done, .other:
+                EmptyView()
+            }
+        }
+        .accessibilityElement(children: .combine)
+    }
+}
+
+private extension CoachRemoteState where Value == CoachMemorySnapshot {
+    /// True once the memory loaded and holds nothing, so there is nothing to forget.
     var isEmptyLoaded: Bool {
-        guard case .loaded(let status) = self else { return false }
-        return status.storedCount == 0
+        guard case .loaded(let snapshot) = self else { return false }
+        return snapshot.items.isEmpty && snapshot.status.storedCount == 0
     }
 }

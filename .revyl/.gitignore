@@ -1,0 +1,6 @@
+*
+!.gitignore
+!config.yaml
+!README.md
+!tests/
+!tests/**

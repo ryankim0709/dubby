@@ -3,22 +3,173 @@ import Testing
 @testable import Dubbing
 
 struct CoachTests {
-    @Test func speakTextMatchesTheWebSDKCommandShape() throws {
+    @Test func socketCommandsHaveTheLiteShape() throws {
         let eventID = UUID()
-        let data = try LiveAvatarCommand.speakText("Hola, ¿qué tal?", eventID: eventID)
-        let json = try #require(try JSONSerialization.jsonObject(with: data) as? [String: String])
-        #expect(json == ["event_id": eventID.uuidString.lowercased(), "event_type": "avatar.speak_text", "text": "Hola, ¿qué tal?"])
+        func object(_ frame: String) throws -> [String: String] {
+            try #require(try JSONSerialization.jsonObject(with: Data(frame.utf8)) as? [String: String])
+        }
+        let speak = try object(LiveAvatarSocketCommand.speak(audio: Data([1, 2, 3, 4]), eventID: eventID))
+        #expect(speak == ["type": "agent.speak", "event_id": eventID.uuidString.lowercased(), "audio": Data([1, 2, 3, 4]).base64EncodedString()])
+        #expect(try object(LiveAvatarSocketCommand.speakEnd(eventID: eventID))["type"] == "agent.speak_end")
+        #expect(try object(LiveAvatarSocketCommand.interrupt(eventID: eventID))["audio"] == nil)
+        #expect(try object(LiveAvatarSocketCommand.keepAlive(eventID: eventID))["type"] == "session.keep_alive")
     }
 
-    @Test func decodesTheAvatarEventsTheCoachFollowsAndSkipsTheRest() throws {
-        func decode(_ json: String) throws -> LiveAvatarEvent? {
-            try LiveAvatarEvent.decode(Data(json.utf8))
+    @Test func decodesTheSocketEventsTheCoachFollowsAndSkipsTheRest() throws {
+        func decode(_ json: String) throws -> LiveAvatarSocketEvent? {
+            try LiveAvatarSocketEvent.decode(json)
         }
-        #expect(try decode(#"{"event_id":"1","event_type":"avatar.speak_started","session_id":"s"}"#) == .avatarStartedSpeaking)
-        #expect(try decode(#"{"event_type":"avatar.speak_ended","session_id":"s","source_event_id":null}"#) == .avatarStoppedSpeaking)
-        #expect(try decode(#"{"event_type":"session.stopped","stop_reason":"IDLE_TIMEOUT"}"#) == .sessionStopped(reason: "IDLE_TIMEOUT"))
-        #expect(try decode(#"{"event_type":"user.transcription","text":"hi"}"#) == nil)
-        #expect(throws: DecodingError.self) { try decode(#"{"text":"no type"}"#) }
+        #expect(try decode(#"{"type":"session.state_updated","state":"connected","event_id":"1","source_event_id":null}"#) == .connected)
+        #expect(try decode(#"{"type":"session.state_updated","state":"disconnected"}"#) == .sessionDisconnected)
+        #expect(try decode(#"{"type":"session.state_updated","state":"new"}"#) == nil)
+        #expect(try decode(#"{"type":"agent.speak_started","source_event_id":"u"}"#) == .speakStarted)
+        #expect(try decode(#"{"type":"agent.speak_ended","source_event_id":"u"}"#) == .speakEnded)
+        #expect(try decode(#"{"type":"agent.speak_interrupted"}"#) == .speakInterrupted)
+        #expect(try decode(#"{"type":"error","error":{"type":"invalid_request_error","message":"bad audio","event_id":"e"}}"#) == .failed(type: "invalid_request_error", message: "bad audio"))
+        #expect(try decode(#"{"type":"agent.audio_buffer_appended"}"#) == nil)
+        #expect(try decode(#"{"type":"agent.state_updated","previous_state":"idle","new_state":"talking"}"#) == nil)
+        #expect(throws: DecodingError.self) { try decode(#"{"state":"no type"}"#) }
+    }
+
+    @Test func replyChunksAreCheckedBeforeAnythingIsSent() throws {
+        try LiveAvatarAudio.validate(chunks: [Data(count: 48_000), Data(count: 24_000)])
+        #expect(throws: CoachError.self) { try LiveAvatarAudio.validate(chunks: []) }
+        #expect(throws: CoachError.self) { try LiveAvatarAudio.validate(chunks: [Data()]) }
+        #expect(throws: CoachError.self) { try LiveAvatarAudio.validate(chunks: [Data(count: 7)]) }
+        #expect(throws: CoachError.self) { try LiveAvatarAudio.validate(chunks: [Data(count: 48_002)]) }
+        #expect(throws: CoachError.self) { try LiveAvatarAudio.validate(chunks: Array(repeating: Data(count: 48_000), count: 61)) }
+        try LiveAvatarAudio.validate(chunks: Array(repeating: Data(count: 48_000), count: 60))
+    }
+
+    @Test func chunksAreSentNoMoreThanTheLeadAheadOfPlayback() {
+        let offsets = (0..<6).map { LiveAvatarAudio.sendOffset(ofChunk: $0) }
+        #expect(offsets == [.seconds(0), .seconds(0), .seconds(0), .seconds(1), .seconds(2), .seconds(3)])
+    }
+
+    @Test func replyAudioMustBeThePcmFormatTheSocketAccepts() throws {
+        func audio(format: String = "pcm_s16le", rate: Int = 24_000, chunks: [String]) -> ReplyAudio {
+            ReplyAudio(format: format, sampleRateHz: rate, channels: 1, chunks: chunks, durationMs: 1, aiGenerated: true)
+        }
+        let samples = Data([0, 1, 2, 3]).base64EncodedString()
+        #expect(try audio(chunks: [samples]).pcmChunks() == [Data([0, 1, 2, 3])])
+        #expect(throws: CoachError.self) { try audio(format: "mp3", chunks: [samples]).pcmChunks() }
+        #expect(throws: CoachError.self) { try audio(rate: 16_000, chunks: [samples]).pcmChunks() }
+        #expect(throws: CoachError.self) { try audio(chunks: ["not base64!"]).pcmChunks() }
+        #expect(throws: CoachError.self) { try audio(chunks: []).pcmChunks() }
+    }
+
+    @Test func aReplyWithAudioDecodesItsVoice() throws {
+        let reply = try decodeReply(#"{"text":"Hi","audio":{"format":"pcm_s16le","sampleRateHz":24000,"channels":1,"chunks":["AAA="],"durationMs":2083,"aiGenerated":true}}"#)
+        #expect(reply.audio?.aiGenerated == true)
+        #expect(reply.audio?.chunks == ["AAA="])
+        #expect(reply.audioError == nil)
+        #expect(try decodeReply(#"{"text":"Hi"}"#).audio == nil)
+    }
+
+    @Test func aReplyWhoseVoiceFailedKeepsItsTextAndSaysWhy() throws {
+        let reply = try decodeReply(#"{"text":"Hi","audio":null,"audioError":{"code":"provider_timeout"}}"#)
+        #expect(reply.text == "Hi")
+        #expect(reply.audio == nil)
+        #expect(reply.audioError?.code == "provider_timeout")
+        #expect(CoachConversation.voiceUnavailableMessage(for: reply.audioError).contains("too long"))
+        #expect(CoachConversation.voiceUnavailableMessage(for: ReplyAudioError(code: "provider_failed")).contains("didn't work"))
+    }
+
+    // MARK: Avatar socket
+
+    private actor FakeTransport: AvatarSocketTransport {
+        private(set) var sent: [String] = []
+        private(set) var isClosed = false
+        private var pending: [String] = []
+        private var waiter: CheckedContinuation<String, any Error>?
+
+        func feed(_ frame: String) {
+            guard let waiter else {
+                pending.append(frame)
+                return
+            }
+            self.waiter = nil
+            waiter.resume(returning: frame)
+        }
+
+        func send(_ text: String) { sent.append(text) }
+
+        func close() {
+            isClosed = true
+            waiter?.resume(throwing: CoachError.avatarDisconnected)
+            waiter = nil
+        }
+
+        func receive() async throws -> String {
+            if !pending.isEmpty { return pending.removeFirst() }
+            if isClosed { throw CoachError.avatarDisconnected }
+            return try await withCheckedThrowingContinuation { waiter = $0 }
+        }
+
+        func sentTypes() throws -> [String] {
+            struct Frame: Decodable { let type: String }
+            return try sent.map { try JSONDecoder().decode(Frame.self, from: Data($0.utf8)).type }
+        }
+    }
+
+    private func connectedSocket(_ transport: FakeTransport) async -> LiveAvatarSocket {
+        let socket = LiveAvatarSocket(transport: transport)
+        await socket.start()
+        await transport.feed(#"{"type":"session.state_updated","state":"connected"}"#)
+        var events = socket.events.makeAsyncIterator()
+        _ = await events.next()
+        return socket
+    }
+
+    @Test func theSocketSendsNothingUntilTheServerSaysConnected() async {
+        let transport = FakeTransport()
+        let socket = LiveAvatarSocket(transport: transport)
+        await socket.start()
+        await #expect(throws: CoachError.avatarDisconnected) { try await socket.speak(chunks: [Data(count: 4)]) }
+        #expect(await transport.sent.isEmpty)
+        await socket.close()
+    }
+
+    @Test func aReplyIsSentAsChunksThenSealed() async throws {
+        let transport = FakeTransport()
+        let socket = await connectedSocket(transport)
+        try await socket.speak(chunks: [Data(count: 48_000), Data(count: 48_000), Data(count: 24_000)])
+        #expect(try await transport.sentTypes() == ["agent.speak", "agent.speak", "agent.speak", "agent.speak_end"])
+        await socket.close()
+    }
+
+    @Test func interruptingStopsTheChunksStillWaitingToBeSent() async throws {
+        let transport = FakeTransport()
+        let socket = await connectedSocket(transport)
+        let speaking = Task { try await socket.speak(chunks: Array(repeating: Data(count: 48_000), count: 6)) }
+        while try await transport.sentTypes().count < 3 { await Task.yield() }
+        try await socket.interrupt()
+        try await speaking.value
+        let types = try await transport.sentTypes()
+        #expect(types.prefix(3).allSatisfy { $0 == "agent.speak" })
+        #expect(types.contains("agent.interrupt"))
+        #expect(!types.contains("agent.speak_end"))
+        await socket.close()
+    }
+
+    @Test func closingInterruptsTheAvatarAndClosesTheTransport() async throws {
+        let transport = FakeTransport()
+        let socket = await connectedSocket(transport)
+        await socket.close()
+        #expect(try await transport.sentTypes() == ["agent.interrupt"])
+        #expect(await transport.isClosed)
+    }
+
+    @Test func aSocketThatEndsOnItsOwnIsReported() async {
+        let transport = FakeTransport()
+        let socket = LiveAvatarSocket(transport: transport)
+        await socket.start()
+        await transport.close()
+        var events = socket.events.makeAsyncIterator()
+        guard case .closed = await events.next() else {
+            Issue.record("Expected a closed event")
+            return
+        }
     }
 
     @Test func sendsOnlyTranscriptsThatHoldWords() {
@@ -42,6 +193,7 @@ struct CoachTests {
         let reply = try decodeReply(#"{"text":"Nice work."}"#)
         #expect(reply.text == "Nice work.")
         #expect(reply.source == nil)
+        #expect(reply.provenance == nil)
         #expect(reply.feedbackBasis == .none)
         #expect(reply.citedEvidenceIds.isEmpty)
         #expect(reply.exercise == nil)
@@ -49,13 +201,17 @@ struct CoachTests {
 
     @Test func aTutoringReplyDecodesItsBasisEvidenceAndExercise() throws {
         let reply = try decodeReply("""
-        {"text":"Slow down on 'underestimate'.","source":"template","feedbackBasis":"script_agreement",
-         "citedEvidenceIds":["take_003"],"unrelated":true,
+        {"text":"Slow down on 'underestimate'.","source":"model",
+         "provenance":{"provider":"openai","api":"responses","model":"gpt-6-luna","responseId":"resp_1"},
+         "feedbackBasis":"script_agreement","citedEvidenceIds":["take_003"],"unrelated":true,
          "exercise":{"kind":"drill_word","locale":"en-US","lineId":"line_02","referenceVersion":1,
            "practiceText":"underestimate","focus":"word_accuracy","instruction":"Say it slowly.",
-           "reasonCode":"recurring_word","evidence":{"attemptIds":["take_003"],"assessmentIds":["a_1"]}}}
+           "reasonCode":"recurring_word","basis":"script_agreement",
+           "evidence":{"attemptIds":["take_003"],"assessmentIds":["a_1"]}}}
         """)
-        #expect(reply.source == .template)
+        #expect(reply.source == .model)
+        #expect(reply.provenance?.summary == "openai/gpt-6-luna")
+        #expect(reply.exercise?.basis == .scriptAgreement)
         #expect(reply.feedbackBasis == .scriptAgreement)
         #expect(reply.citedEvidenceIds == ["take_003"])
         #expect(reply.exercise?.kind == .drillWord)
@@ -83,15 +239,14 @@ struct CoachTests {
 
     @Test func preferencesRoundTripAndOmitUnsetValues() throws {
         var preferences = CoachPreferences.standard
-        preferences.sessionMinutes = .ten
+        preferences.memory = .off
         let json = try #require(try JSONSerialization.jsonObject(with: JSONEncoder().encode(preferences)) as? [String: Any])
-        #expect(json["sessionMinutes"] as? Int == 10)
-        #expect(json["goalNote"] == nil)
-        #expect(json["focus"] as? String == "any")
-        let record = try JSONDecoder().decode(CoachPreferencesRecord.self, from: Data(#"{"preferences":{"focus":"word_accuracy","challenge":"stretch","avoidLineIds":["l1"],"goalNote":"Order food"},"version":3}"#.utf8))
+        #expect(Set(json.keys) == ["focus", "challenge", "avoidLineIds", "memory"])
+        #expect(json["memory"] as? String == "off")
+        let record = try JSONDecoder().decode(CoachPreferencesRecord.self, from: Data(#"{"preferences":{"focus":"word_accuracy","challenge":"stretch","avoidLineIds":["l1"],"memory":"on","goalNote":"Order food"},"version":3}"#.utf8))
         #expect(record.version == 3)
         #expect(record.preferences.focus == .wordAccuracy)
-        #expect(record.preferences.sessionMinutes == nil)
+        #expect(record.preferences.memory == .on)
     }
 
     @Test func preferenceEditsKeepLinesUniqueAndBlankGoalsOut() {
@@ -101,6 +256,8 @@ struct CoachTests {
         preferences.setAvoiding(lineID: "l2", isAvoiding: true)
         preferences.setAvoiding(lineID: "l2", isAvoiding: false)
         #expect(preferences.avoidLineIds == ["l1"])
+        for index in 0..<(CoachPreferences.avoidLineLimit + 5) { preferences.setAvoiding(lineID: "extra\(index)", isAvoiding: true) }
+        #expect(preferences.avoidLineIds.count == CoachPreferences.avoidLineLimit)
         preferences.goalNote = "  \n "
         #expect(preferences.trimmed.goalNote == nil)
         preferences.goalNote = String(repeating: "a", count: CoachPreferences.goalNoteLimit + 1)
@@ -119,6 +276,7 @@ struct CoachTests {
         #expect(map(400, #"{"error":"bad locale","code":"invalid_request"}"#) == .invalidRequest(operation: "Op", message: "bad locale"))
         #expect(map(502, #"{"error":"model unavailable","code":"provider_failed"}"#) == .providerFailed(operation: "Op", message: "model unavailable"))
         #expect(map(503, #"{"error":"x","code":"not_configured"}"#) == .serviceNotConfigured(operation: "Op"))
+        #expect(map(504, #"{"error":"slow","code":"provider_timeout"}"#) == .providerTimeout(operation: "Op"))
         #expect(map(409, #"{"error":"other","code":"something_else"}"#) == .requestFailed(operation: "Op", status: 409, body: "other"))
         #expect(map(500, "<html>gateway</html>") == .requestFailed(operation: "Op", status: 500, body: "<html>gateway</html>"))
     }
@@ -142,28 +300,102 @@ struct CoachTests {
     }
 
     @Test func signedOutRequestsFailBeforeAnythingIsSent() async {
-        let client = CoachBackendClient(baseURL: URL(string: "https://example.invalid")!, tokens: NoToken())
+        let client = CoachBackendClient(baseURL: URL(string: "https://example.invalid")!, tokens: NoToken(), qaFault: nil)
         await #expect(throws: CoachError.signInRequired) { try await client.preferences() }
         await #expect(throws: CoachError.signInRequired) { try await client.forgetMemory() }
     }
 
     // MARK: Exercise and context logic
 
-    @Test func theCoachOnlyTalksAboutTheLineForTheLanguageBeingPractised() {
-        let english = SpokenLanguage.all[0]
-        let spanish = SpokenLanguage.all[3]
-        let practice = CoachPracticeContext(lineID: "line_02", locale: english.identifier)
-        #expect(CoachConversation.replyContext(language: english, practice: practice).lineId == "line_02")
-        #expect(CoachConversation.replyContext(language: spanish, practice: practice).lineId == nil)
-        #expect(CoachConversation.replyContext(language: spanish, practice: practice).locale == "es-ES")
-        #expect(CoachConversation.replyContext(language: english, practice: nil).lineId == nil)
+    @Test func theBackendCodeAndRetryabilityFollowTheError() {
+        #expect(CoachError.providerTimeout(operation: "Op").backendCode == "provider_timeout")
+        #expect(CoachError.serviceNotConfigured(operation: "Op").backendCode == "not_configured")
+        #expect(CoachError.providerFailed(operation: "Op", message: "m").backendCode == "provider_failed")
+        #expect(CoachError.signInRequired.backendCode == "unauthenticated")
+        #expect(CoachError.noSpeechHeard.backendCode == nil)
+        #expect(CoachError.providerTimeout(operation: "Op").isRetryable)
+        #expect(CoachError.serviceNotConfigured(operation: "Op").isRetryable)
+        #expect(!CoachError.invalidRequest(operation: "Op", message: "m").isRetryable)
+        #expect(!CoachError.signInRequired.isRetryable)
+    }
+
+    @Test func qaSwitchesParseOnlyKnownFaults() {
+        #expect(CoachQAOptions.parse(uiTest: true, fault: "provider_timeout") == CoachQAOptions(isUITest: true, fault: .providerTimeout))
+        #expect(CoachQAOptions.parse(uiTest: false, fault: "missing_key").fault == .missingKey)
+        #expect(CoachQAOptions.parse(uiTest: true, fault: "provider_erorr").fault == nil)
+        #expect(CoachQAOptions.parse(uiTest: true, fault: nil).fault == nil)
+        #expect(CoachQAFault.header == "X-QA-Fault")
+    }
+
+    // MARK: Progress
+
+    private func decodeSeries(_ json: String) throws -> ProgressSeries {
+        try JSONDecoder().decode(ProgressSeries.self, from: Data(json.utf8))
+    }
+
+    @Test func theFullDocumentedSeriesDecodes() throws {
+        let series = try decodeSeries(CoachFixtures.acousticSeries)
+        #expect(series.locale == "en-US")
+        #expect(series.evaluator.measurement == .acoustic)
+        #expect(series.evaluator.modelVersion == nil)
+        #expect(series.pronunciationBasis == .acoustic)
+        #expect(series.volume.attempts == 5 && series.volume.scorableAttempts == 4 && series.volume.practiceDays == 2)
+        #expect(series.daily.map(\.date) == ["2026-11-10", "2026-11-12"])
+        #expect(series.daily[1].firstScorable.languageOverall == MetricValue(value: 91.5, samples: 2))
+        #expect(series.daily[0].bestAttempt.fluency?.value == 80)
+        #expect(series.skills.first { $0.metric == "fluency" }?.direction == .improving)
+        #expect(series.skills.first { $0.metric == "languageOverall" }?.change == 4.5)
+        #expect(series.lines.map(\.lineId) == ["scene_001_line_02", "scene_001_line_05"])
+        #expect(series.lines[0].latestScores?.pronunciation == 84)
+        #expect(series.repeatedLines[0].latest.assessmentId == "as4b")
+        #expect(series.words[0].word == "underestimate")
+        #expect(series.words[0].pronunciationIssueAssessmentIds == ["as1", "as2", "as4b"])
+        #expect(series.guidance.focusAreas[0].word == "underestimate")
+        #expect(series.guidance.retryLines[0].practiceWords == ["underestimate"])
+        #expect(series.guidance.newLines.isEmpty)
+    }
+
+    @Test func aTranscriptOnlySeriesNeverShowsPronunciationOrFluency() throws {
+        let acoustic = try decodeSeries(CoachFixtures.acousticSeries)
+        for metric in ScoreMetric.allCases { #expect(acoustic.canShow(metric)) }
+        #expect(acoustic.shownPronunciationScore(for: acoustic.words[0]) == 61)
+
+        let transcriptOnly = try decodeSeries(
+            CoachFixtures.acousticSeries
+                .replacing(#""measurement": "acoustic""#, with: #""measurement": "transcript_only""#)
+                .replacing(#""pronunciationBasis": "acoustic""#, with: #""pronunciationBasis": "script_agreement""#)
+        )
+        #expect(!transcriptOnly.canShow(.pronunciation))
+        #expect(!transcriptOnly.canShow(.fluency))
+        #expect(transcriptOnly.canShow(.wordAccuracy) && transcriptOnly.canShow(.timingFit))
+        #expect(transcriptOnly.shownPronunciationScore(for: transcriptOnly.words[0]) == nil)
+
+        let withUnavailable = try decodeSeries(
+            CoachFixtures.acousticSeries.replacing(#""unavailableMetrics": []"#, with: #""unavailableMetrics": [{"metric":"timingFit","reason":"insufficient_evidence"}]"#)
+        )
+        #expect(!withUnavailable.canShow(.timingFit))
+    }
+
+    @Test func aMissingMeasurementIsTreatedAsTranscriptOnly() throws {
+        let series = try decodeSeries(CoachFixtures.acousticSeries.replacing(#""measurement": "acoustic""#, with: #""measurement": "mystery""#))
+        #expect(series.evaluator.measurement == .transcriptOnly)
+        #expect(!series.canShow(.pronunciation))
+    }
+
+    @Test func memoryItemsDecodeWithoutScoresAndToleratesNewKinds() throws {
+        let json = #"{"items":[{"docId":"attempt-1","kind":"attempt_note","text":"Struggled with 'underestimate'.","sourceIds":["a1","as1"],"state":"done"},{"docId":"x","kind":"future_kind","text":"t","sourceIds":[],"state":"pending"}]}"#
+        struct Response: Decodable { let items: [MemoryItem] }
+        let items = try JSONDecoder().decode(Response.self, from: Data(json.utf8)).items
+        #expect(items.map(\.kind) == [.attemptNote, .other])
+        #expect(items[0].state == .done && items[1].state == .pending)
+        #expect(items[0].sourceIds == ["a1", "as1"])
     }
 
     @Test func exerciseEvidenceNamesTheLineAndAttempts() {
         func exercise(attempts: [String], lineId: String?) -> NextExercise {
             NextExercise(
                 kind: .retryLine, locale: "en-US", lineId: lineId, referenceVersion: 1, practiceText: nil,
-                focus: .any, instruction: "Retry it.", reasonCode: "r",
+                focus: .any, instruction: "Retry it.", reasonCode: "r", basis: .none,
                 evidence: ExerciseEvidence(attemptIds: attempts, assessmentIds: [])
             )
         }
@@ -205,10 +437,17 @@ struct CoachTests {
 
         func memoryStatus() async throws -> CoachMemoryStatus { memory }
 
+        func memoryItems() async throws -> [MemoryItem] {
+            struct Response: Decodable { let items: [MemoryItem] }
+            let items = (0..<memory.done).map { #"{"docId":"doc\#($0)","kind":"attempt_note","text":"Note \#($0)","sourceIds":[],"state":"done"}"# }
+            return try JSONDecoder().decode(Response.self, from: Data(#"{"items":[\#(items.joined(separator: ","))]}"#.utf8)).items
+        }
+
         func forgetMemory() async throws -> Int {
             forgotten = true
             let scheduled = memory.done
             memory = CoachMemoryStatus(pending: 0, failed: 0, done: 0)
+            stored = CoachPreferencesRecord(preferences: { var off = stored.preferences; off.memory = .off; return off }(), version: stored.version + 1)
             return scheduled
         }
     }
@@ -261,13 +500,34 @@ struct CoachTests {
         let service = FakeTutorService(stored: CoachPreferencesRecord(preferences: .standard, version: 0), saveFailures: [])
         let model = CoachMemoryModel(service: service)
         await model.load()
-        await model.forget()
-        #expect(await service.forgotten)
-        guard case .loaded(let status) = model.status else {
-            Issue.record("Expected the status to reload after forgetting")
+        guard case .loaded(let before) = model.snapshot else {
+            Issue.record("Expected the memory to load")
             return
         }
-        #expect(status.storedCount == 0)
+        #expect(before.items.count == 4)
+        await model.forget()
+        #expect(await service.forgotten)
+        guard case .loaded(let snapshot) = model.snapshot else {
+            Issue.record("Expected the memory to reload after forgetting")
+            return
+        }
+        #expect(snapshot.status.storedCount == 0)
+        #expect(snapshot.items.isEmpty)
         #expect(model.forgetError == nil)
+    }
+
+    @MainActor
+    @Test func forgettingMemoryPicksUpTheServersMemoryOffWithoutLosingOtherEdits() async throws {
+        let service = FakeTutorService(stored: CoachPreferencesRecord(preferences: .standard, version: 4), saveFailures: [])
+        let preferences = CoachPreferencesModel(service: service)
+        await preferences.load()
+        preferences.draft.challenge = .stretch
+        _ = try await service.forgetMemory()
+        await preferences.syncMemoryMode()
+        #expect(preferences.draft.memory == .off)
+        #expect(preferences.draft.challenge == .stretch)
+        await preferences.save()
+        #expect(await service.savedVersions == [5])
+        #expect(preferences.saveError == nil)
     }
 }

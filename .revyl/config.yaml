@@ -1,0 +1,12 @@
+project:
+  id: "b3f1a6c2-5d7e-4c1a-9a47-0e2d8f6a31b5"
+
+build:
+  framework: ios
+  profiles:
+    simulator:
+      ios:
+        build_commands:
+          - "xcodebuild -project Dubbing.xcodeproj -scheme Dubbing -destination 'generic/platform=iOS Simulator' -derivedDataPath build/DerivedData CODE_SIGNING_ALLOWED=NO build"
+        output_path: "build/DerivedData/Build/Products/Debug-iphonesimulator/Dubbing.app"
+        timeout_seconds: 3600

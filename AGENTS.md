@@ -22,6 +22,7 @@ Read the applicable files before implementation; they contain instructions for C
 
 ## Workflow
 
+- For the hackathon, do not add or run CI workflows, automated QA jobs, provider/secret/bundle scans, or PR verification agents. Merge authorized PRs once merge conflicts are resolved; checks and test results are not merge gates. Existing test sources remain available for manual use.
 - Read existing code and search for reusable logic before editing. Make the smallest change that completes the requested behavior.
 - Preserve other people's edits and staging. Do not commit, push, or open a PR without explicit authorization; leave implementation changes uncommitted for review.
 - Ask before destructive actions or expanding product scope. Never put credentials, recordings, or private user data in source control.

@@ -10,7 +10,23 @@ enum LoadState<Value> {
 /// Shows loading and failure states, and the content once loaded.
 struct LoadStateContent<Value, Content: View>: View {
     let state: LoadState<Value>
+    let retry: (() -> Void)?
+    let failureIdentifier: String?
     @ViewBuilder let content: (Value) -> Content
+
+    init(state: LoadState<Value>, @ViewBuilder content: @escaping (Value) -> Content) {
+        self.state = state
+        retry = nil
+        failureIdentifier = nil
+        self.content = content
+    }
+
+    init(state: LoadState<Value>, failureIdentifier: String, retry: @escaping () -> Void, @ViewBuilder content: @escaping (Value) -> Content) {
+        self.state = state
+        self.retry = retry
+        self.failureIdentifier = failureIdentifier
+        self.content = content
+    }
 
     var body: some View {
         switch state {
@@ -19,8 +35,17 @@ struct LoadStateContent<Value, Content: View>: View {
                 .tint(Palette.accentText)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 40)
+                .accessibilityLabel("Loading")
         case .failed(let message):
-            EmptyStateView(systemImage: "exclamationmark.triangle", title: "Couldn't load this", message: message)
+            VStack(spacing: 12) {
+                EmptyStateView(systemImage: "exclamationmark.triangle", title: "Couldn't load this", message: message)
+                    .accessibilityIdentifier(failureIdentifier ?? "loadFailed")
+                if let retry {
+                    Button("Try again", action: retry)
+                        .buttonStyle(OutlineCapsuleButtonStyle())
+                        .accessibilityIdentifier("retryLoad")
+                }
+            }
         case .loaded(let value):
             content(value)
         }
@@ -31,7 +56,10 @@ struct DiscoverView: View {
     let clips: LoadState<[LibraryClip]>
     let streakDays: Int
     let onDub: (LibraryClip) -> Void
+    let isSignedIn: Bool
     let onTalkToCoach: () -> Void
+    let onAccount: () -> Void
+    let onRetry: () -> Void
 
     var body: some View {
         ScrollView {
@@ -48,6 +76,15 @@ struct DiscoverView: View {
                             .foregroundStyle(Palette.streak)
                             .accessibilityLabel("\(streakDays)-day streak")
                     }
+                    Button(action: onAccount) {
+                        Image(systemName: isSignedIn ? "person.crop.circle.fill" : "person.crop.circle")
+                            .dubFont(22, weight: .regular)
+                            .foregroundStyle(Palette.textPrimary)
+                            .frame(minWidth: 44, minHeight: 44)
+                            .contentShape(Rectangle())
+                    }
+                    .accessibilityLabel(isSignedIn ? "Account, signed in" : "Account, signed out")
+                    .accessibilityIdentifier("openAccount")
                 }
                 .padding(.top, 8)
                 Button(action: onTalkToCoach) {
@@ -63,13 +100,14 @@ struct DiscoverView: View {
                         .dubFont(14, weight: .regular)
                         .foregroundStyle(Palette.textSecondary)
                 }
-                LoadStateContent(state: clips) { clips in
+                LoadStateContent(state: clips, failureIdentifier: "discoverLoadFailed", retry: onRetry) { clips in
                     if clips.isEmpty {
                         EmptyStateView(
                             systemImage: "film.stack",
-                            title: "No scenes yet",
-                            message: "Add MP4 or MOV clips to the Media folder in the project, then build and run again."
+                            title: "No scenes in this build",
+                            message: "Scenes are the MP4 or MOV clips bundled from the Media folder. Add one there, then build and run again."
                         )
+                        .accessibilityIdentifier("discoverEmpty")
                     } else {
                         VStack(spacing: 16) {
                             ForEach(clips) { clip in
@@ -81,6 +119,7 @@ struct DiscoverView: View {
             }
             .padding(.horizontal, 16)
             .padding(.bottom, 16)
+            .containerIdentifier("discoverScreen")
         }
         .scrollIndicators(.hidden)
         .background(Palette.background)
@@ -113,11 +152,12 @@ struct SceneCard: View {
                     .foregroundStyle(Palette.textPrimary)
                 Button("Dub this scene", action: onDub)
                     .buttonStyle(PrimaryButtonStyle(cornerRadius: 12))
-                    .accessibilityIdentifier("dubScene")
+                    .accessibilityIdentifier("dubScene-\(clip.sceneID)")
             }
             .padding(12)
             .background(Palette.surface)
         }
         .clipShape(RoundedRectangle(cornerRadius: 16))
+        .containerIdentifier("sceneCard-\(clip.sceneID)")
     }
 }
