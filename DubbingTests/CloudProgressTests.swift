@@ -62,7 +62,7 @@ struct CloudProgressTests {
         #expect(Set(summaries.map(\.id)).count == 2)
     }
 
-    @Test func signedOutNeverLoadsAndFailuresAreReported() async throws {
+    @Test func signedOutNeverLoadsCloudProgress() async throws {
         var calls = 0
         let signedOut = CloudProgressModel(account: AccountModel(service: nil)) {
             calls += 1
