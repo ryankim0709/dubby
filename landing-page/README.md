@@ -13,6 +13,7 @@ This is separate from `../landing/`, the informational site, which deliberately 
 | `app.js` | Phone screens, scroll effects, the signup forms, and the Whop checkout |
 | `config.js` | The Convex endpoint and Whop plan ID (both public values) |
 | `assets/LeagueGothic.ttf` | Wordmark and poster face (SIL OFL, licence beside it) |
+| `assets/scenes/*.webp` | Film stills used as posters and video frames (see Images) |
 | `og.png`, `favicon.svg` | Share preview and tab icon |
 
 ## Run locally
@@ -56,8 +57,18 @@ The browser's "payment complete" message only updates the page; the webhook is w
 2. Set **Root Directory** to `landing-page` and **Framework Preset** to *Other*. Leave the build command empty.
 3. Deploy. Every push to `main` redeploys.
 
+## Images
+
+Every poster, role card and video frame is a still from *Tears of Steel* (2012, Blender Foundation), licensed under CC BY 3.0. It's the same film as the app's demo scene, `Dubbing/DemoScenes/tears-of-steel-bridge` (license notes in `docs/demo-scenes.md`). The credit in the page footer is required by the license; keep it whenever these stills are shown.
+
+- `tos-bridge-*.webp` come from the app's bridge clip.
+- The rest were cut from the official 720p release (`tears_of_steel_720p.mov`, the sha256 pinned in `scripts/demo-scenes/prepare-tears-of-steel-bridge.sh`) at these timestamps: celia-close 320 s, thom-arm 395 s, cyborg 560 s, soldier 365 s, sniper 140 s, robot-bridge 515 s, hacker 305 s, duo 215 s.
+- Scene titles other than "The Bridge" (The Lab, Last Stand, Overwatch) are names given on this page, not scenes the app ships yet.
+
+**Swapping images:** any element with `style="--img:url(...)"` shows that image and falls back to its `--a`/`--b` colour gradient without one. Use only footage you have rights to, and update the footer credit to match. Studio films need a license; a screenshot doesn't make them usable.
+
 ## Content notes
 
-- App screens are HTML recreations of the `erica-frontend` screens and use only the Dubby Original scenes (Rain Check, The Lunch Table, Corazón de Fuego). The page says they are previews of an app in development.
+- App screens are HTML recreations of the `erica-frontend` screens, filled with the bridge scene's real characters and dialogue. The page says they are previews of an app in development.
 - Pricing and plan features are draft copy. The iMessage screen shows the planned Keiki agent invite; it is a preview, not a working integration yet.
 - Red appears only on recording UI and cyan only on the coach, matching the app's style guide.

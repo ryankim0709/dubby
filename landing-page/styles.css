@@ -8,6 +8,8 @@
 }
 
 :root {
+  /* Image slots: an element with an inline --img (a url() to a licensed still in assets/scenes/) shows that frame;
+     without one it falls back to its --a/--b colour gradient. */
   --bg: #0f0f0f;
   --glow: #2c2c2c;
   --surface: #1c1c1c;
@@ -244,7 +246,7 @@ html { scrollbar-color: var(--track) var(--bg); }
 .lang-tabs b { color: var(--text); font-weight: 600; }
 
 .poster, .thumb, .stage, .wrap-video, .role {
-  background: linear-gradient(160deg, var(--a), var(--b));
+  background: var(--img, linear-gradient(160deg, var(--a), var(--b))) center / cover no-repeat;
 }
 .poster-title {
   font-family: var(--display); text-transform: uppercase; line-height: 0.9; letter-spacing: 0.01em;
@@ -496,7 +498,7 @@ html { scrollbar-color: var(--track) var(--bg); }
 @keyframes marquee { to { transform: translateX(-50%); } }
 .wcard {
   position: relative; flex: none; overflow: hidden; border-radius: var(--r-card);
-  background: linear-gradient(160deg, var(--a), var(--b));
+  background: var(--img, linear-gradient(160deg, var(--a), var(--b))) center / cover no-repeat;
   display: flex; flex-direction: column; justify-content: flex-end; padding: 16px;
   box-shadow: 0 18px 40px -16px rgba(0, 0, 0, 0.7);
 }
@@ -582,7 +584,7 @@ html { scrollbar-color: var(--track) var(--bg); }
 .dest-msg::after { content: ""; width: 2.2em; height: 1.8em; border-radius: 50%; background: #fff; }
 
 /* Invite screen */
-.invite-scene { position: relative; margin-top: 1.4em; aspect-ratio: 16 / 8; border-radius: 1.8em; overflow: hidden; display: flex; flex-direction: column; justify-content: space-between; padding: 1em; background: linear-gradient(160deg, var(--a), var(--b)); }
+.invite-scene { position: relative; margin-top: 1.4em; aspect-ratio: 16 / 8; border-radius: 1.8em; overflow: hidden; display: flex; flex-direction: column; justify-content: space-between; padding: 1em; background: var(--img, linear-gradient(160deg, var(--a), var(--b))) center / cover no-repeat; }
 .invite-scene::before { content: ""; position: absolute; inset: 0; background: linear-gradient(transparent 30%, rgba(0, 0, 0, 0.55)); }
 .invite-scene > * { position: relative; }
 .invite-scene .poster-title { font-size: 3em; }
@@ -611,7 +613,7 @@ html { scrollbar-color: var(--track) var(--bg); }
 .bubble-in { align-self: flex-start; background: #262628; border-bottom-left-radius: 0.4em; }
 .bubble-out { align-self: flex-end; background: #0a84ff; color: #fff; border-bottom-right-radius: 0.4em; }
 .im-card { padding: 0; overflow: hidden; display: grid; width: 74%; }
-.im-card-art { aspect-ratio: 16 / 8; display: grid; place-items: end start; padding: 0.6em; background: linear-gradient(160deg, var(--a), var(--b)); }
+.im-card-art { aspect-ratio: 16 / 8; display: grid; place-items: end start; padding: 0.6em; background: var(--img, linear-gradient(160deg, var(--a), var(--b))) center / cover no-repeat; }
 .im-card-art .poster-title { font-size: 2.2em; }
 .im-card b { font-size: 0.95em; padding: 0.6em 0.8em 0; }
 .im-card small { font-size: 0.8em; color: var(--text-2); padding: 0.1em 0.8em 0.7em; }
@@ -678,3 +680,7 @@ html { scrollbar-color: var(--track) var(--bg); }
 
 /* The tilted poster wall and colour glows bleed past the edges on purpose; clip them without making main a scroll container, so the sticky phone keeps working. */
 main { overflow-x: clip; }
+
+/* Footer: the CC BY credit for the film stills must stay visible on the page. */
+.footer-notes { display: grid; gap: 6px; max-width: 70ch; }
+.footer .credit a { color: var(--text-2); }
