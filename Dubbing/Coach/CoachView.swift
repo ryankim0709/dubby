@@ -37,23 +37,15 @@ struct CoachView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     HStack(spacing: 12) {
-                        Button(action: onClose) {
-                            Image(systemName: "xmark")
-                                .dubFont(16, weight: .medium)
-                                .foregroundStyle(Palette.textPrimary)
-                                .frame(minWidth: 44, minHeight: 44)
-                        }
-                        .accessibilityLabel("Close")
+                        DubGlassIconButton(systemImage: "xmark", label: "Close", action: onClose)
                         Text("Talk to a coach")
                             .dubFont(16, weight: .semibold)
                             .foregroundStyle(Palette.textPrimary)
                         Spacer()
                         NavigationLink(value: CoachRoute.preferences) {
                             Image(systemName: "slider.horizontal.3")
-                                .dubFont(16, weight: .medium)
-                                .foregroundStyle(Palette.textPrimary)
-                                .frame(minWidth: 44, minHeight: 44)
                         }
+                        .buttonStyle(.dubGlassIcon)
                         .accessibilityLabel("Your coaching preferences and memory")
                         .accessibilityIdentifier("coachPreferences")
                     }
@@ -230,14 +222,14 @@ struct CoachSessionView: View {
                         .accessibilityValue(session.replyFailure?.backendCode ?? "")
                     if session.replyFailure != nil {
                         Button("Try again", action: session.retryReply)
-                            .buttonStyle(OutlineCapsuleButtonStyle())
+                            .buttonStyle(.dubSecondary)
                             .accessibilityIdentifier("coachRetry")
                     }
                     if session.needsMicrophoneAccess {
                         Button("Open Settings") {
                             if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
                         }
-                        .buttonStyle(OutlineCapsuleButtonStyle())
+                        .buttonStyle(.dubSecondary)
                     }
                 }
             }
@@ -324,8 +316,10 @@ struct CoachSessionView: View {
                     .font(.system(size: 30, weight: .medium))
                     .foregroundStyle(session.activity == .listening ? .white : Palette.onAccent)
                     .frame(width: 78, height: 78)
-                    .background(session.activity == .listening ? Color.red : Palette.accent, in: Circle())
+                    .dubGlass(in: Circle(), tint: session.activity == .listening ? .red : Palette.accent, interactive: true)
+                    .contentShape(Circle())
             }
+            .buttonStyle(.plain)
             .disabled(session.connection != .live || session.activity == .transcribing || session.activity == .thinking)
             .opacity(session.connection != .live ? 0.5 : 1)
             .accessibilityLabel(talkLabel)
