@@ -21,7 +21,8 @@ export function createCoachClient(): OpenAI {
 
 // Model IDs are plain configuration, not secrets. Defaults were checked against developers.openai.com on 2026-11-15.
 // gpt-6-luna is OpenAI's most efficient model for focused, high-volume tasks, which suits a two-sentence spoken reply.
-// The speech model is deprecated on 2027-01-06 per OpenAI's deprecation notice; set OPENAI_TTS_MODEL when its replacement is chosen.
+// OpenAI has announced that tts-1, tts-1-hd and every gpt-4o-mini-tts snapshot shut down on 2027-01-06. Its named replacement,
+// gpt-realtime-2.1-mini, isn't a /v1/audio/speech model (Realtime API only), so the model stays behind OPENAI_TTS_MODEL until a decision is made.
 const defaultCoachModel = "gpt-6-luna";
 const defaultSpeechModel = "gpt-4o-mini-tts";
 
@@ -96,6 +97,23 @@ export async function coachReply(
   return { text, model: response.model || model, responseId: response.id || null };
 }
 
+/** LiveAvatar's LITE mode takes PCM 16-bit mono at 24 kHz, in chunks of about one second and at most 1 MB each. */
+export const pcmSampleRateHz = 24_000;
+const bytesPerSecond = pcmSampleRateHz * 2;
+/** One second of audio per chunk, so the app can forward each chunk as one `agent.speak` command unchanged. */
+export const pcmChunkBytes = bytesPerSecond;
+/** A reply is two short sentences; a longer clip means the provider went wrong, and the app shouldn't be sent a minute of audio. */
+export const maxSpeechBytes = 60 * bytesPerSecond;
+// Speech for a short reply should arrive in a few seconds; a stalled request is cut off instead of retried.
+const speechTimeoutMs = 20_000;
+
+export type SpokenReply = {
+  /** Base64 chunks of 16-bit little-endian mono PCM in playback order; every chunk but the last is exactly one second. */
+  chunks: string[];
+  durationMs: number;
+  totalBytes: number;
+};
+
 function bytesToBase64(bytes: Uint8Array): string {
   let binary = "";
   const chunk = 0x8000;
@@ -105,17 +123,29 @@ function bytesToBase64(bytes: Uint8Array): string {
   return btoa(binary);
 }
 
+/** Splits raw PCM into one-second chunks; a trailing odd byte can't be a whole 16-bit sample and is dropped. */
+export function chunkPcm(pcm: Uint8Array): SpokenReply {
+  const whole = pcm.subarray(0, pcm.length - (pcm.length % 2));
+  const chunks: string[] = [];
+  for (let offset = 0; offset < whole.length; offset += pcmChunkBytes) {
+    chunks.push(bytesToBase64(whole.subarray(offset, offset + pcmChunkBytes)));
+  }
+  return { chunks, durationMs: Math.round((whole.length / bytesPerSecond) * 1000), totalBytes: whole.length };
+}
+
 /**
- * Voices a reply as raw PCM, 16-bit signed little-endian, 24 kHz mono, base64-encoded: the exact format
- * LiveAvatar's LITE-mode agent.speak command takes, so the app forwards it without conversion.
+ * Voices the already-checked reply text with the character's stock OpenAI voice, as raw PCM chunks the app
+ * sends to LiveAvatar unchanged. Only the reply text goes to the speech API: the learner's recordings never
+ * reach it, and nothing here reads or alters them.
  */
-export async function speakReply(client: OpenAI, character: CoachCharacter, text: string, model: string = speechModelId()): Promise<string> {
-  const response = await client.audio.speech.create({
-    model,
-    voice: character.openaiVoice,
-    input: text,
-    instructions: character.voiceStyle,
-    response_format: "pcm",
-  });
-  return bytesToBase64(new Uint8Array(await response.arrayBuffer()));
+export async function speakReply(client: OpenAI, character: CoachCharacter, text: string, model: string = speechModelId()): Promise<SpokenReply> {
+  const response = await client.audio.speech.create(
+    { model, voice: character.openaiVoice, input: text, instructions: character.voiceStyle, response_format: "pcm" },
+    { timeout: speechTimeoutMs, maxRetries: 0 },
+  );
+  const pcm = new Uint8Array(await response.arrayBuffer());
+  if (pcm.length < 2 || pcm.length > maxSpeechBytes) {
+    throw new CoachReplyError(`The speech model returned ${pcm.length} bytes of audio`);
+  }
+  return chunkPcm(pcm);
 }

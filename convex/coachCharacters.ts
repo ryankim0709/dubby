@@ -1,3 +1,10 @@
+/**
+ * OpenAI's built-in speech voices only. The speech API also accepts a custom voice object, which would be a
+ * cloned voice; the union leaves that out so a character can't be given one.
+ */
+export const stockVoices = ["alloy", "ash", "ballad", "coral", "echo", "fable", "nova", "onyx", "sage", "shimmer", "verse", "marin", "cedar"] as const;
+export type StockVoice = (typeof stockVoices)[number];
+
 /** A coach the learner can talk to: one LiveAvatar image avatar (video only), one OpenAI voice, and a persona for the model. */
 export type CoachCharacter = {
   id: string;
@@ -7,7 +14,7 @@ export type CoachCharacter = {
   /** Deployment env var holding this character's LiveAvatar `avatar_id`. */
   avatarIdEnv: string;
   /** One of OpenAI's built-in speech voices; the avatar's mouth follows this audio. */
-  openaiVoice: string;
+  openaiVoice: StockVoice;
   /** How OpenAI's speech model should deliver the voice. */
   voiceStyle: string;
   persona: string;

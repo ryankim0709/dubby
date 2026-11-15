@@ -2,8 +2,8 @@ import { httpActionGeneric, type GenericActionCtx, type GenericDataModel, type H
 import { ConvexError } from "convex/values";
 import OpenAI from "openai";
 import { z } from "zod";
-import { coachCharacters, findCharacter, publicCharacter } from "./coachCharacters";
-import { coachModelId, coachReply, CoachReplyError, CoachTimeoutError, createCoachClient, speakReply } from "./coachReply";
+import { coachCharacters, findCharacter, publicCharacter, type CoachCharacter } from "./coachCharacters";
+import { coachModelId, coachReply, CoachReplyError, CoachTimeoutError, createCoachClient, pcmSampleRateHz, speakReply, speechModelId } from "./coachReply";
 import { ConfigurationError, requiredEnv } from "./env";
 import { createSessionToken, LiveAvatarError, sandboxAvatarId } from "./liveAvatar";
 import { tutoringRefs } from "./tutoringRefs";
@@ -60,6 +60,30 @@ function logReply(model: string, status: "ok" | "error", code: string, startedAt
 }
 
 const errorBody = (code: string, error: string) => ({ error, code });
+
+/**
+ * Voices the checked reply for the avatar. The text is already valid and grounded, so a speech failure doesn't
+ * discard it: the response carries `audio: null` and the failure code, and the app shows the text without a voice.
+ */
+async function voiceReply(client: OpenAI, character: CoachCharacter, text: string): Promise<{ audio: object; audioError?: undefined } | { audio: null; audioError: { code: string } }> {
+  const started = Date.now();
+  const model = speechModelId();
+  const log = (status: "ok" | "error", code: string) =>
+    console.log(`coach.speech provider=openai api=audio.speech model=${model} status=${status} code=${code} latencyMs=${Date.now() - started}`);
+  try {
+    const spoken = await speakReply(client, character, text, model);
+    log("ok", "none");
+    return {
+      audio: { format: "pcm_s16le", sampleRateHz: pcmSampleRateHz, channels: 1, chunks: spoken.chunks, durationMs: spoken.durationMs, aiGenerated: true },
+    };
+  } catch (error) {
+    const code = error instanceof CoachTimeoutError || error instanceof OpenAI.APIConnectionTimeoutError ? "provider_timeout" : error instanceof CoachReplyError || error instanceof OpenAI.APIError ? "provider_failed" : undefined;
+    if (code === undefined) throw error;
+    console.error("coach speech failed", { code });
+    log("error", code);
+    return { audio: null, audioError: { code } };
+  }
+}
 
 async function parseBody<T>(request: Request, schema: z.ZodType<T>): Promise<T | Response> {
   let body: unknown;
@@ -164,11 +188,8 @@ export function registerTutoringRoutes(http: HttpRouter): void {
         const pack = { ...context.pack, memoryNotes: memoryNotes.slice(0, 3) };
         const composed = await composeReply(pack, (evidence) => coachReply(client, character, body.languageName, body.turns, evidence, model));
         model = composed.model;
-        let audio: { format: string; base64: string; aiGenerated: true } | null = null;
-        if (body.audio) {
-          audio = { format: "pcm_s16le_24khz_mono", base64: await speakReply(client, character, composed.text), aiGenerated: true };
-        }
         logReply(model, "ok", "none", started);
+        const speech = body.audio ? await voiceReply(client, character, composed.text) : undefined;
         return json(200, {
           text: composed.text,
           source: composed.source,
@@ -176,7 +197,7 @@ export function registerTutoringRoutes(http: HttpRouter): void {
           feedbackBasis: pack.basis,
           citedEvidenceIds: composed.cites,
           exercise: pack.exercise,
-          ...(audio === null ? {} : { audio }),
+          ...(speech === undefined ? {} : speech),
         });
       } catch (error) {
         const failed = failure("POST /coach/reply", error);

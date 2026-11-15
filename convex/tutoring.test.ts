@@ -3,6 +3,7 @@ import { convexTest } from "convex-test";
 import { defineSchema } from "convex/server";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { gradingResult, type GradingResult } from "./gradingContract";
+import { coachCharacters, stockVoices } from "./coachCharacters";
 import { createSessionToken } from "./liveAvatar";
 import { selectNextExercise } from "./tutoringExercise";
 import { defaultPreferences, learnerPreferences } from "./tutoringPreferences";
@@ -654,14 +655,18 @@ describe("convex tutoring functions", () => {
 type OpenAiCall = { path: string; body: Record<string, unknown> };
 
 /** Stands in for api.openai.com: answers /v1/responses with the given text and /v1/audio/speech with a few PCM bytes. */
-function fakeOpenAI(replyText: () => string, failure?: { status: number }) {
+function fakeOpenAI(replyText: () => string, failure?: { status: number }, speech: { bytes?: number; status?: number; hang?: boolean } = {}) {
   const calls: OpenAiCall[] = [];
   vi.stubGlobal("fetch", async (input: string | URL | Request, init?: RequestInit) => {
     const url = new URL(input instanceof Request ? input.url : String(input));
     if (url.hostname !== "api.openai.com") return new Response("not faked", { status: 500 });
     calls.push({ path: url.pathname, body: JSON.parse(String(init?.body ?? "{}")) });
     if (failure !== undefined) return Response.json({ error: { message: "secret provider detail" } }, { status: failure.status });
-    if (url.pathname.endsWith("/audio/speech")) return new Response(new Uint8Array([1, 2, 3, 4]), { headers: { "Content-Type": "audio/pcm" } });
+    if (url.pathname.endsWith("/audio/speech")) {
+      if (speech.hang) return new Promise<Response>((_resolve, reject) => init?.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError"))));
+      if (speech.status !== undefined) return Response.json({ error: { message: "secret speech detail" } }, { status: speech.status });
+      return new Response(Uint8Array.from({ length: speech.bytes ?? 4 }, (_, index) => index % 251), { headers: { "Content-Type": "audio/pcm" } });
+    }
     return Response.json({
       id: "resp_test",
       object: "response",
@@ -739,14 +744,54 @@ describe("coach and tutor HTTP routes", () => {
     expect(String(body.text)).not.toMatch(/\d/);
   });
 
-  test("can return the reply as PCM audio for the avatar", async () => {
-    const calls = fakeOpenAI(() => JSON.stringify({ text: "Say it again.", cites: ["as1"] }));
+  test("the reply can carry its speech as one-second PCM chunks for the avatar", async () => {
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    const calls = fakeOpenAI(() => JSON.stringify({ text: "Say it again.", cites: ["as1"] }), undefined, { bytes: 100_001 });
     const response = await post(await seededTutor(), {}, JSON.stringify({ ...JSON.parse(replyBody), audio: true }));
-    expect(((await response.json()) as { audio: unknown }).audio).toEqual({ format: "pcm_s16le_24khz_mono", base64: "AQIDBA==", aiGenerated: true });
-    expect(calls.map((call) => call.path)).toContain("/v1/audio/speech");
-    expect(calls.find((call) => call.path.endsWith("/speech"))!.body).toMatchObject({ response_format: "pcm", voice: "ash" });
+    const body = (await response.json()) as { text: string; audio: { chunks: string[]; [key: string]: unknown } };
+    expect(response.status).toBe(200);
+    expect(body.audio).toMatchObject({ format: "pcm_s16le", sampleRateHz: 24000, channels: 1, durationMs: 2083, aiGenerated: true });
+    const sizes = body.audio.chunks.map((chunk) => atob(chunk).length);
+    expect(sizes).toEqual([48000, 48000, 4000]);
+    expect(Math.max(...body.audio.chunks.map((chunk) => chunk.length))).toBeLessThan(1_000_000);
+    const speechCall = calls.find((call) => call.path.endsWith("/speech"))!;
+    expect(speechCall.body).toMatchObject({ response_format: "pcm", voice: "ash", input: body.text });
+    expect(log.mock.calls.map((call) => String(call[0])).find((entry) => entry.startsWith("coach.speech"))).toMatch(/^coach\.speech provider=openai api=audio\.speech model=gpt-4o-mini-tts status=ok code=none latencyMs=\d+$/);
   });
 
+  test("no audio is requested from the speech API unless the app asks for it", async () => {
+    const calls = fakeOpenAI(() => JSON.stringify({ text: "Say it again.", cites: ["as1"] }));
+    const body = (await (await post(await seededTutor())).json()) as Record<string, unknown>;
+    expect(body).not.toHaveProperty("audio");
+    expect(calls.map((call) => call.path)).toEqual(["/v1/responses"]);
+  });
+
+  test("a speech failure keeps the reply text and reports why there's no audio", async () => {
+    fakeOpenAI(() => JSON.stringify({ text: "Say it again.", cites: ["as1"] }), undefined, { status: 500 });
+    const body = (await (await post(await seededTutor(), {}, JSON.stringify({ ...JSON.parse(replyBody), audio: true }))).json()) as Record<string, unknown>;
+    expect(body).toMatchObject({ text: "Say it again.", source: "model", audio: null, audioError: { code: "provider_failed" } });
+    expect(JSON.stringify(body)).not.toContain("secret speech detail");
+  });
+
+  test("a speech request that stalls becomes a provider_timeout for the audio only", async () => {
+    fakeOpenAI(() => JSON.stringify({ text: "Say it again.", cites: ["as1"] }), undefined, { hang: true });
+    const pending = post(await seededTutor(), {}, JSON.stringify({ ...JSON.parse(replyBody), audio: true }));
+    await vi.advanceTimersByTimeAsync(20_000);
+    const response = await pending;
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ text: "Say it again.", audio: null, audioError: { code: "provider_timeout" } });
+  });
+
+  test("an empty or runaway speech clip is a speech failure, not audio", async () => {
+    fakeOpenAI(() => JSON.stringify({ text: "Say it again.", cites: ["as1"] }), undefined, { bytes: 0 });
+    const body = (await (await post(await seededTutor(), {}, JSON.stringify({ ...JSON.parse(replyBody), audio: true }))).json()) as Record<string, unknown>;
+    expect(body).toMatchObject({ audio: null, audioError: { code: "provider_failed" } });
+  });
+
+  test("every character speaks with a stock OpenAI voice, never a custom one", () => {
+    for (const character of coachCharacters) expect(stockVoices).toContain(character.openaiVoice);
+  });
+  
   test("a provider failure returns an error with no text and doesn't echo the provider's body", async () => {
     fakeOpenAI(() => "", { status: 400 });
     const response = await post(await seededTutor());
