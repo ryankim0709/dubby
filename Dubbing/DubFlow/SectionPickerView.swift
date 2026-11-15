@@ -58,6 +58,7 @@ struct SectionPickerView: View {
                     }
                     .pickerStyle(.menu)
                     .tint(Palette.accentText)
+                    .frame(minHeight: GlassMetrics.minimumTarget)
                 }
                 .padding(12)
                 .background(Palette.surface, in: RoundedRectangle(cornerRadius: 12))
@@ -74,10 +75,12 @@ struct SectionPickerView: View {
                             preview()
                         }
                     } label: {
-                        Image(systemName: player.isPlaying ? "stop.fill" : "play.fill")
-                        Text(player.isPlaying ? "Stop" : "Preview scene")
+                        HStack(spacing: 8) {
+                            Image(systemName: player.isPlaying ? "stop.fill" : "play.fill")
+                            Text(player.isPlaying ? "Stop" : "Preview scene")
+                        }
                     }
-                    .buttonStyle(OutlineCapsuleButtonStyle())
+                    .buttonStyle(.dubSecondary)
                     Spacer()
                 }
             }
@@ -96,10 +99,9 @@ struct SectionPickerView: View {
                     language: language
                 ))
             }
-            .buttonStyle(PrimaryButtonStyle(cornerRadius: 16))
+            .buttonStyle(.dubPrimary)
             .accessibilityIdentifier("transcribeScene")
             .padding(16)
-            .background(Palette.background)
         }
         .background(Palette.background)
         .toolbar(.hidden, for: .navigationBar)
@@ -186,11 +188,11 @@ private struct SectionTimeline: View {
                     .offset(x: startX)
                     .gesture(drag(.move, width: width))
                 handle
-                    .offset(x: startX - 16)
+                    .offset(x: startX - GlassMetrics.minimumTarget / 2)
                     .gesture(drag(.start, width: width))
                     .accessibilityLabel("Scene start")
                 handle
-                    .offset(x: endX - 16)
+                    .offset(x: endX - GlassMetrics.minimumTarget / 2)
                     .gesture(drag(.end, width: width))
                     .accessibilityLabel("Scene end")
             }
@@ -204,7 +206,7 @@ private struct SectionTimeline: View {
             .frame(width: 10, height: height)
             .overlay(Capsule().fill(Palette.onAccent).frame(width: 2, height: 18))
             // A wider invisible hit area makes the thin handle easy to grab.
-            .frame(width: 32, height: height)
+            .frame(width: GlassMetrics.minimumTarget, height: height)
             .contentShape(Rectangle())
     }
 
