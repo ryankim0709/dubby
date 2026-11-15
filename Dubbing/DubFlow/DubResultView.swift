@@ -62,7 +62,7 @@ struct DubResultView: View {
                             .dubFont(16, weight: .medium)
                             .foregroundStyle(Palette.textPrimary)
                         Button("Cancel export", action: cancelExport)
-                            .buttonStyle(OutlineCapsuleButtonStyle())
+                            .buttonStyle(.dubSecondary)
                             .accessibilityIdentifier("cancelExport")
                     }
                     .frame(maxWidth: .infinity)
@@ -89,7 +89,7 @@ struct DubResultView: View {
                             .dubFont(14, weight: .regular)
                             .foregroundStyle(Palette.textSecondary)
                         Button("Export again", action: startExport)
-                            .buttonStyle(PrimaryButtonStyle(cornerRadius: 16))
+                            .buttonStyle(.dubPrimary)
                             .accessibilityIdentifier("retryExport")
                     }
                     .padding(12)
@@ -113,21 +113,20 @@ struct DubResultView: View {
         .scrollIndicators(.hidden)
         .background(Palette.background)
         .toolbar(.hidden, for: .navigationBar)
-        // Pinned so sharing and finishing stay reachable beside the measurements.
+        // Glass controls float over the page background so sharing and finishing stay reachable beside the measurements.
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if case .finished(let video, _, _) = phase {
                 VStack(spacing: 8) {
                     ShareLink(item: video) {
                         Label("Share dub", systemImage: "square.and.arrow.up")
                     }
-                    .buttonStyle(PrimaryButtonStyle(cornerRadius: 16))
+                    .buttonStyle(.dubPrimary)
                     .accessibilityIdentifier("shareDub")
                     Button("Done", action: onDone)
-                        .buttonStyle(OutlineCapsuleButtonStyle())
+                        .buttonStyle(.dubSecondary)
                         .accessibilityIdentifier("doneDub")
                 }
                 .padding(16)
-                .background(Palette.background)
             }
         }
         .overlay {
@@ -145,17 +144,10 @@ struct DubResultView: View {
 
     private var header: some View {
         HStack(spacing: 12) {
-            Button {
+            DubGlassIconButton(systemImage: "arrow.left", label: "Back") {
                 exportTask?.cancel()
                 onDone()
-            } label: {
-                Image(systemName: "arrow.left")
-                    .dubFont(16, weight: .medium)
-                    .foregroundStyle(Palette.textPrimary)
-                    .frame(minWidth: 44, minHeight: 44)
-                    .contentShape(Rectangle())
             }
-            .accessibilityLabel("Back")
             .accessibilityIdentifier("exportBack")
             Text("Your dub")
                 .dubFont(16, weight: .semibold)
