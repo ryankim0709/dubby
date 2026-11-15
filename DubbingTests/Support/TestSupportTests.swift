@@ -8,6 +8,12 @@ struct TestSupportTests {
         #expect(size > 0)
     }
 
+    @Test func reportsAMissingFixtureAsAThrownError() {
+        #expect(throws: TestFixtureError.missing("does-not-exist.mp4")) {
+            try TestFixtures.url(named: "does-not-exist", extension: "mp4")
+        }
+    }
+
     @Test func removesTheScratchFolderWhenReleased() throws {
         var folder: TemporaryDirectory? = try TemporaryDirectory()
         let url = try #require(folder?.url)
