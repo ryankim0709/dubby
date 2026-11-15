@@ -67,18 +67,45 @@ nonisolated struct LineAnalysis: Hashable, Sendable {
     let envelopes: [[Float]]
 }
 
+/// The reference identity of a curated line: what the backend, assessment and coaching know it by.
+nonisolated struct LineReference: Hashable, Sendable {
+    /// The manifest's `lines[].id`, stable across builds.
+    let lineID: String
+    let characterID: String
+    /// BCP-47 language of the line, for example `en-US`.
+    let locale: String
+    let referenceVersion: Int
+}
+
 nonisolated struct ScriptLine: Hashable, Sendable, Identifiable {
+    /// Position of the line in its script; a local index, not a backend id (see `reference`).
     let id: Int
     let text: String
     let start: Double
     let end: Double
     let speakerID: Int
     let envelope: [Float]
+    /// Set for curated scene lines; nil for lines transcribed from a raw clip, which have no reference identity.
+    let reference: LineReference?
 
     var duration: Double { end - start }
 
+    init(id: Int, text: String, start: Double, end: Double, speakerID: Int, envelope: [Float]) {
+        self.init(id: id, text: text, start: start, end: end, speakerID: speakerID, envelope: envelope, reference: nil)
+    }
+
+    init(id: Int, text: String, start: Double, end: Double, speakerID: Int, envelope: [Float], reference: LineReference?) {
+        self.id = id
+        self.text = text
+        self.start = start
+        self.end = end
+        self.speakerID = speakerID
+        self.envelope = envelope
+        self.reference = reference
+    }
+
     func assigned(to speakerID: Int) -> ScriptLine {
-        ScriptLine(id: id, text: text, start: start, end: end, speakerID: speakerID, envelope: envelope)
+        ScriptLine(id: id, text: text, start: start, end: end, speakerID: speakerID, envelope: envelope, reference: reference)
     }
 }
 
@@ -113,12 +140,56 @@ nonisolated struct DubSetup: Hashable, Sendable {
     let clip: ImportedClip
     let section: ClipSection
     let script: Script
+    /// The played speaker's id in `script`.
     let characterID: Int
+    /// Set when the dub is of a curated scene, whose prepared tracks replace the speech-band filter.
+    let curated: CuratedSceneSelection?
+
+    /// A dub of a raw clip, scripted by transcription.
+    init(clip: ImportedClip, section: ClipSection, script: Script, characterID: Int) {
+        self.clip = clip
+        self.section = section
+        self.script = script
+        self.characterID = characterID
+        curated = nil
+    }
+
+    /// A dub of a curated scene; see `CuratedSceneStudio.makeSetup`.
+    init(clip: ImportedClip, script: Script, curated: CuratedSceneSelection) {
+        self.clip = clip
+        section = ClipSection(start: 0, end: curated.scene.durationSeconds)
+        self.script = script
+        characterID = curated.speakerID
+        self.curated = curated
+    }
+
+    /// How a take that runs long is bounded in this dub.
+    var takeBoundary: TakeBoundary { curated == nil ? .nextLineOfAnyone : .nextLineOfSameCharacter }
+
+    /// The explicit cue, line, grace and recording window for one line.
+    func timing(for line: ScriptLine) -> LineTiming {
+        LineTiming.make(for: line, in: script.lines, boundary: takeBoundary, sceneDuration: section.duration, rules: .standard)
+    }
 }
 
+/// A finished recording of one line. The file is the learner's original take and is never modified: export reads
+/// it, assessment encodes a copy from it, and a later retry writes a new file.
 nonisolated struct RecordedTake: Hashable, Sendable {
     let url: URL
     let duration: Double
+    /// Where the audio came from. Fixture takes are synthetic and must never be assessed.
+    let inputSource: TakeInputSource
+
+    /// A take recorded by this process's configured input (see `TakeInputSource.configured`).
+    init(url: URL, duration: Double) {
+        self.init(url: url, duration: duration, inputSource: TakeInputSource.configured)
+    }
+
+    init(url: URL, duration: Double, inputSource: TakeInputSource) {
+        self.url = url
+        self.duration = duration
+        self.inputSource = inputSource
+    }
 }
 
 /// Where a recorded take lands in the section, in seconds from the section start.
@@ -162,6 +233,7 @@ nonisolated enum DubFlowError: LocalizedError, Equatable {
     case recordingInterrupted(String)
     case playbackFailed(String)
     case exportUnavailable
+    case audioFixtureMissing(String)
 
     var errorDescription: String? {
         switch self {
@@ -187,6 +259,8 @@ nonisolated enum DubFlowError: LocalizedError, Equatable {
             "Couldn't play \(file)."
         case .exportUnavailable:
             "This clip can't be exported on this device."
+        case .audioFixtureMissing(let name):
+            "The QA audio fixture \(name) isn't in this build."
         }
     }
 }

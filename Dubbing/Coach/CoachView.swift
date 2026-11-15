@@ -9,7 +9,8 @@ private enum CoachRoute: Hashable {
 }
 
 /// Pick a scene character to coach you, and the language to practise. `practice` is the line the
-/// dub flow is on, when the coach is opened from there; it lets the coach talk about that line.
+/// dub flow is on, when the coach is opened from there: it picks the starting language and offers
+/// to skip that line in future suggestions.
 struct CoachView: View {
     let practice: CoachPracticeContext?
     let tokens: any CoachAuthTokenProvider
@@ -120,7 +121,7 @@ struct CoachView: View {
         case .success(let backend):
             switch route {
             case .character(let character):
-                CoachSessionView(session: CoachSession(character: character, language: language, backend: backend, practice: practice, exercise: exercise))
+                CoachSessionView(session: CoachSession(character: character, language: language, backend: backend, exercise: exercise))
             case .preferences:
                 CoachPreferencesView(service: backend, practice: practice)
             }
@@ -168,6 +169,21 @@ private struct CharacterRow: View {
     }
 }
 
+/// An invisible element that exposes one runtime fact to UI tests as its accessibility value.
+private struct QAStateCarrier: View {
+    let identifier: String
+    let value: String
+
+    var body: some View {
+        Color.clear
+            .frame(width: 1, height: 1)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(identifier)
+            .accessibilityValue(value)
+            .accessibilityIdentifier(identifier)
+    }
+}
+
 /// The call with one coach: their video, what each of you said, and one button to talk.
 struct CoachSessionView: View {
     @State private var session: CoachSession
@@ -184,11 +200,21 @@ struct CoachSessionView: View {
                 BackHeader(title: session.character.name) { EmptyView() }
                     .padding(.top, 8)
                 avatarCard
-                transcript
-                if let reply = session.lastReply,
-                   let basis = reply.feedbackBasis.display(citedEvidenceCount: reply.citedEvidenceIds.count) {
-                    FeedbackBasisLabel(display: basis)
+                if session.lastReply?.audio?.aiGenerated == true {
+                    Text("The coach's voice is AI-generated.")
+                        .dubFont(12, weight: .regular)
+                        .foregroundStyle(Palette.placeholder)
                 }
+                transcript
+                if session.replyFailure == nil, let reply = session.lastReply {
+                    let citedCount = reply.citedEvidenceIds.count
+                    if let basis = reply.feedbackBasis.display(citedEvidenceCount: citedCount) {
+                        FeedbackBasisLabel(display: basis)
+                    } else if CoachQAOptions.current.isUITest {
+                        QAStateCarrier(identifier: "feedbackBasis", value: reply.feedbackBasis.effective(citedEvidenceCount: citedCount).rawValue)
+                    }
+                }
+                qaState
                 NextExerciseSection(state: session.exercise)
                 if case .ended(let reason) = session.connection {
                     EmptyStateView(systemImage: "video.slash", title: "The call ended", message: reason)
@@ -200,6 +226,13 @@ struct CoachSessionView: View {
                     Text(errorMessage)
                         .dubFont(14, weight: .regular)
                         .foregroundStyle(Palette.streak)
+                        .accessibilityIdentifier(session.replyFailure == nil ? "coachNotice" : "coachError")
+                        .accessibilityValue(session.replyFailure?.backendCode ?? "")
+                    if session.replyFailure != nil {
+                        Button("Try again", action: session.retryReply)
+                            .buttonStyle(OutlineCapsuleButtonStyle())
+                            .accessibilityIdentifier("coachRetry")
+                    }
                     if session.needsMicrophoneAccess {
                         Button("Open Settings") {
                             if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
@@ -229,6 +262,22 @@ struct CoachSessionView: View {
         .onChange(of: scenePhase) { _, phase in
             if phase != .active {
                 session.interrupt(because: "DubIt left the screen")
+            }
+        }
+    }
+
+    /// Runtime facts for UI tests, present only in a debug launch with `-DUBIT_UI_TEST 1`.
+    @ViewBuilder
+    private var qaState: some View {
+        if CoachQAOptions.current.isUITest {
+            if session.replyFailure == nil, let reply = session.lastReply {
+                QAStateCarrier(identifier: "coachReplyText", value: reply.text)
+                if let provenance = reply.provenance {
+                    QAStateCarrier(identifier: "coachReplyProvenance", value: provenance.summary)
+                }
+            }
+            if let spoken = session.lastSpokenText {
+                QAStateCarrier(identifier: "coachAvatarSpeech", value: spoken)
             }
         }
     }

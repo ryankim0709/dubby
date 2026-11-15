@@ -481,6 +481,7 @@
 				CODE_SIGN_ENTITLEMENTS = Config/Dubbing.entitlements;
 				COACH_BACKEND_URL = "";
 				CONVEX_URL = "";
+				EXCLUDED_SOURCE_FILE_NAMES = "*/Dubbing/QAFixtures/*";
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Config/Dubbing-Info.plist";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "DubIt records your voice so you can dub lines from your clip and talk with your coach.";
