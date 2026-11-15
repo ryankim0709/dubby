@@ -3,11 +3,21 @@ import { ConvexError } from "convex/values";
 import OpenAI from "openai";
 import { z } from "zod";
 import { coachCharacters, findCharacter, publicCharacter } from "./coachCharacters";
-import { coachReply, CoachReplyError, speakReply } from "./coachReply";
+import { coachModelId, coachReply, CoachReplyError, CoachTimeoutError, createCoachClient, speakReply } from "./coachReply";
 import { ConfigurationError, requiredEnv } from "./env";
 import { createSessionToken, LiveAvatarError, sandboxAvatarId } from "./liveAvatar";
 import { tutoringRefs } from "./tutoringRefs";
 import { composeReply } from "./tutoringReply";
+
+/** Development-only failures a QA run can ask for with the X-QA-Fault header; ignored unless QA_FAULTS_ENABLED is "true". */
+const qaFaults = ["provider_error", "provider_timeout", "missing_key"] as const;
+type QaFault = (typeof qaFaults)[number];
+
+function requestedFault(request: Request): QaFault | undefined {
+  if (process.env.QA_FAULTS_ENABLED !== "true") return undefined;
+  const value = request.headers.get("X-QA-Fault");
+  return qaFaults.find((fault) => fault === value);
+}
 
 // Provider keys live only in the Convex deployment's environment variables, never in the app. Every route
 // except the public coach catalog needs a signed-in learner, whose identity comes from the verified auth
@@ -44,6 +54,11 @@ function json(status: number, body: object): Response {
   });
 }
 
+/** One content-free line per reply, for QA and monitoring. */
+function logReply(model: string, status: "ok" | "error", code: string, startedAt: number): void {
+  console.log(`coach.reply provider=openai api=responses model=${model} status=${status} code=${code} latencyMs=${Date.now() - startedAt}`);
+}
+
 const errorBody = (code: string, error: string) => ({ error, code });
 
 async function parseBody<T>(request: Request, schema: z.ZodType<T>): Promise<T | Response> {
@@ -75,13 +90,17 @@ function failure(operation: string, error: unknown): Response {
     if (data.code === "version_conflict") return json(409, errorBody("version_conflict", data.message ?? "stale version"));
     if (data.code === "invalid_request") return json(400, errorBody("invalid_request", data.message ?? "invalid request"));
   }
+  if (error instanceof CoachTimeoutError || error instanceof OpenAI.APIConnectionTimeoutError) {
+    console.error("coach provider timed out", { operation });
+    return json(504, errorBody("provider_timeout", "The coach model didn't answer in time"));
+  }
   if (error instanceof LiveAvatarError || error instanceof CoachReplyError) {
     console.error("coach provider call failed", { operation, error: error.message });
     return json(502, errorBody("provider_failed", error.message));
   }
   if (error instanceof OpenAI.APIError) {
     console.error("coach provider call failed", { operation, status: error.status, error: error.message });
-    return json(502, errorBody("provider_failed", `OpenAI request failed with status ${error.status}`));
+    return json(502, errorBody("provider_failed", "The coach model request failed"));
   }
   throw error;
 }
@@ -131,24 +150,39 @@ export function registerTutoringRoutes(http: HttpRouter): void {
       if (body instanceof Response) return body;
       const character = findCharacter(body.characterId);
       if (character === undefined) return json(404, errorBody("not_found", `No coach named ${body.characterId}`));
-      const client = new OpenAI({ apiKey: requiredEnv("OPENAI_API_KEY") });
-      const context = await ctx.runQuery(tutoringRefs.replyContext, body.locale === undefined ? {} : { locale: body.locale });
-      const lastLearnerTurn = body.turns.findLast((turn) => turn.role === "learner")?.text ?? "";
-      const memoryNotes = context.memory === "on" ? await ctx.runAction(tutoringRefs.searchMemory, { query: lastLearnerTurn }) : [];
-      const pack = { ...context.pack, memoryNotes: memoryNotes.slice(0, 3) };
-      const composed = await composeReply(pack, (evidence) => coachReply(client, character, body.languageName, body.turns, evidence));
-      let audio: { format: string; base64: string; aiGenerated: true } | null = null;
-      if (body.audio) {
-        audio = { format: "pcm_s16le_24khz_mono", base64: await speakReply(client, character, composed.text), aiGenerated: true };
+      const started = Date.now();
+      const fault = requestedFault(request);
+      let model = coachModelId();
+      try {
+        if (fault === "missing_key") throw new ConfigurationError("The deployment env var OPENAI_API_KEY isn't set");
+        if (fault === "provider_error") throw new CoachReplyError("Simulated provider error");
+        if (fault === "provider_timeout") throw new CoachTimeoutError("Simulated provider timeout");
+        const client = createCoachClient();
+        const context = await ctx.runQuery(tutoringRefs.replyContext, body.locale === undefined ? {} : { locale: body.locale });
+        const lastLearnerTurn = body.turns.findLast((turn) => turn.role === "learner")?.text ?? "";
+        const memoryNotes = context.memory === "on" ? await ctx.runAction(tutoringRefs.searchMemory, { query: lastLearnerTurn }) : [];
+        const pack = { ...context.pack, memoryNotes: memoryNotes.slice(0, 3) };
+        const composed = await composeReply(pack, (evidence) => coachReply(client, character, body.languageName, body.turns, evidence, model));
+        model = composed.model;
+        let audio: { format: string; base64: string; aiGenerated: true } | null = null;
+        if (body.audio) {
+          audio = { format: "pcm_s16le_24khz_mono", base64: await speakReply(client, character, composed.text), aiGenerated: true };
+        }
+        logReply(model, "ok", "none", started);
+        return json(200, {
+          text: composed.text,
+          source: composed.source,
+          ...(composed.provenance === undefined ? {} : { provenance: composed.provenance }),
+          feedbackBasis: pack.basis,
+          citedEvidenceIds: composed.cites,
+          exercise: pack.exercise,
+          ...(audio === null ? {} : { audio }),
+        });
+      } catch (error) {
+        const failed = failure("POST /coach/reply", error);
+        logReply(model, "error", (JSON.parse(await failed.clone().text()) as { code: string }).code, started);
+        return failed;
       }
-      return json(200, {
-        text: composed.text,
-        source: composed.source,
-        feedbackBasis: pack.basis === "none" ? "none" : pack.basis,
-        citedEvidenceIds: composed.cites,
-        exercise: pack.exercise,
-        ...(audio === null ? {} : { audio }),
-      });
     }),
   });
 
@@ -192,6 +226,12 @@ export function registerTutoringRoutes(http: HttpRouter): void {
     path: "/tutor/memory/status",
     method: "GET",
     handler: authenticated(async (ctx) => json(200, await ctx.runQuery(tutoringRefs.memoryStatus, {}))),
+  });
+
+  http.route({
+    path: "/tutor/memory",
+    method: "GET",
+    handler: authenticated(async (ctx) => json(200, { items: await ctx.runQuery(tutoringRefs.memoryItems, {}) })),
   });
 
   http.route({

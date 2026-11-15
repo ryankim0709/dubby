@@ -136,8 +136,8 @@ export function selectNextExercise(
   }
   const avoided = new Set(preferences.avoidLineIds);
   const acoustic = series.pronunciationBasis === "acoustic";
-  // A pronunciation preference can't be served without an acoustic measurement, so it falls back to script accuracy.
-  const wantsFallback = preferences.focus === "pronunciation" && !acoustic;
+  // Pronunciation and fluency are acoustic measurements, so without one those preferences fall back to script accuracy.
+  const wantsFallback = (preferences.focus === "pronunciation" || preferences.focus === "fluency") && !acoustic;
   const wantedFocus: Focus = wantsFallback ? "word_accuracy" : preferences.focus;
   const lineStatus = new Map(series.lines.map((line) => [line.lineId + "#" + line.referenceVersion, line]));
 

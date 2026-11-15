@@ -287,6 +287,38 @@ export const memoryStatus = queryGeneric({
   },
 });
 
+export type MemoryItem = {
+  docId: string;
+  kind: "preference" | "attempt_note" | "difficulty";
+  text: string;
+  /** The Convex attempt or assessment IDs this note was derived from; empty for preferences. */
+  sourceIds: string[];
+  /** "pending" and "failed" mean Supermemory doesn't hold this note (yet); "done" means it does. */
+  state: "pending" | "done" | "failed";
+};
+
+const itemKind = { preferences: "preference", attempt: "attempt_note", difficulty: "difficulty" } as const;
+
+/** What the tutor remembers about the caller, served from Convex's outbox rather than from a Supermemory read. */
+export const memoryItems = queryGeneric({
+  args: {},
+  handler: async (ctx): Promise<MemoryItem[]> => {
+    const { subject } = await requireLearner(ctx);
+    const rows = await ctx.db
+      .query("tutoringMemoryOutbox")
+      .withIndex("by_subject_doc", (q) => q.eq("subject", subject))
+      .collect();
+    return rows
+      .flatMap((row) => {
+        if (row.op !== "upsert" || row.document === undefined) return [];
+        const document = row.document as { kind: keyof typeof itemKind; content: string; metadata: Record<string, string | string[]> };
+        const ids = [document.metadata.attemptId, document.metadata.assessmentId, document.metadata.attemptIds].flat().filter((id): id is string => typeof id === "string");
+        return [{ docId: row.docId as string, kind: itemKind[document.kind], text: document.content, sourceIds: [...new Set(ids)].sort(), state: row.state as MemoryItem["state"] }];
+      })
+      .sort((a, b) => (a.docId < b.docId ? -1 : 1));
+  },
+});
+
 /** Turns memory off and queues deletion of every derived document. Practice history in Convex is untouched. */
 export const forgetMemory = mutationGeneric({
   args: {},

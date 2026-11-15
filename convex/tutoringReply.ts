@@ -114,7 +114,9 @@ export function parseModelReply(raw: string): ModelReply | undefined {
   }
 }
 
-const pronunciationVocabulary = /pronunc|pronounc|accent|phoneme|acento|prononc|aussprache|発音|발음|发音|произнош/iu;
+// Pronunciation and fluency are acoustic findings; without an acoustic measurement a reply may use neither vocabulary.
+const acousticVocabulary =
+  /pronunc|pronounc|accent|phoneme|acento|prononc|aussprache|発音|발음|发音|произнош|fluen|fluid|hesita|smooth(ly)?\b|flow(ing)?\b|fluidez|fluidité|fließ/iu;
 
 /** Why a model reply can't be spoken. An empty list means it passed. */
 export function replyProblems(reply: ModelReply, pack: EvidencePack): string[] {
@@ -129,7 +131,7 @@ export function replyProblems(reply: ModelReply, pack: EvidencePack): string[] {
   if (reply.cites.some((id) => !known.has(id))) problems.push("cites_unknown_evidence");
   if (pack.items.length > 0 && reply.cites.length === 0) problems.push("uncited");
   if (/\d/.test(text)) problems.push("unsupported_number");
-  if (pack.basis !== "acoustic" && pronunciationVocabulary.test(text)) problems.push("pronunciation_claim_without_acoustic_measurement");
+  if (pack.basis !== "acoustic" && acousticVocabulary.test(text)) problems.push("acoustic_claim_without_acoustic_measurement");
   if (pack.basis === "script_agreement" && reply.cites.length > 0 && !text.toLowerCase().includes(scriptDisclosure)) {
     problems.push("missing_script_disclosure");
   }
@@ -149,24 +151,38 @@ export function templateReply(pack: EvidencePack): ModelReply {
   return { text: `${finding} ${pack.exercise.instruction}`, cites: [top.id] };
 }
 
-export type ComposedReply = { text: string; cites: string[]; source: "model" | "template"; problems: string[] };
+/** What the model call returned: the reply JSON and the facts the app and QA need about the call. */
+export type GeneratedReply = { text: string; model: string; responseId: string | null };
+
+export type ComposedReply = {
+  text: string;
+  cites: string[];
+  /** "template" only when the model answered but its reply failed the post-check; a provider failure is never a canned reply. */
+  source: "model" | "template";
+  problems: string[];
+  /** Present exactly when source is "model". */
+  provenance?: { provider: "openai"; api: "responses"; model: string; responseId?: string };
+  model: string;
+};
 
 /**
- * Asks the model for a reply and keeps it only if it passes the post-check; a model failure, an
- * unreadable answer or a failed check falls back to the template. The tutor always answers.
+ * Asks the model for a reply and keeps it only if it passes the post-check; an unreadable answer or a
+ * failed check falls back to the template. A provider error propagates to the caller instead: the tutor
+ * never hides an outage behind a canned reply.
  */
-export async function composeReply(pack: EvidencePack, generate: (pack: EvidencePack) => Promise<string>): Promise<ComposedReply> {
-  const fallback = (problems: string[]): ComposedReply => ({ ...templateReply(pack), source: "template", problems });
-  let raw: string;
-  try {
-    raw = await generate(pack);
-  } catch (error) {
-    console.warn("coach model reply failed, using the template", { error: String(error) });
-    return fallback(["model_failed"]);
-  }
-  const parsed = parseModelReply(raw);
+export async function composeReply(pack: EvidencePack, generate: (pack: EvidencePack) => Promise<GeneratedReply>): Promise<ComposedReply> {
+  const generated = await generate(pack);
+  const fallback = (problems: string[]): ComposedReply => ({ ...templateReply(pack), source: "template", problems, model: generated.model });
+  const parsed = parseModelReply(generated.text);
   if (parsed === undefined) return fallback(["unreadable"]);
   const problems = replyProblems(parsed, pack);
   if (problems.length > 0) return fallback(problems);
-  return { text: parsed.text.trim(), cites: [...new Set(parsed.cites)], source: "model", problems: [] };
+  return {
+    text: parsed.text.trim(),
+    cites: [...new Set(parsed.cites)],
+    source: "model",
+    problems: [],
+    model: generated.model,
+    provenance: { provider: "openai", api: "responses", model: generated.model, ...(generated.responseId === null ? {} : { responseId: generated.responseId }) },
+  };
 }

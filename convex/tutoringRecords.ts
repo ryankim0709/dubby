@@ -85,6 +85,10 @@ export const tutoringRecord = z
     if (hasPronunciation) {
       ctx.addIssue({ code: "custom", message: "a transcript-only evaluator can't supply pronunciation scores" });
     }
+    // Fluency is an acoustic measurement in the grading contract, so a transcript-only evaluator can't supply it either.
+    if (record.assessment.scores.fluency !== null) {
+      ctx.addIssue({ code: "custom", message: "a transcript-only evaluator can't supply a fluency score" });
+    }
   });
 export type TutoringRecord = z.infer<typeof tutoringRecord>;
 

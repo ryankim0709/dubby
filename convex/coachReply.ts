@@ -1,10 +1,23 @@
 import OpenAI from "openai";
 import type { CoachCharacter } from "./coachCharacters";
-import { maxSpokenWords, scriptDisclosure, renderEvidence, type EvidencePack } from "./tutoringReply";
+import { requiredEnv } from "./env";
+import { maxSpokenWords, scriptDisclosure, renderEvidence, type EvidencePack, type GeneratedReply } from "./tutoringReply";
 
 export type CoachTurn = { role: "learner" | "coach"; text: string };
 
 export class CoachReplyError extends Error {}
+/** The provider didn't answer within the bounded timeout. */
+export class CoachTimeoutError extends Error {}
+
+// Each OpenAI attempt gets 8 seconds and a failed one is retried once, so a spoken reply either arrives or fails
+// within about 17 seconds. Callers get a provider_timeout instead of a canned reply.
+const requestTimeoutMs = 8_000;
+const requestRetries = 1;
+
+/** The one place the OpenAI client is built; the key stays in the Convex environment. */
+export function createCoachClient(): OpenAI {
+  return new OpenAI({ apiKey: requiredEnv("OPENAI_API_KEY"), timeout: requestTimeoutMs, maxRetries: requestRetries });
+}
 
 // Model IDs are plain configuration, not secrets. Defaults were checked against developers.openai.com on 2026-11-15.
 // gpt-6-luna is OpenAI's most efficient model for focused, high-volume tasks, which suits a two-sentence spoken reply.
@@ -65,7 +78,7 @@ export async function coachReply(
   turns: readonly CoachTurn[],
   pack: EvidencePack,
   model: string = coachModelId(),
-): Promise<string> {
+): Promise<GeneratedReply> {
   const response = await client.responses.create({
     model,
     instructions: `${coachingRules(languageName, pack)}\n\n${character.persona}`,
@@ -80,7 +93,7 @@ export async function coachReply(
   if (text.length === 0) {
     throw new CoachReplyError(`The coach model returned no text (status: ${response.status ?? "unknown"})`);
   }
-  return text;
+  return { text, model: response.model || model, responseId: response.id || null };
 }
 
 function bytesToBase64(bytes: Uint8Array): string {

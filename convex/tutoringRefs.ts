@@ -1,5 +1,5 @@
 import { makeFunctionReference } from "convex/server";
-import type { IngestResult } from "./tutoring";
+import type { IngestResult, MemoryItem } from "./tutoring";
 import type { NextExercise } from "./tutoringExercise";
 import type { LearnerPreferences } from "./tutoringPreferences";
 import type { TutoringReport } from "./tutoringProgress";
@@ -19,6 +19,7 @@ export const tutoringRefs = {
   replyContext: makeFunctionReference<"query", { locale?: string }, { pack: EvidencePack; memory: "on" | "off" }>("tutoring:replyContext"),
   getPreferences: makeFunctionReference<"query", Record<string, never>, { preferences: LearnerPreferences; version: number }>("tutoring:getPreferences"),
   setPreferences: makeFunctionReference<"mutation", { preferences: unknown; expectedVersion: number }, { preferences: LearnerPreferences; version: number }>("tutoring:setPreferences"),
+  memoryItems: makeFunctionReference<"query", Record<string, never>, MemoryItem[]>("tutoring:memoryItems"),
   memoryStatus: makeFunctionReference<"query", Record<string, never>, { pending: number; failed: number; done: number }>("tutoring:memoryStatus"),
   forgetMemory: makeFunctionReference<"mutation", Record<string, never>, { scheduled: number }>("tutoring:forgetMemory"),
   searchMemory: makeFunctionReference<"action", { query: string }, string[]>("tutoring:searchMemory"),

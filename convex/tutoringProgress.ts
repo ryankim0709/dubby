@@ -142,6 +142,8 @@ export type SeriesProgress = {
   evaluator: { provider: string; modelVersion: string | null; configVersion: string; measurement: "acoustic" | "transcript_only" };
   /** "script_agreement" means no acoustic measurement exists, so pronunciation findings are off limits. */
   pronunciationBasis: "acoustic" | "script_agreement";
+  /** Metrics this series can never report, with why; a transcript-only evaluator measures no pronunciation or fluency. */
+  unavailableMetrics: { metric: ScoreMetric; reason: "no_acoustic_measurement" }[];
   volume: PracticeVolume;
   daily: DailyPerformance[];
   skills: SkillTrend[];
@@ -568,6 +570,12 @@ function seriesProgress(records: readonly TutoringRecord[], catalog: readonly Pr
       measurement: reference.evaluator.measurement,
     },
     pronunciationBasis: acoustic ? "acoustic" : "script_agreement",
+    unavailableMetrics: acoustic
+      ? []
+      : [
+          { metric: "pronunciation", reason: "no_acoustic_measurement" },
+          { metric: "fluency", reason: "no_acoustic_measurement" },
+        ],
     volume,
     daily,
     skills,

@@ -166,6 +166,11 @@ describe("grading contract boundary", () => {
     expect(built).toMatchObject({ ok: false });
   });
 
+  test("a transcript-only evaluator can't carry a fluency score either", () => {
+    const withFluency = scored({ assessmentId: "as8", attemptId: "a8", recordedAt: "2026-11-10T10:00:00-08:00" }, lineA, [{}, {}, {}, {}], 80);
+    expect(recordsForSession(session("s9", scriptEvaluator, [withFluency]), "2026-11-15T00:00:00Z")).toMatchObject({ ok: false });
+  });
+
   test("an unknown measurement kind is treated as transcript-only", () => {
     const parsed = dubbingSessionResults.parse({ ...session("s9", scriptEvaluator, [valid]), evaluator: { ...scriptEvaluator, measurement: "magic" } });
     expect(parsed.evaluator.measurement).toBe("transcript_only");
@@ -235,6 +240,9 @@ describe("progress", () => {
     expect(built.pronunciationBasis).toBe("script_agreement");
     expect(built.words[0]).toMatchObject({ word: "underestimate", scriptIssueCount: 1, pronunciationIssueCount: 0 });
     expect(built.daily[0]!.firstScorable.pronunciation).toBeNull();
+    expect(built.daily[0]!.firstScorable.fluency).toBeNull();
+    expect(built.unavailableMetrics.map((entry) => entry.metric)).toEqual(["pronunciation", "fluency"]);
+    expect(JSON.stringify(built)).not.toMatch(/"pronunciation":\s*[0-9]/);
   });
 
   test("is deterministic for any input order", () => {
@@ -275,6 +283,18 @@ describe("next exercise", () => {
     expect(exercise.instruction.toLowerCase()).not.toContain("pronunc");
   });
 
+  test("a fluency preference falls back the same way without an acoustic measurement", () => {
+    const scriptOnly = buildTutoringReport(
+      recordsOf(session("s3", scriptEvaluator, [scored({ assessmentId: "b1", attemptId: "b1", recordedAt: "2026-11-13T10:00:00-08:00" }, lineA, [{}, { status: "substituted" }, {}, {}], null)])),
+      [],
+      "x",
+    );
+    const exercise = selectNextExercise(scriptOnly, learnerPreferences.parse({ focus: "fluency" }));
+    expect(exercise.focus).toBe("word_accuracy");
+    expect(exercise.reasonCode).toMatch(/script_fallback$/);
+    expect(exercise.instruction.toLowerCase()).not.toMatch(/fluen|smooth/);
+  });
+
   test("is stable across repeated calls", () => {
     expect(selectNextExercise(report, defaultPreferences)).toEqual(selectNextExercise(report, defaultPreferences));
   });
@@ -309,7 +329,7 @@ describe("coach reply evidence and post-check", () => {
   test("without an acoustic measurement it rejects pronunciation claims and requires the script disclosure", () => {
     const id = script.items[0]!.id;
     expect(script.basis).toBe("script_agreement");
-    expect(replyProblems({ text: "Your pronunciation of power is off.", cites: [id] }, script)).toContain("pronunciation_claim_without_acoustic_measurement");
+    expect(replyProblems({ text: "Your pronunciation of power is off.", cites: [id] }, script)).toContain("acoustic_claim_without_acoustic_measurement");
     expect(replyProblems({ text: "Say it again.", cites: [id] }, script)).toContain("missing_script_disclosure");
     expect(replyProblems({ text: "Going by how closely your words match the script, say it again.", cites: [id] }, script)).toEqual([]);
   });
@@ -329,24 +349,37 @@ describe("coach reply evidence and post-check", () => {
     expect(templateReply(script).text).toContain("match the script");
   });
 
-  test("uses a valid model reply, and falls back to the template on bad, unreadable or failing replies", async () => {
+  const generated = (text: string): { text: string; model: string; responseId: string | null } => ({ text, model: "gpt-test", responseId: "resp_1" });
+
+  test("uses a valid model reply and records its provenance", async () => {
     const id = acoustic.items[0]!.id;
-    const ok = await composeReply(acoustic, async () => JSON.stringify({ text: "Say underestimate slowly.", cites: [id] }));
-    expect(ok).toMatchObject({ source: "model", cites: [id] });
-    const fenced = await composeReply(acoustic, async () => "~~~json\n{}\n~~~".replaceAll("~", "\u0060"));
-    expect(fenced.source).toBe("template");
-    for (const generate of [
-      async () => JSON.stringify({ text: "You got 88.", cites: [id] }),
-      async () => "not json",
-      async (): Promise<string> => {
-        throw new Error("provider down");
-      },
-    ]) {
-      const result = await composeReply(acoustic, generate);
+    const ok = await composeReply(acoustic, async () => generated(JSON.stringify({ text: "Say underestimate slowly.", cites: [id] })));
+    expect(ok).toMatchObject({ source: "model", cites: [id], provenance: { provider: "openai", api: "responses", model: "gpt-test", responseId: "resp_1" } });
+  });
+
+  test("falls back to the template only when the model answered but the reply failed the post-check", async () => {
+    const id = acoustic.items[0]!.id;
+    for (const text of [JSON.stringify({ text: "You got 88.", cites: [id] }), "not json", JSON.stringify({ text: "Fine.", cites: [] })]) {
+      const result = await composeReply(acoustic, async () => generated(text));
       expect(result.source).toBe("template");
+      expect(result.provenance).toBeUndefined();
       expect(result.problems.length).toBeGreaterThan(0);
       expect(replyProblems(result, acoustic)).toEqual([]);
     }
+  });
+
+  test("a provider failure is never turned into a canned reply", async () => {
+    await expect(
+      composeReply(acoustic, async () => {
+        throw new Error("provider down");
+      }),
+    ).rejects.toThrow("provider down");
+  });
+
+  test("without an acoustic measurement a reply can't state a fluency finding either", () => {
+    const id = script.items[0]!.id;
+    expect(replyProblems({ text: "Going by how closely your words match the script, your fluency is great.", cites: [id] }, script)).toContain("acoustic_claim_without_acoustic_measurement");
+    expect(replyProblems({ text: "Going by how closely your words match the script, say it smoothly.", cites: [id] }, script)).toContain("acoustic_claim_without_acoustic_measurement");
   });
 });
 
@@ -615,6 +648,157 @@ describe("convex tutoring functions", () => {
     expect(asAlice.pack.items.map((item) => item.id)).toEqual(["as1"]);
     const asBob = await t.withIdentity(bob).query(tutoringRefs.replyContext, {});
     expect(asBob.pack.items).toEqual([]);
+  });
+});
+
+type OpenAiCall = { path: string; body: Record<string, unknown> };
+
+/** Stands in for api.openai.com: answers /v1/responses with the given text and /v1/audio/speech with a few PCM bytes. */
+function fakeOpenAI(replyText: () => string, failure?: { status: number }) {
+  const calls: OpenAiCall[] = [];
+  vi.stubGlobal("fetch", async (input: string | URL | Request, init?: RequestInit) => {
+    const url = new URL(input instanceof Request ? input.url : String(input));
+    if (url.hostname !== "api.openai.com") return new Response("not faked", { status: 500 });
+    calls.push({ path: url.pathname, body: JSON.parse(String(init?.body ?? "{}")) });
+    if (failure !== undefined) return Response.json({ error: { message: "secret provider detail" } }, { status: failure.status });
+    if (url.pathname.endsWith("/audio/speech")) return new Response(new Uint8Array([1, 2, 3, 4]), { headers: { "Content-Type": "audio/pcm" } });
+    return Response.json({
+      id: "resp_test",
+      object: "response",
+      created_at: 0,
+      model: "gpt-6-luna-test",
+      status: "completed",
+      output: [{ type: "message", id: "msg_1", status: "completed", role: "assistant", content: [{ type: "output_text", text: replyText(), annotations: [] }] }],
+    });
+  });
+  return calls;
+}
+
+describe("coach and tutor HTTP routes", () => {
+  const seeded = session("s1", acousticEvaluator, [
+    scored({ assessmentId: "as1", attemptId: "a1", recordedAt: "2026-11-10T10:00:00-08:00" }, lineA, withWeak(1, 64), 70),
+  ]);
+  const replyBody = JSON.stringify({ characterId: "anakin", languageName: "English", locale: "en-US", turns: [{ role: "learner", text: "Hi coach" }] });
+  const post = (t: ReturnType<typeof convexTest>, headers: Record<string, string> = {}, body = replyBody) =>
+    t.withIdentity(alice).fetch("/coach/reply", { method: "POST", headers: { "Content-Type": "application/json", ...headers }, body });
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-11-15T12:00:00Z"));
+    process.env.OPENAI_API_KEY = "test-openai-key";
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+    for (const name of ["OPENAI_API_KEY", "QA_FAULTS_ENABLED", "SUPERMEMORY_API_KEY"]) delete process.env[name];
+  });
+
+  async function seededTutor() {
+    const t = convexTest(schema, modules);
+    await t.mutation(tutoringRefs.ingestDubbingSession, ingestArgs(alice.tokenIdentifier, seeded));
+    return t;
+  }
+
+  test("every coach and tutor route except the coach list needs a signed-in learner", async () => {
+    const t = convexTest(schema, modules);
+    expect((await t.fetch("/coach/characters")).status).toBe(200);
+    for (const [path, method] of [["/coach/reply", "POST"], ["/coach/session-token", "POST"], ["/tutor/progress", "GET"], ["/tutor/next-exercise", "GET"], ["/tutor/preferences", "GET"], ["/tutor/memory", "GET"], ["/tutor/memory", "DELETE"]] as const) {
+      const response = await t.fetch(path, { method, headers: { "Content-Type": "application/json" }, ...(method === "POST" ? { body: "{}" } : {}) });
+      expect([path, response.status, ((await response.json()) as { code: string }).code]).toEqual([path, 401, "unauthenticated"]);
+    }
+  });
+
+  test("a valid model reply is returned with its provenance, evidence and a content-free log line", async () => {
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    const calls = fakeOpenAI(() => JSON.stringify({ text: "Say underestimate slowly.", cites: ["as1"] }));
+    const t = await seededTutor();
+    const response = await post(t);
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as Record<string, unknown>;
+    expect(body).toMatchObject({
+      text: "Say underestimate slowly.",
+      source: "model",
+      feedbackBasis: "acoustic",
+      citedEvidenceIds: ["as1"],
+      provenance: { provider: "openai", api: "responses", model: "gpt-6-luna-test", responseId: "resp_test" },
+      exercise: { kind: "drill_word" },
+    });
+    expect(JSON.stringify(body)).not.toContain("test-openai-key");
+    expect(calls[0]!.body).toMatchObject({ model: "gpt-6-luna", store: false, text: { format: { type: "json_schema", strict: true } } });
+    const line = log.mock.calls.map((call) => String(call[0])).find((entry) => entry.startsWith("coach.reply"));
+    expect(line).toMatch(/^coach\.reply provider=openai api=responses model=gpt-6-luna-test status=ok code=none latencyMs=\d+$/);
+    expect(line).not.toContain("Hi coach");
+  });
+
+  test("a reply that fails the post-check becomes the template, with no provenance", async () => {
+    fakeOpenAI(() => JSON.stringify({ text: "You scored 88 points.", cites: ["as1"] }));
+    const body = (await (await post(await seededTutor())).json()) as Record<string, unknown>;
+    expect(body).toMatchObject({ source: "template", citedEvidenceIds: ["as1"] });
+    expect(body).not.toHaveProperty("provenance");
+    expect(String(body.text)).not.toMatch(/\d/);
+  });
+
+  test("can return the reply as PCM audio for the avatar", async () => {
+    const calls = fakeOpenAI(() => JSON.stringify({ text: "Say it again.", cites: ["as1"] }));
+    const response = await post(await seededTutor(), {}, JSON.stringify({ ...JSON.parse(replyBody), audio: true }));
+    expect(((await response.json()) as { audio: unknown }).audio).toEqual({ format: "pcm_s16le_24khz_mono", base64: "AQIDBA==", aiGenerated: true });
+    expect(calls.map((call) => call.path)).toContain("/v1/audio/speech");
+    expect(calls.find((call) => call.path.endsWith("/speech"))!.body).toMatchObject({ response_format: "pcm", voice: "ash" });
+  });
+
+  test("a provider failure returns an error with no text and doesn't echo the provider's body", async () => {
+    fakeOpenAI(() => "", { status: 400 });
+    const response = await post(await seededTutor());
+    const body = (await response.json()) as Record<string, unknown>;
+    expect(response.status).toBe(502);
+    expect(body).toMatchObject({ code: "provider_failed" });
+    expect(body).not.toHaveProperty("text");
+    expect(JSON.stringify(body)).not.toContain("secret provider detail");
+  });
+
+  test("a missing OpenAI key is a 503 and calls nothing", async () => {
+    delete process.env.OPENAI_API_KEY;
+    const calls = fakeOpenAI(() => "");
+    const response = await post(await seededTutor());
+    expect([response.status, ((await response.json()) as { code: string }).code]).toEqual([503, "not_configured"]);
+    expect(calls).toHaveLength(0);
+  });
+
+  test("QA fault headers are honored only when QA_FAULTS_ENABLED is true", async () => {
+    const calls = fakeOpenAI(() => JSON.stringify({ text: "Say it again.", cites: ["as1"] }));
+    const t = await seededTutor();
+    expect((await post(t, { "X-QA-Fault": "provider_error" })).status).toBe(200);
+    expect(calls.length).toBeGreaterThan(0);
+    calls.length = 0;
+    process.env.QA_FAULTS_ENABLED = "true";
+    for (const [fault, status, code] of [["provider_error", 502, "provider_failed"], ["provider_timeout", 504, "provider_timeout"], ["missing_key", 503, "not_configured"]] as const) {
+      const response = await post(t, { "X-QA-Fault": fault });
+      const body = (await response.json()) as Record<string, unknown>;
+      expect([response.status, body.code]).toEqual([status, code]);
+      expect(body).not.toHaveProperty("text");
+    }
+    expect(calls).toHaveLength(0);
+    expect((await post(t, { "X-QA-Fault": "unknown_fault" })).status).toBe(200);
+  });
+
+  test("the progress, exercise, preference and memory routes serve only the signed-in learner", async () => {
+    const t = await seededTutor();
+    const get = async (identity: typeof alice, path: string) => (await t.withIdentity(identity).fetch(path)).json() as Promise<any>;
+    expect((await get(alice, "/tutor/progress")).series).toHaveLength(1);
+    expect((await get(bob, "/tutor/progress")).series).toEqual([]);
+    expect((await get(alice, "/tutor/next-exercise")).exercise.kind).toBe("drill_word");
+    expect((await get(bob, "/tutor/next-exercise")).exercise.kind).toBe("first_attempt");
+    const memory = (await get(alice, "/tutor/memory")).items as { kind: string; sourceIds: string[]; state: string }[];
+    expect(memory).toEqual([expect.objectContaining({ kind: "attempt_note", sourceIds: ["a1", "as1"], state: "pending" })]);
+    expect((await get(bob, "/tutor/memory")).items).toEqual([]);
+    const put = (preferences: unknown, expectedVersion: number) =>
+      t.withIdentity(alice).fetch("/tutor/preferences", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ preferences, expectedVersion }) });
+    expect((await put({ focus: "timing" }, 0)).status).toBe(200);
+    const stale = await put({}, 0);
+    expect([stale.status, ((await stale.json()) as { code: string }).code]).toEqual([409, "version_conflict"]);
+    expect((await put({ userId: "bob" }, 1)).status).toBe(400);
+    expect((await t.withIdentity(alice).fetch("/tutor/memory", { method: "DELETE" })).status).toBe(200);
   });
 });
 
