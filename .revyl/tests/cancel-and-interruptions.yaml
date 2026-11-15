@@ -1,0 +1,46 @@
+test:
+  metadata:
+    name: "DubIt cancel and interruption checks"
+    platform: ios
+    tags:
+      - smoke
+      - interruptions
+  build:
+    name: "dubby"
+  device:
+    model: "iPhone 17 Pro"
+    os_version: "iOS 26.5"
+    orientation: portrait
+  blocks:
+    - type: validation
+      step_description: "The element with accessibility identifier \"discoverScreen\" is visible"
+    - type: instructions
+      step_description: "Open the demo scene with \"dubScene-demo\", complete scene setup, choose the first \"characterCard-\", tap \"startDubbing\""
+    - type: instructions
+      step_description: "Tap \"recordLine\", allow the microphone if asked, wait for \"recordingIndicator\" to appear then disappear, then tap \"keepTake\""
+    - type: validation
+      step_description: "\"studioProgress\" starts with \"1 of\""
+    - type: instructions
+      step_description: "Tap \"retryTake\", wait for \"recordingIndicator\", then tap \"cancelRecording\""
+    - type: validation
+      step_description: "\"studioProgress\" still starts with \"1 of\", an element with identifier starting with \"lineKept-\" is visible, and \"playTake\" is visible"
+    - type: instructions
+      step_description: "Tap \"recordLine\" and wait for \"recordingIndicator\""
+    - type: instructions
+      step_description: "Go to the Home Screen, wait 3 seconds, and return to the app"
+    - type: validation
+      step_description: "\"studioStatus\" has the value \"interrupted\" and \"studioError\" has the value \"recordingInterrupted\"; \"studioProgress\" is unchanged"
+    - type: instructions
+      step_description: "Tap \"recordLine\", wait for the recording to finish, tap \"keepTake\""
+    - type: instructions
+      step_description: "Tap \"finishDub\" and immediately tap \"cancelExport\""
+    - type: validation
+      step_description: "\"exportStatus\" has the value \"cancelled\" and \"retryExport\" is visible"
+    - type: instructions
+      step_description: "Tap \"exportBack\", then tap the tab button \"tab-myDubs\""
+    - type: validation
+      step_description: "\"myDubsEmpty\" is visible, so no dub was saved by the cancelled export"
+    - type: instructions
+      step_description: "Open the demo scene again, dub one line and keep it, tap \"finishDub\", then go to the Home Screen and return"
+    - type: validation
+      step_description: "\"exportStatus\" ends with the value \"finished\", \"failed\" (with \"exportError\" and \"retryExport\" visible), or \"cancelled\", and never stays on a progress value"

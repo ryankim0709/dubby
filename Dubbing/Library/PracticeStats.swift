@@ -9,6 +9,38 @@ nonisolated struct WeekDay: Hashable, Sendable, Identifiable {
     var id: Date { date }
 }
 
+/// Counts over the takes whose recordings were measured on this device. Nothing here is a score: a dub saved
+/// without measurements contributes no takes, and the UI shows "Not measured" when `hasMeasurements` is false.
+nonisolated struct MeasuredPractice: Equatable, Sendable {
+    let measuredTakes: Int
+    let takesFittingLine: Int
+    let takesWithVoice: Int
+    let silentTakes: Int
+    /// Dubs saved before takes were measured.
+    let dubsWithoutMeasurements: Int
+
+    var hasMeasurements: Bool { measuredTakes > 0 }
+
+    init(measurements: [TakeMeasurement]) {
+        self.init(measurements: measurements, dubsWithoutMeasurements: 0)
+    }
+
+    private init(measurements: [TakeMeasurement], dubsWithoutMeasurements: Int) {
+        measuredTakes = measurements.count
+        takesFittingLine = measurements.filter(\.fitsLine).count
+        takesWithVoice = measurements.filter { $0.level == .quiet || $0.level == .clear }.count
+        silentTakes = measurements.filter { $0.level == .silent }.count
+        self.dubsWithoutMeasurements = dubsWithoutMeasurements
+    }
+
+    init(dubs: [SavedDub]) {
+        self.init(
+            measurements: dubs.flatMap { $0.takeMeasurements ?? [] },
+            dubsWithoutMeasurements: dubs.filter { $0.takeMeasurements == nil }.count
+        )
+    }
+}
+
 /// Practice numbers derived from the dubs the user actually saved.
 nonisolated enum PracticeStats {
     /// Consecutive days with a dub, ending today, or yesterday if today has none yet (the streak is still alive).
