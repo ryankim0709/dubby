@@ -60,6 +60,8 @@ Capy helps us build the product, Convex operates its cloud services, Revyl verif
 .
 ├── README.md                         Project overview and developer setup
 ├── AGENTS.md                         Instructions for coding agents
+├── CLAUDE.md                         Imports AGENTS.md for Claude Code
+├── .github/pull_request_template.md  Sections for pull request descriptions
 ├── .gitignore                        Local Xcode state, build output, node_modules, and local clips in Media/
 ├── docs/
 │   └── grading-contract.md           Proposed assessment API and learning-progress semantics
@@ -121,8 +123,14 @@ Capy helps us build the product, Convex operates its cloud services, Revyl verif
 │   ├── product.mdc                   Product journey and MVP priorities
 │   ├── swift.mdc                     Native implementation conventions
 │   └── dubbing-pipeline.mdc          Recording, composition, assessment, and service rules
-└── .agents/skills/impeccable/        Project-local design skill and its references
+├── .agents/skills/impeccable/        Project-local design skill, its references, and its helper agent definitions
+├── .claude/
+│   ├── skills/impeccable             Symlink to the Impeccable skill for Claude Code
+│   └── agents/                       Impeccable helper agents for Claude Code and Cursor
+└── .codex/agents/                    Impeccable helper agents for Codex
 ```
+
+`.codex/agents/` holds copies of the skill's agent definitions in `.agents/skills/impeccable/agents/`. `.claude/agents/` holds the same instructions with Claude Code frontmatter and script paths under `.claude/skills/impeccable/`. Update both when the skill is upgraded.
 
 The server-side Supermemory client and Revyl configuration will be added when those integrations are implemented. They are not part of the current directory structure.
 
