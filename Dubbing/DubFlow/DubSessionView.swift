@@ -83,9 +83,7 @@ struct DubSessionView: View {
                         stopActivity()
                         onFinish(takes)
                     }
-                    .dubFont(14, weight: .semibold)
-                    .foregroundStyle(takes.isEmpty ? Palette.textSecondary : Palette.accentText)
-                    .frame(minHeight: 44)
+                    .buttonStyle(.dubSecondary)
                     .disabled(takes.isEmpty || activity != .idle || pending != nil)
                     .accessibilityIdentifier("finishDub")
                 }
@@ -126,11 +124,10 @@ struct DubSessionView: View {
         .background(Palette.background)
         .toolbar(.hidden, for: .navigationBar)
         // Pinned so recording and keeping stay reachable however much feedback is on screen.
-        .safeAreaInset(edge: .bottom, spacing: 0) {
+        .safeAreaBar(edge: .bottom, spacing: 0) {
             controls
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
-                .background(Palette.background)
         }
         .overlay {
             StateCarriers(items: [
@@ -184,20 +181,13 @@ struct DubSessionView: View {
 
     private func header<Trailing: View>(@ViewBuilder trailing: () -> Trailing) -> some View {
         HStack(spacing: 12) {
-            Button {
+            DubGlassIconButton(systemImage: "arrow.left", label: "Back") {
                 if takes.isEmpty && pending == nil {
                     dismiss()
                 } else {
                     isConfirmingExit = true
                 }
-            } label: {
-                Image(systemName: "arrow.left")
-                    .dubFont(16, weight: .medium)
-                    .foregroundStyle(Palette.textPrimary)
-                    .frame(minWidth: 44, minHeight: 44)
-                    .contentShape(Rectangle())
             }
-            .accessibilityLabel("Back")
             .accessibilityIdentifier("studioBack")
             Text("Dubbing studio")
                 .dubFont(16, weight: .semibold)
@@ -237,9 +227,9 @@ struct DubSessionView: View {
                         Label("REC", systemImage: "circle.fill")
                             .dubFont(12, weight: .bold)
                             .foregroundStyle(.white)
-                            .padding(.horizontal, 8)
-                            .frame(minHeight: 24)
-                            .background(Color.red, in: Capsule())
+                            .padding(.horizontal, 10)
+                            .frame(minHeight: 28)
+                            .dubGlass(in: Capsule(), tint: Color.red)
                             .padding(8)
                             .accessibilityIdentifier("recordingIndicator")
                     }
@@ -355,9 +345,7 @@ struct DubSessionView: View {
                         listenToOriginal()
                     }
                 }
-                .dubFont(14, weight: .regular)
-                .foregroundStyle(Palette.accentText)
-                .frame(minHeight: 44)
+                .buttonStyle(.dubSecondary)
                 .disabled(activity == .recording || activity == .playingTake)
                 .accessibilityIdentifier("listenToOriginal")
             }
@@ -381,68 +369,63 @@ struct DubSessionView: View {
     }
 
     private var controls: some View {
-        VStack(spacing: 10) {
-            HStack(spacing: 12) {
-                Button {
-                    move(by: -1)
-                } label: {
-                    Image(systemName: "chevron.left")
-                        .frame(minWidth: 44, minHeight: 44)
-                }
-                .disabled(index == 0 || pending != nil || activity != .idle)
-                .accessibilityLabel("Previous line")
-                .accessibilityIdentifier("studioPrevious")
-                Spacer()
-                recordButton
-                Spacer()
-                Button {
-                    move(by: 1)
-                } label: {
-                    Image(systemName: "chevron.right")
-                        .frame(minWidth: 44, minHeight: 44)
-                }
-                .disabled(index >= lines.count - 1 || pending != nil || activity != .idle)
-                .accessibilityLabel("Next line")
-                .accessibilityIdentifier("studioNext")
-            }
-            .foregroundStyle(Palette.textPrimary)
-            Text(recordHint)
-                .dubFont(14, weight: .regular)
-                .foregroundStyle(Palette.textPrimary)
-                .multilineTextAlignment(.center)
-            if activity == .recording {
-                Button("Cancel recording") {
-                    isRecordingCancelled = true
-                    stopActivity()
-                }
-                .buttonStyle(OutlineCapsuleButtonStyle())
-                .accessibilityIdentifier("cancelRecording")
-            }
-            AdaptiveStack(rowAlignment: .center, spacing: 8) {
-                if let take = shownTake {
-                    Button {
-                        if activity == .playingTake {
-                            stopActivity()
-                        } else {
-                            playTake(take)
-                        }
-                    } label: {
-                        Image(systemName: activity == .playingTake ? "stop.fill" : "play.fill")
-                        Text(activity == .playingTake ? "Stop" : "Play my take")
+        GlassEffectContainer(spacing: GlassMetrics.clusterSpacing) {
+            VStack(spacing: 10) {
+                HStack(spacing: 12) {
+                    DubGlassIconButton(systemImage: "chevron.left", label: "Previous line") {
+                        move(by: -1)
                     }
-                    .buttonStyle(OutlineCapsuleButtonStyle())
-                    .disabled(activity == .recording || activity == .playingOriginal)
-                    .accessibilityIdentifier("playTake")
+                    .disabled(index == 0 || pending != nil || activity != .idle)
+                    .accessibilityIdentifier("studioPrevious")
+                    Spacer()
+                    recordButton
+                    Spacer()
+                    DubGlassIconButton(systemImage: "chevron.right", label: "Next line") {
+                        move(by: 1)
+                    }
+                    .disabled(index >= lines.count - 1 || pending != nil || activity != .idle)
+                    .accessibilityIdentifier("studioNext")
+                }
+                Text(recordHint)
+                    .dubFont(14, weight: .regular)
+                    .foregroundStyle(Palette.textPrimary)
+                    .multilineTextAlignment(.center)
+                if activity == .recording {
+                    Button("Cancel recording") {
+                        isRecordingCancelled = true
+                        stopActivity()
+                    }
+                    .buttonStyle(.dubSecondary)
+                    .accessibilityIdentifier("cancelRecording")
                 }
                 if pendingForLine != nil {
                     Button("Keep take", action: keepPending)
-                        .buttonStyle(OutlineCapsuleButtonStyle())
+                        .buttonStyle(.dubPrimary)
                         .disabled(activity != .idle)
                         .accessibilityIdentifier("keepTake")
-                    Button("Record again") { record() }
-                        .buttonStyle(OutlineCapsuleButtonStyle())
-                        .disabled(activity != .idle || microphone == .denied)
-                        .accessibilityIdentifier("retryTake")
+                }
+                AdaptiveStack(rowAlignment: .center, spacing: 8) {
+                    if let take = shownTake {
+                        Button {
+                            if activity == .playingTake {
+                                stopActivity()
+                            } else {
+                                playTake(take)
+                            }
+                        } label: {
+                            Image(systemName: activity == .playingTake ? "stop.fill" : "play.fill")
+                            Text(activity == .playingTake ? "Stop" : "Play my take")
+                        }
+                        .buttonStyle(.dubSecondary)
+                        .disabled(activity == .recording || activity == .playingOriginal)
+                        .accessibilityIdentifier("playTake")
+                    }
+                    if pendingForLine != nil {
+                        Button("Record again") { record() }
+                            .buttonStyle(.dubSecondary)
+                            .disabled(activity != .idle || microphone == .denied)
+                            .accessibilityIdentifier("retryTake")
+                    }
                 }
             }
         }
@@ -460,8 +443,10 @@ struct DubSessionView: View {
                 .font(.system(size: 30, weight: .medium))
                 .foregroundStyle(activity == .recording ? .white : Palette.onAccent)
                 .frame(width: 78, height: 78)
-                .background(activity == .recording ? Color.red : Palette.accent, in: Circle())
+                .dubGlass(in: Circle(), tint: activity == .recording ? Color.red : Palette.accent, interactive: true)
+                .contentShape(Circle())
         }
+        .buttonStyle(.plain)
         .disabled(activity == .playingOriginal || activity == .playingTake || microphone == .denied)
         .accessibilityLabel(activity == .recording ? "Stop recording" : "Record this line")
         .accessibilityHint(microphone == .denied ? "Unavailable: microphone access is off" : "")
