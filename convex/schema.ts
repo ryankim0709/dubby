@@ -2,6 +2,7 @@ import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 import { tutoringTables } from "./tutoringTables";
 import { assessmentContentFields, jobErrorV, jobStageV, jobStatusV, outcomeV } from "./lib/validators";
+import { timedWordV } from "./lib/transcription";
 
 /** Tables follow docs/convex-backend.md and contract v1 section 4. Ids are Convex ids; times are epoch milliseconds. */
 export default defineSchema({
@@ -35,6 +36,17 @@ export default defineSchema({
   })
     .index("by_scene", ["sceneId"])
     .index("by_scene_slug", ["sceneId", "slug"]),
+
+  /** Shared script timing for a published video, independent of any learner's recordings. */
+  sceneTranscripts: defineTable({
+    videoId: v.id("_storage"),
+    locale: v.string(),
+    status: v.union(v.literal("processing"), v.literal("ready"), v.literal("failed")),
+    leaseId: v.string(),
+    leaseExpiresAt: v.number(),
+    durationSeconds: v.optional(v.number()),
+    words: v.optional(v.array(timedWordV)),
+  }).index("by_video_locale", ["videoId", "locale"]),
 
   /** Immutable: a text or timing change inserts a new row with the next referenceVersion. */
   referenceLines: defineTable({

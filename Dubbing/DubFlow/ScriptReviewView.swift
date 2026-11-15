@@ -61,7 +61,11 @@ struct ScriptReviewView: View {
                 .padding(.top, 8)
             VStack(alignment: .leading, spacing: 16) {
                 stepRow(index: 0, title: "Pulling the scene's audio")
+                #if targetEnvironment(simulator)
+                stepRow(index: 1, title: "Preparing library transcription")
+                #else
                 stepRow(index: 1, title: "Getting the \(request.language.name) speech model")
+                #endif
                 stepRow(index: 2, title: "Transcribing the dialogue")
                 stepRow(index: 3, title: "Splitting lines by voice")
             }
@@ -125,13 +129,22 @@ struct ScriptReviewView: View {
             let audioURL = request.clip.workingDirectory.appending(path: "scene.m4a")
             try await MediaPipeline.exportAudio(from: request.clip.url, section: request.section, to: audioURL)
             phase = .preparingModel
+            #if targetEnvironment(simulator)
+            let transcriber = try SceneTranscriptionClient.configured(in: .main)
+            phase = .transcribing
+            let words = try await transcriber.transcribe(request)
+            #else
             let transcriber = try await SpeechTranscription.prepare(for: request.language)
             phase = .transcribing
             let words = try await SpeechTranscription.transcribe(audioURL: audioURL, using: transcriber)
+            #endif
+            try Task.checkCancellation()
             let lines = ScriptBuilder.segmentLines(words: words, pauseThreshold: 0.7, sentencePause: 0)
             guard !lines.isEmpty else { throw DubFlowError.noSpeechFound }
             phase = .groupingVoices
             phase = .ready(try await MediaPipeline.analyzeVoices(audioURL: audioURL, lines: lines, barCount: 48))
+        } catch is CancellationError {
+            return
         } catch {
             phase = .failed(FlowIssue(error: error))
         }
