@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { assessmentOutcomeSchema } from "./integrations/contracts";
 import { InvalidOutputError, validateCoaching, validateOutcome } from "./lib/outcome";
-import { acousticProvenance, coachingFixture, scoredOutcome, unscorableOutcome } from "./test.helpers";
+import { acousticProvenance, coachingFixture, scoredOutcome, unscorableOutcome, withProvenance } from "./test.helpers";
 
 const input = {
   assessmentId: "job",
@@ -19,13 +19,13 @@ const expected = { ...input };
 function check(edit: (outcome: ReturnType<typeof scoredOutcome>) => void = () => {}, provenance = acousticProvenance) {
   const outcome = scoredOutcome(input);
   edit(outcome);
-  return validateOutcome(outcome, expected, provenance);
+  return validateOutcome(withProvenance(outcome, provenance), expected);
 }
 
 describe("validateOutcome", () => {
   it("accepts the worked example and counts the reference words", () => {
     expect(check()).toBe(4);
-    expect(validateOutcome(unscorableOutcome(input), expected, acousticProvenance)).toBe(0);
+    expect(validateOutcome(withProvenance(unscorableOutcome(input)), expected)).toBe(0);
   });
 
   it("rejects an outcome for a different attempt or reference", () => {

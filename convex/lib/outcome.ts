@@ -1,5 +1,5 @@
 import { WORD_BOUNDARY_TOLERANCE_MS } from "./config";
-import type { AssessmentOutcome, Coaching, EngineProvenance } from "../integrations/contracts";
+import type { AssessmentOutcome, Coaching } from "../integrations/contracts";
 
 /** The engine or coaching output broke the contract; retrying the same call cannot fix it. */
 export class InvalidOutputError extends Error {
@@ -33,8 +33,12 @@ function invalid(message: string): never {
  * transcript-only measurement. It does not recompute totals; the engine owns them.
  * Returns the number of reference words the alignment covers.
  */
-export function validateOutcome(outcome: AssessmentOutcome, expected: ExpectedEcho, provenance: EngineProvenance): number {
+export function validateOutcome(outcome: AssessmentOutcome, expected: ExpectedEcho): number {
   const { response } = outcome;
+  const measurement = outcome.provenance.measurement;
+  if (response.measurement !== measurement || outcome.evidence.measurement !== measurement) {
+    invalid("the outcome reports inconsistent measurement kinds");
+  }
   if (
     response.attemptId !== expected.attemptId ||
     response.lineId !== expected.lineId ||
@@ -61,7 +65,7 @@ export function validateOutcome(outcome: AssessmentOutcome, expected: ExpectedEc
   if (scores.languageOverall !== null && components.some((value) => value === null)) {
     invalid("languageOverall can't be reported while a component is unavailable");
   }
-  if (provenance.measurement === "transcript_only" && (scores.pronunciation !== null || wordResults.some((word) => word.pronunciationScore !== null))) {
+  if (measurement === "transcript_only" && (scores.pronunciation !== null || wordResults.some((word) => word.pronunciationScore !== null))) {
     invalid("a transcript-only measurement can't carry pronunciation values");
   }
   if (wordResults.length === 0 && scores.wordAccuracy !== null) invalid("word accuracy needs a word alignment");
