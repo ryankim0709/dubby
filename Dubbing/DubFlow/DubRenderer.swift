@@ -96,6 +96,7 @@ nonisolated enum DubRenderer {
     }
 
     /// A player item for previewing the dub before or after export, with exactly the export's tracks and mix.
+    @MainActor
     static func makePreviewItem(for timeline: DubTimeline) async throws -> AVPlayerItem {
         let (composition, mix) = try await makeComposition(for: timeline)
         let item = AVPlayerItem(asset: composition)

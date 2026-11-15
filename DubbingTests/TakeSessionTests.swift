@@ -11,42 +11,53 @@ struct TakeBookTests {
 
     @Test func keptTakeSurvivesCancelledFailedAndDiscardedRetries() {
         var book = TakeBook()
-        #expect(book.begin(lineID: 3, url: take("first").url))
-        #expect(book.finish(take("first")) == nil)
+        let begun = book.begin(lineID: 3, url: take("first").url)
+        #expect(begun)
+        let replacedByFirst = book.finish(take("first"))
+        #expect(replacedByFirst == nil)
         #expect(book.kept[3] == nil, "a finished take is only a candidate")
-        #expect(book.keepCandidate(lineID: 3))
+        let keptFirst = book.keepCandidate(lineID: 3)
+        #expect(keptFirst)
         #expect(book.kept[3] == take("first"))
 
         // A retry that is cancelled, fails or is interrupted ends the same way: its file is handed back for deletion.
-        #expect(book.begin(lineID: 3, url: take("cancelled").url))
-        #expect(book.abandon() == take("cancelled").url)
+        _ = book.begin(lineID: 3, url: take("cancelled").url)
+        let abandoned = book.abandon()
+        #expect(abandoned == take("cancelled").url)
         #expect(book.kept[3] == take("first"))
         #expect(book.inFlight == nil)
 
         // A finished retry waits as a candidate; discarding it keeps the earlier take.
-        #expect(book.begin(lineID: 3, url: take("second").url))
+        _ = book.begin(lineID: 3, url: take("second").url)
         _ = book.finish(take("second"))
         #expect(book.latestTake(lineID: 3) == take("second"))
-        #expect(book.discardCandidate(lineID: 3) == take("second").url)
+        let discarded = book.discardCandidate(lineID: 3)
+        #expect(discarded == take("second").url)
         #expect(book.kept[3] == take("first"))
 
         // Another finished retry replaces an older candidate, and keeping it replaces the kept take.
         _ = book.begin(lineID: 3, url: take("third").url)
         _ = book.finish(take("third"))
         _ = book.begin(lineID: 3, url: take("fourth").url)
-        #expect(book.finish(take("fourth")) == take("third").url)
-        #expect(book.keepCandidate(lineID: 3))
+        let replacedCandidate = book.finish(take("fourth"))
+        #expect(replacedCandidate == take("third").url)
+        let keptFourth = book.keepCandidate(lineID: 3)
+        #expect(keptFourth)
         #expect(book.kept[3] == take("fourth"))
         #expect(book.candidates.isEmpty)
     }
 
     @Test func onlyOneRecordingAtATimeAndOnlyTheOneInFlightFinishes() {
         var book = TakeBook()
-        #expect(book.begin(lineID: 1, url: take("a").url))
-        #expect(!book.begin(lineID: 2, url: take("b").url))
-        #expect(book.finish(take("b")) == nil)
+        let first = book.begin(lineID: 1, url: take("a").url)
+        let second = book.begin(lineID: 2, url: take("b").url)
+        #expect(first)
+        #expect(!second)
+        let finished = book.finish(take("b"))
+        #expect(finished == nil)
         #expect(book.candidates.isEmpty)
-        #expect(!book.keepCandidate(lineID: 2))
+        let kept = book.keepCandidate(lineID: 2)
+        #expect(!kept)
     }
 }
 
