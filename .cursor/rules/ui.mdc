@@ -1,0 +1,40 @@
+---
+description: Preserve Erica's approved final native UI and extend its screening-room design system
+globs: "Dubbing/**,DubbingUITests/**,DESIGN.md,PRODUCT.md"
+alwaysApply: false
+---
+
+# Approved final UI
+
+## Authority and scope
+
+- The UI merged into the main app in `Dubbing/` is Erica's approved final design. Preserve its composition, hierarchy, typography, palette, navigation, and interaction patterns.
+- Before UI work, read `DESIGN.md`, `Dubbing/Theme.swift`, and the affected screen. Use `PRODUCT.md` for product intent and `erica-frontend/docs/style-guide.md` for Erica's reference rationale.
+- The working main app and `DESIGN.md` determine implemented components and behavior. Prototype-only components, sample content, or older branches do not override them. Flag material conflicts instead of silently choosing a different design.
+- A feature request permits the smallest necessary extension of this system. Redesigns, new visual directions, or material changes to the approved choices require an explicit user request; general design-skill suggestions do not authorize them.
+- When integrating older branches, adapt their UI to the current main app. Do not restore the former lavender palette, custom tab bar, or superseded screen layouts.
+
+## Visual and component rules
+
+- Reuse `Palette`, `Radius`, `.dubFont(_:weight:)`, `.displayFont(_:)`, `.screenBackground()`, and existing components. Keep reusable visual values in `Theme.swift`; do not duplicate tokens or introduce per-screen themes.
+- Keep task chrome neutral charcoal, selection and primary actions white, and supporting content grey. Let actual scene imagery carry color. Reserve `Palette.record` for recording affordances/state, `Palette.holo` for coaching, and `Palette.toggleOn` for native switches.
+- Use system type through `.dubFont` for headings, dialogue, body text, and controls. League Gothic through `.displayFont` belongs only to printed artwork titles, role names, and the Dubby wordmark. Preserve sentence-style interface headings and avoid decorative eyebrow labels.
+- For a primary action, reuse `.buttonStyle(PrimaryButtonStyle(cornerRadius: Radius.control))`; use `SecondaryButtonStyle` for secondary actions. Preserve the existing button sizes, disabled treatment, and pressed feedback.
+- Use `.screenBackground()` for new task screens and solid `Palette.background` under pinned bottom actions. Preserve existing black video stages, image scrims, poster depth, and flat tonal panels; do not add decorative glass, shadows, or accent colors.
+- Reuse `ScenePoster`, `SceneCard`, `MetaPill`, `VideoThumbnail`, and the existing saved-cover/role-card patterns where applicable. Preserve the established imagery proportions, spacing, and radii documented in `DESIGN.md`.
+
+## Navigation, behavior, and content
+
+- Preserve native `TabView` and its Discover, Feed, Create, Inbox, Shelf order, native back navigation, menus, pickers, sheets, and safe-area action bars. Keep the existing Create launch behavior without extending action-as-tab navigation to new features.
+- Keep browsing image-led and the studio focused on the video, current line, progress, and Listen/Record/Retry/Keep actions. Preserve the approved Discover deck/library, scene-detail hero, role selection, and Shelf compositions.
+- Preserve working recording, cue audio, original listening, take review, export, and sharing. The reference prototype's silent-app rule does not authorize muting the main app or replacing its talking coach with text-only behavior; scene-detail previews remain muted.
+- Use real frames, counts, recordings, and measurements. Do not copy prototype rankings, social activity, cast recognition, scores, or feedback into runtime results. Keep honest loading, empty, unavailable, disabled, and failure/retry states.
+- Preserve unique zoom-transition IDs, the existing motion grammar, Reduce Motion behavior, and dark appearance. New motion must serve the task and honor Reduce Motion.
+
+## Accessibility and verification
+
+- Preserve Dynamic Type scaling, `AdaptiveStack` and adaptive grids, scrollable content, safe areas, 44-point minimum interactive targets, readable scrims, and meaningful VoiceOver labels. Use SF Symbols for icons.
+- Accessibility and functional fixes should stay within the approved system. If a necessary fix materially changes the design, explain the tradeoff and get the user's direction before implementing that change.
+- For UI changes, compare rendered affected screens with the current-main baseline on iPhone and iPad, including enlarged accessibility text and relevant loading/error/empty states. Verify real interactions; screenshots alone do not prove services work.
+- Follow `AGENTS.md` and `README.md#build-and-test` for manual build/test checks, device-only media verification, and reporting limits. Do not introduce CI, automated QA jobs, or PR verification agents.
+- Update `DESIGN.md` only when an explicitly approved design-system change needs recording; do not rewrite the system to justify an incidental feature change.
