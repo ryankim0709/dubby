@@ -23,7 +23,7 @@ struct PracticeProgressView: View {
                         .accessibilityAddTraits(.isHeader)
                 } else if account.isAvailable {
                     Button("Sign in to see your coach's progress", action: onAccount)
-                        .buttonStyle(OutlineCapsuleButtonStyle())
+                        .buttonStyle(.dubSecondary)
                         .accessibilityIdentifier("progressSignIn")
                 }
                 LoadStateContent(state: dubs, failureIdentifier: "progressLoadFailed", retry: onRetry) { dubs in
