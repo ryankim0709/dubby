@@ -164,6 +164,8 @@ open Dubbing.xcodeproj
 
 Choose the `Dubbing` scheme, select an iPhone simulator or your device, and run the app. Any clips in `Media/` are bundled into the build and appear on Discover. With no clips, Discover explains how to add them.
 
+Debug builds use `Config/Dubbing-Debug.entitlements`, which allows a free Personal Team to sign the app for a connected iPhone. Release builds use `Config/Dubbing.entitlements` with Sign in with Apple, which requires an eligible developer team. Testing Apple sign-in in Debug also requires that team and the Release entitlements file.
+
 The app runs on an iPhone without Convex credentials, AI service keys, or a Revyl account. Simulator dubbing needs the configured transcription backend; coaching also needs its provider setup. Its one third-party package is the LiveKit Swift SDK, which Xcode fetches on the first build. Microphone and speech recognition permissions are requested the first time they are needed.
 
 ## Build and test

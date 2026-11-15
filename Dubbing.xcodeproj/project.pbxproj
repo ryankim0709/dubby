@@ -440,7 +440,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_PREVIEWS = YES;
 				CLERK_PUBLISHABLE_KEY = "";
-				CODE_SIGN_ENTITLEMENTS = Config/Dubbing.entitlements;
+				CODE_SIGN_ENTITLEMENTS = "Config/Dubbing-Debug.entitlements";
 				COACH_BACKEND_URL = "https://stoic-platypus-829.convex.site";
 				CONVEX_URL = "https://stoic-platypus-829.convex.cloud";
 				GENERATE_INFOPLIST_FILE = YES;
