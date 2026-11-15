@@ -77,6 +77,10 @@ struct CoachTests {
         #expect(!script.title.localizedCaseInsensitiveContains("pronunciation"))
     }
 
+    @Test func anAcousticClaimWithNoCitedResultIsNotLabelledAsMeasured() {
+        #expect(FeedbackBasis.acoustic.display(citedEvidenceCount: 0) == nil)
+    }
+
     @Test func preferencesRoundTripAndOmitUnsetValues() throws {
         var preferences = CoachPreferences.standard
         preferences.sessionMinutes = .ten

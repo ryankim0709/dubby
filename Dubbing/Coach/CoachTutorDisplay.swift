@@ -10,8 +10,11 @@ nonisolated struct FeedbackBasisDisplay: Equatable, Sendable {
 
 nonisolated extension FeedbackBasis {
     /// The label for feedback with this basis, or nil when the feedback has no measured basis to
-    /// name. Script agreement is never worded as a pronunciation score.
+    /// name. Script agreement is never worded as a pronunciation score, and an acoustic claim with
+    /// no cited result is not labelled as measured.
     func display(citedEvidenceCount: Int) -> FeedbackBasisDisplay? {
+        // A measurement claim has to point at a recorded result; without one it is shown as no basis.
+        if self == .acoustic && citedEvidenceCount == 0 { return nil }
         let evidence = citedEvidenceCount > 0 ? " It cites \(citedEvidenceCount) of your recorded results." : ""
         switch self {
         case .acoustic:

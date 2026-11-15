@@ -2,7 +2,7 @@ import AVFoundation
 import LiveKit
 import os
 
-/// One conversation with a coach: the learner's speech goes to the LLM, and the LLM's reply goes to the avatar.
+/// One conversation with a coach: the learner's speech goes to the backend's coach model, and its reply goes to the avatar.
 @MainActor
 @Observable
 final class CoachSession {

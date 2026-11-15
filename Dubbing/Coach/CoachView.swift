@@ -81,7 +81,7 @@ struct CoachView: View {
                             }
                         }
                     }
-                    Text("What you say is transcribed on this iPhone. The text goes to Anthropic's Claude to write your coach's reply, and LiveAvatar by HeyGen turns that reply into the coach's voice and video.")
+                    Text("What you say is transcribed on this iPhone. The text goes through DubIt's servers to OpenAI, which writes your coach's reply, and LiveAvatar by HeyGen turns that reply into the coach's voice and video.")
                         .dubFont(12, weight: .regular)
                         .foregroundStyle(Palette.placeholder)
                 }
