@@ -95,6 +95,26 @@ it runs in the default Convex runtime. `convex/billing.test.ts` exercises real s
 tampering, duplicate delivery, learner isolation, expiration, and the paid API gate without charging a
 card. A live Whop-to-Convex checkout still needs the deployment and credentials above.
 
+## Dub Clubs sandbox
+
+The native Inbox contains one Dub Clubs challenge using the licensed bridge scene. `demo` and `demo1`
+map to two distinct Whop sandbox users, displayed as Alex and Sam. This demo has a private Whop
+conversation; it does not grant other accounts access or change the coach subscription.
+Debug/QA builds accept `-DUBBY_OPEN_CLUBS 1` to open Inbox directly after normal sign-in for a demo.
+
+Set `WHOP_CLUB_API_KEY`, `WHOP_CLUB_ACCOUNT_ID`, and `WHOP_CLUB_CHANNEL_ID` on the development
+deployment. The server key needs `dms:read`, `dms:message:manage`, and `dms:channel:manage`. Creating
+the two Whop subaccounts during setup additionally uses `company:create_child`; the initial key also
+has `company:basic:read`, `chat:read`, and `chat:message:create`. No key is bundled in iOS. Enroll the two
+existing demo learners with the internal `clubs:seedDemoMembers` mutation and their Whop user IDs.
+
+`GET /clubs/feed` reads real Whop messages and fresh signed media URLs. The foreground screen refreshes
+every five seconds. `POST /clubs/uploads` creates an owned private upload; iOS preserves the exact signed
+upload headers and uploads directly to Whop. `POST /clubs/posts` waits for processing, validates the file,
+and publishes as the authenticated learner. An upload's publication is idempotent, and another learner
+cannot claim it. Voice feedback must reference a video in this conversation. iOS limits recordings to
+30 seconds and previews media with a Whop sharing disclosure before the user sends it.
+
 ## Identity and ownership
 
 - Every function derives the caller from `ctx.auth.getUserIdentity()`; no function takes a user id.

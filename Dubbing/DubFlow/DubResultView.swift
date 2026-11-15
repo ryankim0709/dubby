@@ -225,15 +225,15 @@ struct DubResultView: View {
                 .dubFont(34, weight: .bold)
                 .foregroundStyle(Palette.textPrimary)
                 .accessibilityAddTraits(.isHeader)
+            Text("\(setup.clip.title) · you as \(setup.script.speaker(withID: setup.characterID)?.name ?? "your character")")
+                .dubFont(15, weight: .regular)
+                .foregroundStyle(Palette.textSecondary)
             ResultPlayer(url: video)
                 .aspectRatio(16 / 9, contentMode: .fit)
                 .clipShape(RoundedRectangle(cornerRadius: 16))
             if let completionRoom {
                 CompleteCoDubView(room: completionRoom, video: video, linesRecorded: takes.count, account: account, isWorking: $isCoDubUploading)
             }
-            Text("You're the main character.")
-                .dubFont(22, weight: .bold)
-                .foregroundStyle(Palette.textPrimary)
             Text("\(takes.count) of \(setup.script.lines(spokenBy: setup.characterID).count) lines in your voice, saved to your Shelf.")
                 .dubFont(14, weight: .regular)
                 .foregroundStyle(Palette.textSecondary)

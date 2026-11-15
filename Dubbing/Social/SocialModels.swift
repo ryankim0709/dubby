@@ -46,7 +46,7 @@ nonisolated struct SocialScript: Codable, Hashable, Sendable {
               protectedSpans.allSatisfy({ $0.start.isFinite && $0.end.isFinite && $0.start >= 0 && $0.start < $0.end && $0.end <= duration }) else {
             throw SocialError.invalidResponse("The invitation has an invalid script, role, locale, or timing.")
         }
-        let clip = ImportedClip(url: video, title: title, durationSeconds: duration, origin: .bundled, workingDirectory: video.deletingLastPathComponent())
+        let clip = ImportedClip(url: video, title: title, durationSeconds: duration, origin: .bundled, workingDirectory: video.deletingLastPathComponent(), locale: locale)
         let script = Script(
             lines: lines.map { ScriptLine(id: $0.id, text: $0.text, start: $0.start, end: $0.end, speakerID: $0.speakerId, envelope: [], reference: nil) },
             speakers: speakers.map { Speaker(id: $0.id, name: $0.name) }

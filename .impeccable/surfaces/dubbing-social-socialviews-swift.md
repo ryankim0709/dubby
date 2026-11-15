@@ -17,10 +17,10 @@ OWN-WORLD: Inherit neutral charcoal, white selection and actions, SF interface t
 
 STORY: Finish every line of one role, choose a scene partner or private link, record the open role, watch the combined result, and approve its friends-feed audience together.
 
-FIRST VIEWPORT: Invitation headline names the open role, followed by the saved scene thumbnail, role selector, real friends and one send action. Inbox leads with actual invitation states. The result leads with playable video and both performers' recorded line counts.
+FIRST VIEWPORT: Invitation headline names the open role, followed by the saved scene thumbnail, role selector, real friends and one send action. Inbox's Co-dubs section leads with actual invitation states alongside the existing Clubs section. The result leads with playable video and both performers' recorded line counts.
 
 FORM: Native lists, sheets, system sharing and the existing studio. seed: none (pinned). User: "the social aspect of dubbing ... sharing with friends" with the attached invitation/result reference. Realtime status changes are the signature interaction; native transitions honor Reduce Motion. No generated scores, sample friends or public feed.
 
 FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance.
 
-Verification: Inspect rendered iPhone and iPad layouts and accessibility text sizes; verify authorization, error behavior and two-performer audio composition. Review inline because this side conversation prohibits sub-agents. Preserve existing DESIGN.md tokens.
+Verification: Inspect rendered iPhone layouts and accessibility text sizes; verify authorization, error behavior and two-performer audio composition. Review inline because this side conversation prohibits sub-agents. Preserve existing DESIGN.md tokens.

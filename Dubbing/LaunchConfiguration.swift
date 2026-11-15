@@ -7,6 +7,8 @@ import UIKit
 nonisolated struct LaunchConfiguration: Equatable, Sendable {
     /// `-DUBBY_UI_TEST 1`: start from a clean state with animations off.
     let isUITest: Bool
+    /// Opens the real club screen for a signed-in demo learner; it never bypasses account access.
+    let opensClubs: Bool
     /// `-DUBBY_DEMO_SCENE <sceneID>`: the scene listed first.
     let demoSceneID: String?
     /// `-DUBBY_EXPORT_STEP_DELAY_MS <n>`: a pause before each export phase, so cancelling and backgrounding can be exercised.
@@ -20,6 +22,7 @@ nonisolated struct LaunchConfiguration: Equatable, Sendable {
             return arguments[index + 1]
         }
         isUITest = value(of: "-DUBBY_UI_TEST") == "1"
+        opensClubs = value(of: "-DUBBY_OPEN_CLUBS") == "1"
         demoSceneID = value(of: "-DUBBY_DEMO_SCENE")
         exportStepDelayMilliseconds = value(of: "-DUBBY_EXPORT_STEP_DELAY_MS").flatMap { Int($0) }.flatMap { $0 > 0 ? $0 : nil }
     }

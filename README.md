@@ -28,7 +28,9 @@ The app dubs real scenes end to end on the iPhone, with no sample data. Clips pl
 3. Dub one character in the studio. Each line's original audio plays as a reference, a 1.5-second cue plays before recording, and the video keeps rolling silently while you record so your take lines up with the actor's mouth.
 4. Export the scene with your takes mixed in, save it to My Dubs, and share it.
 
-Progress shows a streak and totals computed from saved dubs. Feed and Inbox support friends and asynchronous co-dubs: add a friend by username, finish your character's lines, invite them to another role, and watch the combined result. Private invite links can also be claimed by one signed-in learner. Both performers approve before a co-dub appears in their friends' feeds. Setup and privacy boundaries are in [Social dubbing](docs/social-dubbing.md).
+Progress shows a streak and totals computed from saved dubs. Inbox contains a Whop sandbox Dub Clubs demo: `demo` (Alex) and `demo1` (Sam) can dub the licensed bridge challenge, share videos privately, and give spoken feedback.
+
+Feed and Inbox support friends and asynchronous co-dubs: add a friend by username, finish your character's lines, invite them to another role, and watch the combined result. Private invite links can also be claimed by one signed-in learner. Both performers approve before a co-dub appears in their friends' feeds. Setup and privacy boundaries are in [Social dubbing](docs/social-dubbing.md).
 
 When the build has a Convex URL, the app opens on a sign-in page: learners sign in or create an account with a username and password, stored in Convex. The shared demo logins use the username as the password: `demo`, `demo1`, `maya`, `theo`, and `jordan`. `scripts/seed-demo-progress.mjs` gives them weeks of scored dubs to show on the Progress tab. Setup is in [docs/convex-backend.md](docs/convex-backend.md).
 

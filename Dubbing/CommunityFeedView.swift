@@ -26,8 +26,8 @@ struct CommunityFeedView: View {
                     if let issue { Text(issue).dubFont(14, weight: .regular).foregroundStyle(Palette.textSecondary) }
                 }.padding(20)
             }
-            .screenBackground().foregroundStyle(Palette.textPrimary)
-            .navigationTitle("Friends feed").navigationBarTitleDisplayMode(.inline)
+            .background(.black).foregroundStyle(Palette.textPrimary)
+            .navigationTitle("Feed").navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Friends", systemImage: "person.2", action: onFriends).labelStyle(.iconOnly) } }
             .sheet(item: $playing) { post in
                 NavigationStack {
