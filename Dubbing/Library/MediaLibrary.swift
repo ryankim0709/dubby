@@ -13,10 +13,13 @@ nonisolated enum MediaLibrary {
     static let videoExtensions = ["mp4", "mov", "m4v"]
 
     /// Every bundled video, sorted by title. The clips themselves stay out of git; see `Media/README.md`.
+    /// Files that a curated scene's manifest references are left out: those scenes are listed from their manifests.
     @concurrent
     static func loadClips(in bundle: Bundle) async throws -> [LibraryClip] {
+        let candidates = videoExtensions.flatMap { bundle.urls(forResourcesWithExtension: $0, subdirectory: nil) ?? [] }
+        let sceneFiles = CuratedSceneLoader.referencedFiles(manifestURLs: CuratedSceneLoader.manifestURLs(in: bundle))
         var clips: [LibraryClip] = []
-        for url in videoExtensions.flatMap({ bundle.urls(forResourcesWithExtension: $0, subdirectory: nil) ?? [] }) {
+        for url in rawClipURLs(candidates, excluding: sceneFiles) {
             clips.append(LibraryClip(
                 url: url,
                 title: title(forFileName: url.deletingPathExtension().lastPathComponent),
@@ -24,6 +27,11 @@ nonisolated enum MediaLibrary {
             ))
         }
         return clips.sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
+    }
+
+    /// The videos that aren't part of a curated scene.
+    static func rawClipURLs(_ urls: [URL], excluding sceneFiles: Set<URL>) -> [URL] {
+        urls.filter { !sceneFiles.contains(CuratedSceneLoader.comparable($0)) }
     }
 
     /// Turns a file name like `anakin-confronts-obi-wan` into `Anakin Confronts Obi Wan`.
