@@ -61,6 +61,11 @@ struct SectionPickerView: View {
                 }
                 .padding(12)
                 .background(Palette.surface, in: RoundedRectangle(cornerRadius: 12))
+                #if targetEnvironment(simulator)
+                Text("This library scene is processed by OpenAI to build your script.")
+                    .dubFont(14, weight: .regular)
+                    .foregroundStyle(Palette.textSecondary)
+                #endif
                 AdaptiveStack(rowAlignment: .center, spacing: 12) {
                     Button {
                         if player.isPlaying {

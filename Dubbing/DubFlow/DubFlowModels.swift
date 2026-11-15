@@ -45,7 +45,7 @@ nonisolated struct TranscriptionRequest: Hashable, Sendable {
 }
 
 /// A transcribed word, timed in seconds from the start of the section audio.
-nonisolated struct TranscribedWord: Hashable, Sendable {
+nonisolated struct TranscribedWord: Hashable, Decodable, Sendable {
     let text: String
     let start: Double
     let end: Double

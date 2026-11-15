@@ -35,7 +35,8 @@ Known limits:
 
 - **Speaker grouping is approximate.** It clusters speech-band MFCC voice fingerprints and got 6 of 8 lines right on the test scene. Users fix the rest by tapping a line's speaker.
 - **Dialogue replacement is filtered, not separated.** Clips don't come with separate dialogue and music tracks, so under the user's lines the original audio crossfades to a copy with the speech band (about 420–3,400 Hz) filtered out. Bass and treble of the music and effects carry on, but music in the speech band is lost there. Curated scenes with prepared dialogue and background tracks would remove this limit.
-- **Transcription depends on the device.** iOS 26 `SpeechTranscriber` is used where Apple reports it supported, then `DictationTranscriber`, then `SFSpeechRecognizer`. The iOS Simulator has no on-device speech models, so in the Simulator transcription goes through Apple's servers and may be unavailable.
+- **Transcription depends on the device.** On an iPhone, iOS 26 `SpeechTranscriber` is used where Apple reports it supported, then `DictationTranscriber`, then `SFSpeechRecognizer`. Simulator dubbing uses the Convex/OpenAI transcript of the published library video instead, because Apple's speech service can report support but fail to load its model files. Local-only clips still need an iPhone.
+- **Backend script timing uses `whisper-1`.** It provides measured word timestamps, which the studio needs. OpenAI schedules this model to shut down on February 26, 2027; a replacement with word timings is needed before then. See [OpenAI's file transcription guide](https://developers.openai.com/api/docs/guides/speech-to-text).
 - **The coach hears words, not sounds.** It receives an on-device transcript of what you said, so it can coach wording and grammar but not pronunciation.
 - **Not yet built:** pronunciation scoring, character-voice conversion, drafts, and accounts.
 
@@ -163,7 +164,7 @@ open Dubbing.xcodeproj
 
 Choose the `Dubbing` scheme, select an iPhone simulator or your device, and run the app. Any clips in `Media/` are bundled into the build and appear on Discover. With no clips, Discover explains how to add them.
 
-The app runs without Convex credentials, AI service keys, or a Revyl account; only the coach needs them. Its one third-party package is the LiveKit Swift SDK, which Xcode fetches on the first build. Microphone and speech recognition permissions are requested the first time they are needed.
+The app runs on an iPhone without Convex credentials, AI service keys, or a Revyl account. Simulator dubbing needs the configured transcription backend; coaching also needs its provider setup. Its one third-party package is the LiveKit Swift SDK, which Xcode fetches on the first build. Microphone and speech recognition permissions are requested the first time they are needed.
 
 ## Build and test
 
@@ -193,6 +194,8 @@ npm run typecheck
 Compilation performs Swift typechecking. `DubbingTests` uses Swift Testing and covers the coach's LiveAvatar message formats and line splitting, take placement and trim reporting, scene framing limits, voice grouping, the speech-band filter, streaks, the saved-dub library, and a real export against the synthetic fixture. The export test checks that the 1 kHz tone is filtered out under a take while the 80 Hz tone carries on. There is no separate linter or formatter configuration and no Revyl test suite yet.
 
 Recording, playback, interruptions, audio routes, and on-device transcription need an actual iPhone for manual verification; the Simulator cannot verify microphone quality or transcribe speech on the device.
+
+Simulator dubbing requires `COACH_BACKEND_URL` and `OPENAI_API_KEY` on that Convex deployment. `POST /scenes/transcribe` accepts only a published scene's slug, stored-video SHA-256, and matching locale; it never accepts learner recordings or arbitrary URLs. The backend transcribes the stored video once and caches its word timings by video ID and locale. Concurrent requests share a lease, and replacing the stored video creates a new cache entry. The app clips those full-video timings to the selected section and converts them to section-relative seconds. Published videos must be at most 24 MB and 120 seconds for this path.
 
 Revyl remains available for cloud builds and app previews. Its build configuration is in `.revyl/config.yaml`; no automated Revyl test plans are configured.
 
