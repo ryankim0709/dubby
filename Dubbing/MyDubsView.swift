@@ -97,6 +97,7 @@ struct MyDubsView: View {
 private struct SavedDubCard: View {
     let dub: SavedDub
     let video: URL
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -106,19 +107,19 @@ private struct SavedDubCard: View {
                     Image(systemName: "play.fill")
                         .font(.system(size: 16))
                         .foregroundStyle(Palette.textPrimary)
-                        .frame(width: 36, height: 36)
-                        .background(.black.opacity(0.45), in: Circle())
+                        .frame(width: GlassMetrics.minimumTarget, height: GlassMetrics.minimumTarget)
+                        .dubGlass(in: Circle())
                 }
                 .clipShape(RoundedRectangle(cornerRadius: 16))
                 .padding(.bottom, 8)
             Text(dub.sceneTitle)
                 .dubFont(14, weight: .medium)
                 .foregroundStyle(Palette.textPrimary)
-                .lineLimit(1)
+                .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
             Text("as \(dub.characterName) · \(dub.createdAt.formatted(.relative(presentation: .named)))")
                 .dubFont(12, weight: .regular)
                 .foregroundStyle(Palette.textSecondary)
-                .lineLimit(1)
+                .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
             Text("\(dub.linesDubbed)/\(dub.totalLines) lines in your voice")
                 .dubFont(12, weight: .semibold)
                 .foregroundStyle(Palette.accentText)
@@ -155,9 +156,9 @@ private struct SavedDubPlayer: View {
                     }
                     Spacer()
                     Button("Done") { dismiss() }
+                        .buttonStyle(.dubSecondary)
                         .accessibilityIdentifier("savedDubDone")
-                        .dubFont(16, weight: .semibold)
-                        .foregroundStyle(Palette.accentText)
+                        .fixedSize(horizontal: true, vertical: false)
                         .frame(minWidth: 44, minHeight: 44)
                 }
                 VideoPlayer(player: player)
@@ -169,7 +170,7 @@ private struct SavedDubPlayer: View {
                 ShareLink(item: video) {
                     Label("Share dub", systemImage: "square.and.arrow.up")
                 }
-                .buttonStyle(PrimaryButtonStyle(cornerRadius: 16))
+                .buttonStyle(.dubPrimary)
                 .accessibilityIdentifier("shareSavedDub")
             }
             .padding(16)
