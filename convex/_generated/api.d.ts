@@ -8,6 +8,14 @@
  * @module
  */
 
+import type * as assessment_align from "../assessment/align.js";
+import type * as assessment_assess from "../assessment/assess.js";
+import type * as assessment_azure from "../assessment/azure.js";
+import type * as assessment_azureClient from "../assessment/azureClient.js";
+import type * as assessment_index from "../assessment/index.js";
+import type * as assessment_normalize from "../assessment/normalize.js";
+import type * as assessment_types from "../assessment/types.js";
+import type * as assessment_validate from "../assessment/validate.js";
 import type * as assessments from "../assessments.js";
 import type * as attempts from "../attempts.js";
 import type * as coachCharacters from "../coachCharacters.js";
@@ -42,6 +50,14 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  "assessment/align": typeof assessment_align;
+  "assessment/assess": typeof assessment_assess;
+  "assessment/azure": typeof assessment_azure;
+  "assessment/azureClient": typeof assessment_azureClient;
+  "assessment/index": typeof assessment_index;
+  "assessment/normalize": typeof assessment_normalize;
+  "assessment/types": typeof assessment_types;
+  "assessment/validate": typeof assessment_validate;
   assessments: typeof assessments;
   attempts: typeof attempts;
   coachCharacters: typeof coachCharacters;
