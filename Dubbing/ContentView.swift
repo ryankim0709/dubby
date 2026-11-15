@@ -3,7 +3,7 @@ import SwiftUI
 struct ContentView: View {
     let account: AccountModel
     let scoring: DubScoringModel?
-    @State private var tab: AppTab = .discover
+    @State private var tab: AppTab = LaunchConfiguration.current.opensClubs ? .messages : .discover
     @State private var clips: LoadState<[LibraryClip]> = .loading
     @State private var dubs: LoadState<[SavedDub]> = .loading
     @State private var launch: DubFlowLaunch?
