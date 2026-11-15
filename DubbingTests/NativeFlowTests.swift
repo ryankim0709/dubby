@@ -217,6 +217,13 @@ struct IssueStateTests {
         #expect(FlowIssue(error: DubFlowError.microphoneDenied).code == "microphoneDenied")
     }
 
+    @Test func measuredTakesCarryNoPronunciationBasis() {
+        let take = TakeMeasurement(lineID: 1, takeSeconds: 1, lineSeconds: 2, allowedSeconds: 2.75, peakDecibels: -8)
+        #expect(take.feedbackBasis == .none)
+        #expect(FeedbackBasis.acoustic.rawValue == "acoustic")
+        #expect(FeedbackBasis.scriptAgreement.rawValue == "script_agreement")
+    }
+
     @Test func aTakeWithoutAudioShowsNoLevelInsteadOfAnInventedOne() {
         let unread = TakeMeasurement(lineID: 1, takeSeconds: 1, lineSeconds: 2, allowedSeconds: 2.75, peakDecibels: nil)
         #expect(unread.levelDescription == nil)

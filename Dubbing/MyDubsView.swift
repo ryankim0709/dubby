@@ -170,7 +170,7 @@ private struct SavedDubPlayer: View {
                     Label("Share dub", systemImage: "square.and.arrow.up")
                 }
                 .buttonStyle(PrimaryButtonStyle(cornerRadius: 16))
-                .accessibilityIdentifier("savedDubShare")
+                .accessibilityIdentifier("shareSavedDub")
             }
             .padding(16)
             .containerIdentifier("savedDubPlayer")

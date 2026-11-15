@@ -102,9 +102,9 @@ struct DubSessionView: View {
                         issue: FlowIssue(error: DubFlowError.microphoneDenied),
                         identifier: "microphonePermissionBanner",
                         value: "denied",
-                        retryTitle: "Check again",
-                        retryIdentifier: "permissionRetry",
-                        retry: { recheckMicrophone() }
+                        retryTitle: "Try again",
+                        retryIdentifier: "retry",
+                        retry: nil
                     )
                 } else if let issue {
                     IssueCard(
@@ -113,7 +113,7 @@ struct DubSessionView: View {
                         identifier: "studioError",
                         value: issue.code,
                         retryTitle: "Try again",
-                        retryIdentifier: "studioRetry",
+                        retryIdentifier: "retry",
                         retry: failedActivity.map { retryAction(for: $0) }
                     )
                 }
@@ -160,6 +160,9 @@ struct DubSessionView: View {
         .onChange(of: scenePhase) { _, phase in
             if phase != .active {
                 interrupt(because: "DubIt left the screen")
+            } else {
+                // The user may have turned the microphone on in Settings, so recording re-enables on its own.
+                refreshMicrophone()
             }
         }
         .confirmationDialog("Leave the studio?", isPresented: $isConfirmingExit, titleVisibility: .visible) {
@@ -223,14 +226,6 @@ struct DubSessionView: View {
 
     private func refreshMicrophone() {
         microphone = MicrophoneAccess(AVAudioApplication.shared.recordPermission)
-    }
-
-    /// Re-checks access after the user returns from Settings and records again when it is on.
-    private func recheckMicrophone() {
-        refreshMicrophone()
-        if microphone != .denied {
-            record()
-        }
     }
 
     private var videoCard: some View {
