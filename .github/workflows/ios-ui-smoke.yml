@@ -1,0 +1,92 @@
+name: iOS UI smoke
+
+on:
+  pull_request:
+    paths:
+      - 'Dubbing/**'
+      - 'DubbingUITests/**'
+      - 'Dubbing.xcodeproj/**'
+      - 'scripts/qa/e2e/**'
+      - '.github/workflows/ios-ui-smoke.yml'
+  push:
+    branches: ['**']
+    paths:
+      - 'Dubbing/**'
+      - 'DubbingUITests/**'
+      - 'Dubbing.xcodeproj/**'
+      - 'scripts/qa/e2e/**'
+      - '.github/workflows/ios-ui-smoke.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-ui-smoke-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  static-checks:
+    name: Provider and secret scans
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - name: Runtime provider scan
+        run: scripts/qa/e2e/check-runtime-provider.sh
+        continue-on-error: true
+      - name: Key scan over the repository text
+        run: scripts/qa/e2e/check-no-key-in-artifacts.sh Dubbing Config DubbingUITests .revyl
+
+  ui-smoke:
+    name: UI smoke tests (iPhone 17 Pro, iOS 26 simulator)
+    runs-on: macos-26
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Select Xcode with the iOS 26 SDK
+        run: |
+          sudo xcode-select -s /Applications/Xcode_26.6.app
+          xcodebuild -version
+
+      - name: Run the UI smoke tests
+        run: scripts/qa/e2e/run-ui-smoke.sh
+
+      - name: Check the Release bundle has no QA fixture
+        run: |
+          xcodebuild -project Dubbing.xcodeproj -scheme Dubbing -configuration Release \
+            -destination 'generic/platform=iOS Simulator' -derivedDataPath build/ReleaseDerivedData \
+            CODE_SIGNING_ALLOWED=NO build
+          scripts/qa/e2e/check-release-bundle.sh build/ReleaseDerivedData/Build/Products/Release-iphonesimulator/Dubbing.app
+
+      - name: Scan the built app and logs for provider keys
+        if: ${{ !cancelled() }}
+        run: scripts/qa/e2e/check-no-key-in-artifacts.sh build/DerivedData/Build/Products/Debug-iphonesimulator/Dubbing.app build/ui-smoke/test.log
+
+      - name: Write job summary
+        if: ${{ !cancelled() }}
+        run: |
+          {
+            echo '### iOS UI smoke'
+            echo '```'
+            cat build/ui-smoke/environment.txt 2>/dev/null || true
+            echo
+            cat build/ui-smoke/results.txt 2>/dev/null || echo 'No result list was produced; see the step log.'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload results and screenshots
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: ios-ui-smoke-results
+          path: |
+            build/ui-smoke/results.txt
+            build/ui-smoke/summary.json
+            build/ui-smoke/environment.txt
+            build/ui-smoke/test.log
+            build/ui-smoke/ui-smoke.xcresult
+            build/ui-smoke/attachments
+          if-no-files-found: warn
+          retention-days: 14
