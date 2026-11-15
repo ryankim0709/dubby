@@ -159,7 +159,7 @@ struct DubSessionView: View {
         }
         .onChange(of: scenePhase) { _, phase in
             if phase != .active {
-                interrupt(because: "DubIt left the screen")
+                interrupt(because: "Dubby left the screen")
             } else {
                 // The user may have turned the microphone on in Settings, so recording re-enables on its own.
                 refreshMicrophone()

@@ -1,11 +1,11 @@
-# DubIt agent guide
+# Dubby agent guide
 
 These instructions apply throughout this repository. Follow more specific nested instructions when present.
 
 ## Project context
 
-- DubIt is an entertainment-first iOS app for learning languages by dubbing short scenes, with pronunciation coaching.
-- Product reference: https://chatgpt.com/share/6af93b36-93b8-83e8-adf7-baf6326f35ac. The confirmed direction is DubIt. The `avatar-coach` branch adds a talking-character coach (a LiveAvatar video face that speaks Claude's replies); other avatar-tutor ideas stay out of scope.
+- Dubby is an entertainment-first iOS app for learning languages by dubbing short scenes, with pronunciation coaching.
+- Product reference: https://chatgpt.com/share/6af93b36-93b8-83e8-adf7-baf6326f35ac. The confirmed direction is Dubby. The `avatar-coach` branch adds a talking-character coach (a LiveAvatar video face that speaks Claude's replies); other avatar-tutor ideas stay out of scope.
 - The repository contains a native SwiftUI app: `Dubbing/`, `DubbingTests/`, and the shared `Dubbing` Xcode scheme.
 - The project uses Swift 6, targets iOS 26.0+, and enables default MainActor isolation for the app target. Preserve these settings unless asked.
 - Read `README.md` for the selected development tools, cloud architecture, and integration status. Follow those choices; the reference chat's other stack suggestions are not adopted dependencies.

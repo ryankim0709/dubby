@@ -68,7 +68,7 @@ describe("coach routes", () => {
 
     const health = await t.fetch("/health");
     expect(health.status).toBe(200);
-    expect(await health.json()).toEqual({ ok: true, service: "dubit-backend", schemaVersion: 1 });
+    expect(await health.json()).toEqual({ ok: true, service: "dubby-backend", schemaVersion: 1 });
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 });

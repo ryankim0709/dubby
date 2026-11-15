@@ -1,7 +1,7 @@
 import { appError } from "./errors";
 
 /** The `aud` claim of password session tokens; auth.config.ts accepts tokens only for this audience. */
-export const PASSWORD_TOKEN_AUDIENCE = "dubit";
+export const PASSWORD_TOKEN_AUDIENCE = "dubby";
 /** Path of the public signing key, relative to the deployment's site URL. */
 export const PASSWORD_JWKS_PATH = "/.well-known/jwks.json";
 

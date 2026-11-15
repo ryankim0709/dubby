@@ -436,8 +436,9 @@
 				CONVEX_URL = "https://stoic-platypus-829.convex.cloud";
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Config/Dubbing-Info.plist";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "DubIt records your voice so you can dub lines from your clip and talk with your coach.";
-				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "DubIt transcribes the dialogue in your scene so you can dub it, and what you say to your coach.";
+				INFOPLIST_KEY_CFBundleDisplayName = Dubby;
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Dubby records your voice so you can dub lines from your clip and talk with your coach.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Dubby transcribes the dialogue in your scene so you can dub it, and what you say to your coach.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -474,8 +475,9 @@
 				EXCLUDED_SOURCE_FILE_NAMES = "*/Dubbing/QAFixtures/*";
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Config/Dubbing-Info.plist";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "DubIt records your voice so you can dub lines from your clip and talk with your coach.";
-				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "DubIt transcribes the dialogue in your scene so you can dub it, and what you say to your coach.";
+				INFOPLIST_KEY_CFBundleDisplayName = Dubby;
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Dubby records your voice so you can dub lines from your clip and talk with your coach.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Dubby transcribes the dialogue in your scene so you can dub it, and what you say to your coach.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;

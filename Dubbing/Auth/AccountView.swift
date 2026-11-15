@@ -41,7 +41,7 @@ struct SignInView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
-                Text("dub.it")
+                Text("dubby")
                     .dubFont(32, weight: .semibold)
                     .italic()
                     .foregroundStyle(Palette.accentText)
@@ -74,7 +74,7 @@ private struct AccountPanel: View {
             EmptyStateView(
                 systemImage: "person.crop.circle.badge.exclamationmark",
                 title: "Sign-in isn't set up in this build",
-                message: "This build has no account service connected, so you're using DubIt signed out."
+                message: "This build has no account service connected, so you're using Dubby signed out."
             )
             .accessibilityIdentifier("accountUnavailable")
         } else {
@@ -99,7 +99,7 @@ private struct AccountPanel: View {
         VStack(alignment: .leading, spacing: 12) {
             EmptyStateView(
                 systemImage: "person.crop.circle",
-                title: "Welcome to dub.it",
+                title: "Welcome to Dubby",
                 message: "Sign in or create an account to start dubbing."
             )
             .accessibilityIdentifier("accountSignedOut")

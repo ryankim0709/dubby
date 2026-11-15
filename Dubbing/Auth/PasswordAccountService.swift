@@ -147,7 +147,7 @@ final class PasswordAccountService: AccountService {
         } catch ClientError.ConvexError(let data) {
             throw AccountError.backend(Self.message(fromErrorData: data))
         } catch {
-            throw AccountError.backend("Couldn't reach DubIt: \(error.localizedDescription)")
+            throw AccountError.backend("Couldn't reach Dubby: \(error.localizedDescription)")
         }
     }
 
@@ -169,7 +169,7 @@ extension AccountModel {
     /// The model for this build: password accounts when the build has a Convex URL, otherwise a signed-out app.
     static func live(in bundle: Bundle) -> AccountModel {
         guard let configuration = AuthConfiguration.configured(in: bundle) else { return AccountModel(service: nil) }
-        let service = PasswordAccountService(configuration: configuration, keychain: SessionKeychain(service: "dubit.password-session"))
+        let service = PasswordAccountService(configuration: configuration, keychain: SessionKeychain(service: "dubby.password-session"))
         return AccountModel(service: service, convexClient: service.convexClient)
     }
 }

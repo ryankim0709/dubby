@@ -65,7 +65,7 @@ struct DiscoverView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 HStack {
-                    Text("dub.it")
+                    Text("dubby")
                         .dubFont(24, weight: .semibold)
                         .italic()
                         .foregroundStyle(Palette.accentText)

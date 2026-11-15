@@ -88,7 +88,7 @@ internals (`run`, `claim`, `saveOutcome`, `complete`, `recordFailure`, `reclaimS
 
 | Route | Auth | Notes |
 | --- | --- | --- |
-| `GET /health` | none | `{ ok: true, service: "dubit-backend", schemaVersion: 1 }`. Constants only. |
+| `GET /health` | none | `{ ok: true, service: "dubby-backend", schemaVersion: 1 }`. Constants only. |
 | `GET /coach/characters` | none | Unchanged. |
 | `POST /coach/session-token` | Bearer | Unchanged body and response. 401 before any provider call; 400, 404, 503 as before. |
 | `POST /coach/reply` | Bearer | Same. Still served by the baseline coach code (see Known gaps). |

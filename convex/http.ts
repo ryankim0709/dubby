@@ -41,7 +41,7 @@ const http = httpRouter();
 http.route({
   path: "/health",
   method: "GET",
-  handler: httpActionGeneric(async () => json(200, { ok: true, service: "dubit-backend", schemaVersion: SCHEMA_VERSION })),
+  handler: httpActionGeneric(async () => json(200, { ok: true, service: "dubby-backend", schemaVersion: SCHEMA_VERSION })),
 });
 
 registerTutoringRoutes(http);

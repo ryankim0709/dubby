@@ -10,7 +10,7 @@ import type { TutoringRecord } from "./tutoringRecords";
 
 /** Guides Supermemory's memory extraction; the API caps it at 1500 characters. */
 const supportingContext =
-  "Notes about one DubIt learner, who practises a language by dubbing short movie lines. Remember recurring " +
+  "Notes about one Dubby learner, who practises a language by dubbing short movie lines. Remember recurring " +
   "word difficulties, practised lines, and the learner's stated goals and preferences. The notes carry no scores; " +
   "do not infer proficiency levels or general grammar ability from repeated movie dialogue.";
 
@@ -37,7 +37,8 @@ export async function sha256Hex(text: string): Promise<string> {
 /**
  * One Supermemory namespace per learner isolates their memories. It comes only from the authenticated
  * subject, keyed by a server secret so the provider never sees the raw identity and can't reverse it.
- * Namespaces allow letters, digits, "_", ":" and "-", up to 100 characters.
+ * Namespaces allow letters, digits, "_", ":" and "-", up to 100 characters. The "dubit" prefix is from the
+ * app's former name; changing it would orphan every learner's stored memories.
  */
 export async function learnerNamespace(subject: string, secret: string): Promise<string> {
   const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);

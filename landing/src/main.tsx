@@ -7,7 +7,7 @@ import './styles.css';
 const rootElement: HTMLElement | null = document.getElementById('root');
 
 if (rootElement === null) {
-  throw new Error('Cannot mount DubIt: the root element is missing from index.html.');
+  throw new Error('Cannot mount Dubby: the root element is missing from index.html.');
 }
 
 createRoot(rootElement).render(

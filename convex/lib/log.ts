@@ -19,7 +19,7 @@ export type LogEvent = {
  * codes so a tokens, keys, audio, or transcript text can't be logged by accident.
  */
 export function logEvent(event: LogEvent): void {
-  const line = JSON.stringify({ app: "dubit-backend", ...event });
+  const line = JSON.stringify({ app: "dubby-backend", ...event });
   if (event.status === "failed" || event.status === "retrying") console.warn(line);
   else console.log(line);
 }

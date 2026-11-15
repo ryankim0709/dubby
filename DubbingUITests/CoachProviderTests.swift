@@ -4,11 +4,11 @@ import XCTest
 final class CoachProviderTests: DubbingUITestCase {
     private func launchCoach(fault: String?) throws {
         try XCTSkipUnless(
-            ProcessInfo.processInfo.environment["DUBIT_QA_COACH_DEV"] == "1",
-            "Blocked: needs a Convex development deployment with the backend OpenAI key configured, a test identity, and an app built with COACH_BACKEND_URL pointing at it (Convex Backend DUBB-4, Tutoring DUBB-3). Run with TEST_RUNNER_DUBIT_QA_COACH_DEV=1 once it exists."
+            ProcessInfo.processInfo.environment["DUBBY_QA_COACH_DEV"] == "1",
+            "Blocked: needs a Convex development deployment with the backend OpenAI key configured, a test identity, and an app built with COACH_BACKEND_URL pointing at it (Convex Backend DUBB-4, Tutoring DUBB-3). Run with TEST_RUNNER_DUBBY_QA_COACH_DEV=1 once it exists."
         )
         if let fault {
-            app.launchArguments += ["-DUBIT_QA_COACH_FAULT", fault]
+            app.launchArguments += ["-DUBBY_QA_COACH_FAULT", fault]
         }
         app.launch()
         tap("talkToCoach")

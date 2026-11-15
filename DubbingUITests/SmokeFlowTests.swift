@@ -41,8 +41,8 @@ final class SmokeFlowTests: DubbingUITestCase {
 
         app.terminate()
         app.launchArguments = [
-            "-DUBIT_DEMO_SCENE", DemoScene.sceneID,
-            "-DUBIT_AUDIO_FIXTURE", DemoScene.audioFixture,
+            "-DUBBY_DEMO_SCENE", DemoScene.sceneID,
+            "-DUBBY_AUDIO_FIXTURE", DemoScene.audioFixture,
         ]
         app.launch()
         tap("tab-myDubs")

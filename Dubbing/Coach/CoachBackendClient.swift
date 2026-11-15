@@ -93,7 +93,7 @@ nonisolated protocol CoachTutorService: Sendable {
     func forgetMemory() async throws -> Int
 }
 
-/// Talks to the DubIt Convex backend, which holds the OpenAI and LiveAvatar keys. The device
+/// Talks to the Dubby Convex backend, which holds the OpenAI and LiveAvatar keys. The device
 /// sends only the learner's Convex auth token and receives only short-lived avatar session tokens.
 nonisolated struct CoachBackendClient: CoachTutorService {
     let baseURL: URL

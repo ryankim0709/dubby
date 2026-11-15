@@ -3,7 +3,7 @@
 
 Usage: python3 scripts/demo-scenes/measure_scene.py SCENE_DIR CACHE_DIR
 
-CACHE_DIR is the prepare script's download cache (default ~/.cache/dubit-demo-scenes/<sceneId>). This is a
+CACHE_DIR is the prepare script's download cache (default ~/.cache/dubby-demo-scenes/<sceneId>). This is a
 quality-assurance tool, not part of the build. It needs numpy and ffmpeg and reports:
 
 1. Score check: per 0.2 s block of the shipped background, level, spectral flatness and tonal prominence,

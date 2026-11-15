@@ -38,7 +38,7 @@ describe("password auth", () => {
 
     const [headerText, claimsText, signatureText] = session.token.split(".");
     const claims = JSON.parse(new TextDecoder().decode(base64UrlDecode(claimsText)));
-    expect(claims).toMatchObject({ iss: SITE_URL, aud: "dubit" });
+    expect(claims).toMatchObject({ iss: SITE_URL, aud: "dubby" });
     expect(claims.exp).toBeGreaterThan(claims.iat);
     expect(session.expiresAt).toBe(claims.exp * 1000);
 
