@@ -5,7 +5,15 @@ import { AZURE_PROVIDER_NAME, EVALUATOR_CONFIG_VERSION } from "./assessment";
 import { createAzureEngine } from "./integrations/azureEngine";
 import { AssessmentError, assessmentOutcomeSchema } from "./integrations/contracts";
 import { validateOutcome } from "./lib/outcome";
-import { type World, drain, fixtureText, record, startWorld } from "./test.helpers";
+import { type World, doubles, drain, fixtureText, record, startWorld } from "./test.helpers";
+
+// The Azure engine is the real one; the coaching side is whatever the test plugs in, so these tests
+// hold whichever coaching provider the deployment registers.
+vi.mock("./integrations/providers", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./integrations/providers")>();
+  const { doubles: current } = await import("./test.helpers");
+  return { ...actual, getCoachingProvider: () => current.coach };
+});
 
 // Every Azure response here is a synthetic fixture served by a fake fetch; no request leaves the test.
 
@@ -144,6 +152,7 @@ describe("assessment jobs with the Azure engine configured", () => {
 
   beforeEach(async () => {
     vi.useFakeTimers();
+    doubles.coach = null;
     vi.stubEnv("AZURE_SPEECH_KEY", KEY);
     vi.stubEnv("AZURE_SPEECH_REGION", "eastus");
     fetchMock = vi.fn(async () => reply(200, success()));
