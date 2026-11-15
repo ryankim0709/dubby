@@ -28,7 +28,7 @@ struct CloudProgressSection: View {
                     EmptyStateView(systemImage: "exclamationmark.triangle", title: "Couldn't load coach progress", message: message)
                         .accessibilityIdentifier("cloudProgressFailed")
                     Button("Try again") { Task { await model.refresh() } }
-                        .buttonStyle(OutlineCapsuleButtonStyle())
+                        .buttonStyle(.dubSecondary)
                         .accessibilityIdentifier("cloudProgressRetry")
                 }
             case .loaded(let series) where series.isEmpty:
