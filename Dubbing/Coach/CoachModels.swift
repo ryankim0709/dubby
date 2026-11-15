@@ -140,6 +140,15 @@ nonisolated enum CoachConversation {
         return text.isEmpty ? nil : text
     }
 
+    /// What to tell the learner when a reply came without a voice. The text is still the coach's reply.
+    static func voiceUnavailableMessage(for error: ReplyAudioError?) -> String {
+        switch error?.code {
+        case "provider_timeout": "The coach's voice took too long, so this reply is text only."
+        case "provider_failed": "The coach's voice didn't work this time, so this reply is text only."
+        default: "The coach's voice isn't available for this reply, so it is shown as text."
+        }
+    }
+
     /// LiveAvatar takes a two-letter language for the avatar's voice, such as "es" for es-ES.
     static func avatarLanguageCode(for language: SpokenLanguage) -> String {
         Locale(identifier: language.identifier).language.languageCode?.identifier ?? language.identifier

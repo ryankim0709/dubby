@@ -31,13 +31,14 @@ struct CoachTests {
         #expect(throws: DecodingError.self) { try decode(#"{"state":"no type"}"#) }
     }
 
-    @Test func replyAudioIsSplitIntoBoundedOneSecondChunks() throws {
-        let chunks = try LiveAvatarAudio.chunks(of: Data(count: 120_000))
-        #expect(chunks.map(\.count) == [48_000, 48_000, 24_000])
-        #expect(throws: CoachError.self) { try LiveAvatarAudio.chunks(of: Data()) }
-        #expect(throws: CoachError.self) { try LiveAvatarAudio.chunks(of: Data(count: 7)) }
-        #expect(throws: CoachError.self) { try LiveAvatarAudio.chunks(of: Data(count: LiveAvatarAudio.maximumBytes + 2)) }
-        #expect(try LiveAvatarAudio.chunks(of: Data(count: LiveAvatarAudio.maximumBytes)).count == 60)
+    @Test func replyChunksAreCheckedBeforeAnythingIsSent() throws {
+        try LiveAvatarAudio.validate(chunks: [Data(count: 48_000), Data(count: 24_000)])
+        #expect(throws: CoachError.self) { try LiveAvatarAudio.validate(chunks: []) }
+        #expect(throws: CoachError.self) { try LiveAvatarAudio.validate(chunks: [Data()]) }
+        #expect(throws: CoachError.self) { try LiveAvatarAudio.validate(chunks: [Data(count: 7)]) }
+        #expect(throws: CoachError.self) { try LiveAvatarAudio.validate(chunks: [Data(count: 48_002)]) }
+        #expect(throws: CoachError.self) { try LiveAvatarAudio.validate(chunks: Array(repeating: Data(count: 48_000), count: 61)) }
+        try LiveAvatarAudio.validate(chunks: Array(repeating: Data(count: 48_000), count: 60))
     }
 
     @Test func chunksAreSentNoMoreThanTheLeadAheadOfPlayback() {
@@ -46,16 +47,32 @@ struct CoachTests {
     }
 
     @Test func replyAudioMustBeThePcmFormatTheSocketAccepts() throws {
-        let good = ReplyAudio(format: "pcm_s16le_24khz_mono", base64: Data([0, 1]).base64EncodedString(), aiGenerated: true)
-        #expect(try good.pcm() == Data([0, 1]))
-        #expect(throws: CoachError.self) { try ReplyAudio(format: "mp3", base64: "AAA=", aiGenerated: true).pcm() }
-        #expect(throws: CoachError.self) { try ReplyAudio(format: "pcm_s16le_24khz_mono", base64: "not base64!", aiGenerated: true).pcm() }
+        func audio(format: String = "pcm_s16le", rate: Int = 24_000, chunks: [String]) -> ReplyAudio {
+            ReplyAudio(format: format, sampleRateHz: rate, channels: 1, chunks: chunks, durationMs: 1, aiGenerated: true)
+        }
+        let samples = Data([0, 1, 2, 3]).base64EncodedString()
+        #expect(try audio(chunks: [samples]).pcmChunks() == [Data([0, 1, 2, 3])])
+        #expect(throws: CoachError.self) { try audio(format: "mp3", chunks: [samples]).pcmChunks() }
+        #expect(throws: CoachError.self) { try audio(rate: 16_000, chunks: [samples]).pcmChunks() }
+        #expect(throws: CoachError.self) { try audio(chunks: ["not base64!"]).pcmChunks() }
+        #expect(throws: CoachError.self) { try audio(chunks: []).pcmChunks() }
     }
 
     @Test func aReplyWithAudioDecodesItsVoice() throws {
-        let reply = try decodeReply(#"{"text":"Hi","audio":{"format":"pcm_s16le_24khz_mono","base64":"AAA=","aiGenerated":true}}"#)
+        let reply = try decodeReply(#"{"text":"Hi","audio":{"format":"pcm_s16le","sampleRateHz":24000,"channels":1,"chunks":["AAA="],"durationMs":2083,"aiGenerated":true}}"#)
         #expect(reply.audio?.aiGenerated == true)
+        #expect(reply.audio?.chunks == ["AAA="])
+        #expect(reply.audioError == nil)
         #expect(try decodeReply(#"{"text":"Hi"}"#).audio == nil)
+    }
+
+    @Test func aReplyWhoseVoiceFailedKeepsItsTextAndSaysWhy() throws {
+        let reply = try decodeReply(#"{"text":"Hi","audio":null,"audioError":{"code":"provider_timeout"}}"#)
+        #expect(reply.text == "Hi")
+        #expect(reply.audio == nil)
+        #expect(reply.audioError?.code == "provider_timeout")
+        #expect(CoachConversation.voiceUnavailableMessage(for: reply.audioError).contains("too long"))
+        #expect(CoachConversation.voiceUnavailableMessage(for: ReplyAudioError(code: "provider_failed")).contains("didn't work"))
     }
 
     // MARK: Avatar socket
@@ -108,7 +125,7 @@ struct CoachTests {
         let transport = FakeTransport()
         let socket = LiveAvatarSocket(transport: transport)
         await socket.start()
-        await #expect(throws: CoachError.avatarDisconnected) { try await socket.speak(Data(count: 4)) }
+        await #expect(throws: CoachError.avatarDisconnected) { try await socket.speak(chunks: [Data(count: 4)]) }
         #expect(await transport.sent.isEmpty)
         await socket.close()
     }
@@ -116,7 +133,7 @@ struct CoachTests {
     @Test func aReplyIsSentAsChunksThenSealed() async throws {
         let transport = FakeTransport()
         let socket = await connectedSocket(transport)
-        try await socket.speak(Data(count: 120_000))
+        try await socket.speak(chunks: [Data(count: 48_000), Data(count: 48_000), Data(count: 24_000)])
         #expect(try await transport.sentTypes() == ["agent.speak", "agent.speak", "agent.speak", "agent.speak_end"])
         await socket.close()
     }
@@ -124,7 +141,7 @@ struct CoachTests {
     @Test func interruptingStopsTheChunksStillWaitingToBeSent() async throws {
         let transport = FakeTransport()
         let socket = await connectedSocket(transport)
-        let speaking = Task { try await socket.speak(Data(count: 6 * 48_000)) }
+        let speaking = Task { try await socket.speak(chunks: Array(repeating: Data(count: 48_000), count: 6)) }
         while try await transport.sentTypes().count < 3 { await Task.yield() }
         try await socket.interrupt()
         try await speaking.value
