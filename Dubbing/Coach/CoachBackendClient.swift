@@ -147,6 +147,19 @@ nonisolated struct CoachBackendClient: CoachTutorService {
         return reply
     }
 
+    /// Opens a live tutor session about one of the learner's scored dubs. The backend reads the dub's score sheet
+    /// itself; the app sends only which dub.
+    func liveTutorSession(clientDubID: String) async throws -> LiveTutorGrant {
+        struct Body: Encodable { let clientDubId: String }
+        let operation = "Starting your tutor"
+        let request = try ServiceRequest.json(method: "POST", url: baseURL.appending(path: "tutor/live-session"), body: Body(clientDubId: clientDubID), headers: [:])
+        let grant = try await send(request, as: LiveTutorGrant.self, operation: operation)
+        guard !grant.clientSecret.isEmpty, !grant.model.isEmpty else {
+            throw CoachError.invalidResponse(operation: operation, reason: "the session had no key or model")
+        }
+        return grant
+    }
+
     func progress(locale: String?) async throws -> CoachProgress {
         try await send(get("tutor/progress", locale: locale), as: CoachProgress.self, operation: "Loading your progress")
     }

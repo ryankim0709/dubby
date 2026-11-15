@@ -5,6 +5,7 @@ import SwiftUI
 struct DubScoreCard: View {
     let state: DubScoringModel.State?
     let onRetry: () -> Void
+    let onPractise: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -75,6 +76,17 @@ struct DubScoreCard: View {
         Text("Scored on the words you said and how well each take fit its line. Pronunciation isn't scored yet.")
             .dubFont(12, weight: .regular)
             .foregroundStyle(Palette.textSecondary)
+        // The tutor works from scored lines and silent takes; failures and unsupported languages give it nothing to practise.
+        if sheet.lines.contains(where: { $0.status == .scored || $0.reason == "no_speech" }) {
+            Button(action: onPractise) {
+                Label("Practise with your tutor", systemImage: "waveform")
+            }
+            .buttonStyle(SecondaryButtonStyle())
+            .accessibilityIdentifier("practiseWithTutor")
+            Text("A live AI tutor talks you through these lines. Your voice is sent to OpenAI during the call.")
+                .dubFont(12, weight: .regular)
+                .foregroundStyle(Palette.textSecondary)
+        }
     }
 }
 

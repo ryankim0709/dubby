@@ -45,6 +45,8 @@ struct DubResultView: View {
     let onDone: () -> Void
     @State private var phase: ExportPhase = .filteringDialogue
     @State private var savedDubID: UUID?
+    @State private var tutor: LiveTutorSession?
+    @State private var tutorUnavailable: String?
     @State private var attempt = 0
     @State private var exportTask: Task<Void, Never>?
     @State private var saveFailed = false
@@ -154,6 +156,11 @@ struct DubResultView: View {
         }
         .onDisappear { exportTask?.cancel() }
         .sheet(item: $clubDraft) { draft in ClubComposer(account: account, draft: draft, onShared: {}) }
+        .fullScreenCover(isPresented: Binding(get: { tutor != nil }, set: { if !$0 { tutor = nil } })) {
+            if let tutor {
+                LiveTutorView(session: tutor)
+            }
+        }
     }
 
     private var header: some View {
@@ -224,7 +231,12 @@ struct DubResultView: View {
                 .foregroundStyle(Palette.streak)
                 .accessibilityIdentifier("dubTrimNotice")
             }
-            DubScoreCard(state: scoringState, onRetry: retryScoring)
+            DubScoreCard(state: scoringState, onRetry: retryScoring, onPractise: startTutor)
+            if let tutorUnavailable {
+                Text(tutorUnavailable)
+                    .dubFont(14, weight: .regular)
+                    .foregroundStyle(Palette.streak)
+            }
             TakeSummaryView(measurements: measurements)
         }
     }
@@ -237,6 +249,18 @@ struct DubResultView: View {
     private func retryScoring() {
         guard let savedDubID else { return }
         scoring?.retry(dubID: savedDubID)
+    }
+
+    /// The tutor reads the same dub the scoring model submitted, keyed by its lowercased id.
+    private func startTutor() {
+        guard let savedDubID else { return }
+        do {
+            let backend = try CoachBackendClient.configured(in: .main, tokens: AccountTokenProvider(account: account))
+            tutorUnavailable = nil
+            tutor = LiveTutorSession(clientDubID: savedDubID.uuidString.lowercased(), backend: backend)
+        } catch {
+            tutorUnavailable = error.localizedDescription
+        }
     }
 
     private func startExport() {
