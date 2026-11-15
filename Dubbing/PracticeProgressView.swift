@@ -4,6 +4,8 @@ import SwiftUI
 struct PracticeProgressView: View {
     let dubs: LoadState<[SavedDub]>
     let folder: URL
+    let account: AccountModel
+    let onAccount: () -> Void
     let onRetry: () -> Void
 
     var body: some View {
@@ -13,6 +15,17 @@ struct PracticeProgressView: View {
                     .dubFont(24, weight: .semibold)
                     .foregroundStyle(Palette.textPrimary)
                     .padding(.top, 8)
+                if account.phase.isSignedIn {
+                    CloudProgressSection(account: account)
+                    Text("On this device")
+                        .dubFont(18, weight: .semibold)
+                        .foregroundStyle(Palette.textPrimary)
+                        .accessibilityAddTraits(.isHeader)
+                } else if account.isAvailable {
+                    Button("Sign in to see your coach's progress", action: onAccount)
+                        .buttonStyle(OutlineCapsuleButtonStyle())
+                        .accessibilityIdentifier("progressSignIn")
+                }
                 LoadStateContent(state: dubs, failureIdentifier: "progressLoadFailed", retry: onRetry) { dubs in
                     if dubs.isEmpty {
                         EmptyStateView(
