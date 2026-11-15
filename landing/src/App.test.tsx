@@ -58,6 +58,16 @@ describe('page structure', (): void => {
   });
 });
 
+describe('coaching copy', (): void => {
+  test('separates written tips from measurements', (): void => {
+    render(<App />);
+
+    const section: HTMLElement = document.getElementById('coaching') as HTMLElement;
+    expect(section.textContent).toMatch(/a tip is advice, not a measurement/);
+    expect(section.textContent).toMatch(/not a pronunciation score/);
+  });
+});
+
 describe('illustrations are labeled', (): void => {
   test('the hero illustration says it is not a recording', (): void => {
     render(<App />);

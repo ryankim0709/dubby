@@ -74,5 +74,6 @@ describe('destinations', (): void => {
       /testimonial|\d[\d,.]*\s?(users|learners|downloads)|\brated\b|\bstars?\b/i,
     );
     expect(text).not.toMatch(/clon(e|ing)|deepfake|actor.?s voice/i);
+    expect(text).not.toMatch(/claude|anthropic|openai|chatgpt|\bgpt\b|\bllm\b|powered by ai/i);
   });
 });

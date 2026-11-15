@@ -18,7 +18,7 @@ const signals = [
 ] as const;
 
 const principles = [
-  'Built from your take. Feedback is meant to come from an assessment of the recording you made, not from a template.',
+  'Built from your take. Feedback is meant to come from an assessment of the recording you made. The written tips explain what that assessment measured: a tip is advice, not a measurement, and matching the script in a transcript is not a pronunciation score.',
   'No invented numbers. When something could not be measured, the app says so instead of guessing.',
   'Unusable audio is not a low grade. A silent or noisy take gets recording tips, not a failing mark.',
   'You are not graded on sounding like the actor. Voice and acting style are not language errors.',
