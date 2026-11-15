@@ -177,7 +177,7 @@ nonisolated enum DubProduction {
             section: setup.section,
             dialogueSuppressed: filtered,
             placements: placements,
-            suppressionSpans: ScriptBuilder.suppressionSpans(placements: placements, padding: rules.suppressionPadding, sectionDuration: setup.section.duration),
+            suppressionSpans: SocialAudioProtection.subtract(setup.protectedAudioSpans, from: ScriptBuilder.suppressionSpans(placements: placements, padding: rules.suppressionPadding, sectionDuration: setup.section.duration)),
             decisions: TakeDecision.decide(lines: setup.script.lines, takes: takes, boundary: .nextLineOfAnyone, sceneDuration: setup.section.duration, rules: rules),
             rules: rules
         )

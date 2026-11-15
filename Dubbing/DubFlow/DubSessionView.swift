@@ -22,6 +22,7 @@ private struct PendingTake {
 /// The real dubbing studio: hear each original line, then record yours along with the muted video.
 struct DubSessionView: View {
     let setup: DubSetup
+    let requiredKeptLines: Int
     let onFinish: ([Int: RecordedTake]) -> Void
     @State private var player: SegmentPlayer
     @State private var recorder = TakeRecorder()
@@ -47,9 +48,11 @@ struct DubSessionView: View {
 
     private static let logger = Logger(subsystem: "com.ryankim.Dubbing", category: "studio")
 
-    init(setup: DubSetup, onFinish: @escaping ([Int: RecordedTake]) -> Void) {
+    init(setup: DubSetup, initialTakes: [Int: RecordedTake], requiredKeptLines: Int, onFinish: @escaping ([Int: RecordedTake]) -> Void) {
         self.setup = setup
+        self.requiredKeptLines = requiredKeptLines
         self.onFinish = onFinish
+        _takes = State(initialValue: initialTakes)
         _player = State(initialValue: SegmentPlayer(url: setup.clip.url))
     }
 
@@ -84,6 +87,11 @@ struct DubSessionView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     progress
+                    if requiredKeptLines > 1 && takes.count < requiredKeptLines {
+                        Text("Keep all \(requiredKeptLines) lines to finish this co-dub.")
+                            .dubFont(14, weight: .regular)
+                            .foregroundStyle(Palette.textSecondary)
+                    }
                     if let cueLine {
                         cue(cueLine)
                     }
@@ -143,7 +151,7 @@ struct DubSessionView: View {
                     stopActivity()
                     onFinish(takes)
                 }
-                .disabled(takes.isEmpty || activity != .idle || pending != nil)
+                .disabled(takes.count < requiredKeptLines || activity != .idle || pending != nil)
                 .accessibilityIdentifier("finishDub")
             }
         }

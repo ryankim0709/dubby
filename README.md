@@ -30,6 +30,8 @@ The app dubs real scenes end to end on the iPhone, with no sample data. Clips pl
 
 Progress shows a streak and totals computed from saved dubs. Inbox contains a Whop sandbox Dub Clubs demo: `demo` (Alex) and `demo1` (Sam) can dub the licensed bridge challenge, share videos privately, and give spoken feedback.
 
+Feed and Inbox support friends and asynchronous co-dubs: add a friend by username, finish your character's lines, invite them to another role, and watch the combined result. Private invite links can also be claimed by one signed-in learner. Both performers approve before a co-dub appears in their friends' feeds. Setup and privacy boundaries are in [Social dubbing](docs/social-dubbing.md).
+
 When the build has a Convex URL, the app opens on a sign-in page: learners sign in or create an account with a username and password, stored in Convex. The shared demo logins use the username as the password: `demo`, `demo1`, `maya`, `theo`, and `jordan`. `scripts/seed-demo-progress.mjs` gives them weeks of scored dubs to show on the Progress tab. Setup is in [docs/convex-backend.md](docs/convex-backend.md).
 
 Discover also opens a talking coach. You pick a scene character as your teacher and talk to them in the language you're practising; they answer as a talking video face. The coach's code is in place, but it hasn't run end to end yet because it needs provider keys, a Convex deployment, and an avatar per character. See [Talking coach](#talking-coach).

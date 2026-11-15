@@ -240,6 +240,19 @@ http.route({
 });
 
 const audioPath = /^\/media\/attempts\/([^/]+)\/audio$/;
+http.route({
+  pathPrefix: "/social/media/",
+  method: "GET",
+  handler: httpAction(async (ctx, request) => {
+    if (!(await isSignedIn(ctx))) return unauthenticated("social.media");
+    const rawId = new URL(request.url).pathname.slice("/social/media/".length);
+    const asset = await ctx.runQuery(internal.social.media, { rawId });
+    if (asset === null) return json(404, { error: "This video isn't shared with your account" });
+    const blob = await ctx.storage.get(asset.storageId);
+    if (blob === null) return json(404, { error: "The shared video is missing" });
+    return new Response(blob, { headers: { "Content-Type": "video/mp4", "Cache-Control": "private, no-store" } });
+  }),
+});
 const rangeHeader = /^bytes=(\d*)-(\d*)$/;
 
 /** Streams a recording to its owner. Range requests are supported so AVPlayer can seek. */

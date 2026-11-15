@@ -1,14 +1,24 @@
+import Combine
+import ConvexMobile
 import SwiftUI
 
 struct ContentView: View {
     let account: AccountModel
     let scoring: DubScoringModel?
+    @Binding var pendingCoDubCode: String?
     @State private var tab: AppTab = LaunchConfiguration.current.opensClubs ? .messages : .discover
     @State private var clips: LoadState<[LibraryClip]> = .loading
     @State private var dubs: LoadState<[SavedDub]> = .loading
     @State private var launch: DubFlowLaunch?
     @State private var isCoachPresented = false
     @State private var isAccountPresented = false
+    @State private var social: LoadState<SocialSnapshot> = .loading
+    @State private var socialRefresh = UUID()
+    @State private var isFriendsPresented = false
+    @State private var selectedRoom: SocialRoomSelection?
+    @State private var pendingSocialLaunch: SocialDubLaunch?
+    @State private var socialIssue: String?
+    @State private var inboxSection: InboxSection = .clubs
 
     private let libraryFolder = DubLibrary.defaultFolder
     private let history = LocalDubHistory(folder: DubLibrary.defaultFolder)
@@ -24,13 +34,13 @@ struct ContentView: View {
                 DiscoverView(clips: clips, streakDays: streakDays, onDub: { launch = .scene($0) }, isSignedIn: account.phase.isSignedIn, onTalkToCoach: { isCoachPresented = true }, onAccount: { isAccountPresented = true }, onRetry: reloadClips)
             }
             Tab("Feed", systemImage: "play.rectangle.on.rectangle.fill", value: AppTab.feed) {
-                CommunityFeedView(onCreate: { launch = .chooseScene })
+                CommunityFeedView(account: account, state: social, onAccount: { isAccountPresented = true }, onRetry: { socialRefresh = UUID() }, onFriends: { isFriendsPresented = true }, onCreate: { launch = .chooseScene })
             }
             Tab("Create", systemImage: "plus.circle.fill", value: AppTab.create) {
                 Color.clear
             }
             Tab("Inbox", systemImage: "tray.fill", value: AppTab.messages) {
-                NavigationStack { MessagesView(account: account, scoring: scoring) }
+                NavigationStack { MessagesView(account: account, scoring: scoring, section: $inboxSection, state: social, onAccount: { isAccountPresented = true }, onRetry: { socialRefresh = UUID() }, onFriends: { isFriendsPresented = true }, onOpenRoom: { selectedRoom = SocialRoomSelection(id: $0) }) }
             }
             Tab("Shelf", systemImage: "books.vertical.fill", value: AppTab.myDubs) {
                 NavigationStack {
@@ -53,11 +63,54 @@ struct ContentView: View {
         .sheet(isPresented: $isAccountPresented) {
             AccountView(account: account, onClose: { isAccountPresented = false })
         }
+        .sheet(isPresented: $isFriendsPresented) {
+            FriendsView(account: account, state: social, onAccount: { isFriendsPresented = false; isAccountPresented = true }, onRetry: { socialRefresh = UUID() }, onClose: { isFriendsPresented = false })
+        }
+        .sheet(item: $selectedRoom, onDismiss: startPendingSocialDub) { selection in
+            SocialRoomView(id: selection.id, account: account, viewerId: socialViewerId, onDub: { pendingSocialLaunch = $0; selectedRoom = nil }, onShowFeed: { selectedRoom = nil; tab = .feed }, onClose: { selectedRoom = nil })
+        }
+        .alert("Couldn't open the invitation", isPresented: socialIssuePresented) { Button("OK") { socialIssue = nil } } message: { Text(socialIssue ?? "") }
+        .task(id: socialRefresh) { await watchSocial() }
+        .task(id: pendingCoDubCode) { await openIncomingInvite() }
         .task {
             await loadDubs()
             await loadClips()
         }
         .preferredColorScheme(.dark)
+    }
+
+    private var socialViewerId: String? {
+        guard case .loaded(let snapshot) = social else { return nil }
+        return snapshot.me.id
+    }
+
+    private var socialIssuePresented: Binding<Bool> { Binding(get: { socialIssue != nil }, set: { if !$0 { socialIssue = nil } }) }
+
+    private func startPendingSocialDub() {
+        if let pendingSocialLaunch {
+            launch = .social(pendingSocialLaunch)
+            self.pendingSocialLaunch = nil
+        }
+    }
+
+    private func watchSocial() async {
+        guard account.phase.isSignedIn, let client = account.convexClient else { social = .failed(SocialError.signInRequired.localizedDescription); return }
+        do {
+            for try await snapshot in client.subscribe(to: "social:snapshot", yielding: SocialSnapshot.self).values { social = .loaded(snapshot) }
+        } catch is CancellationError { return }
+        catch { social = .failed(error.localizedDescription) }
+    }
+
+    private func openIncomingInvite() async {
+        guard let code = pendingCoDubCode, account.phase.isSignedIn else { return }
+        do {
+            let id = try await SocialBackendClient.configured(account: account).redeem(code: code)
+            pendingCoDubCode = nil
+            tab = .messages
+            inboxSection = .coDubs
+            selectedRoom = SocialRoomSelection(id: id)
+        } catch is CancellationError { return }
+        catch { pendingCoDubCode = nil; socialIssue = error.localizedDescription }
     }
 
     private var tabSelection: Binding<AppTab> {
@@ -108,5 +161,5 @@ struct ContentView: View {
 }
 
 #Preview {
-    ContentView(account: AccountModel(service: nil), scoring: nil)
+    ContentView(account: AccountModel(service: nil), scoring: nil, pendingCoDubCode: .constant(nil))
 }
