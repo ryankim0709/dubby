@@ -10,8 +10,7 @@ struct DubbingApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
-                .environment(account)
+            ContentView(account: account)
         }
     }
 }
