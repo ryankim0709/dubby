@@ -263,6 +263,10 @@ Setup: `OPENAI_API_KEY` on the Convex deployment, plus the `COACH_BACKEND_URL` b
 
 Not verified yet: no call has run against OpenAI, and audio, echo cancellation, interruptions and Bluetooth routes need an actual iPhone.
 
+### Take coach
+
+In the studio, a hologram of the character pops up after every take. It shows timing measured on the phone at once: no voice, came in early, late, long or short, or on cue. Meanwhile the take goes to a Realtime session opened with `POST /tutor/take-coach`. The model listens to it beside the line's text and the timing, calls `suggest_next_step` with retry or keep and a one-sentence tip, and then says the tip aloud. The suggested button is ringed; the learner accepts or declines it with Retry or Keep. One session serves a whole studio visit, and the app asks for every response itself, so the session never hears the open microphone. Takes recorded from UI-test fixture audio are never sent. Code: `Dubbing/LiveTutor/TakeCoach.swift`, `TakeTiming.swift` and `TakeCoachPopup.swift`.
+
 ## Planned cloud architecture
 
 The iPhone will own the interface, audio recording, playback, line timing, audio mixing, MP4 export, and native sharing. Local drafts and recordings should remain available while cloud processing is in progress.

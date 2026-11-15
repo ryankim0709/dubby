@@ -160,6 +160,19 @@ nonisolated struct CoachBackendClient: CoachTutorService {
         return grant
     }
 
+    /// Opens the studio's take coach for one scene; the character's name sets the coach's persona.
+    func takeCoachSession(sceneTitle: String, characterName: String, locale: String) async throws -> LiveTutorGrant {
+        struct Body: Encodable { let sceneTitle: String; let characterName: String; let locale: String }
+        let operation = "Starting your take coach"
+        let body = Body(sceneTitle: sceneTitle, characterName: characterName, locale: locale)
+        let request = try ServiceRequest.json(method: "POST", url: baseURL.appending(path: "tutor/take-coach"), body: body, headers: [:])
+        let grant = try await send(request, as: LiveTutorGrant.self, operation: operation)
+        guard !grant.clientSecret.isEmpty, !grant.model.isEmpty else {
+            throw CoachError.invalidResponse(operation: operation, reason: "the session had no key or model")
+        }
+        return grant
+    }
+
     func progress(locale: String?) async throws -> CoachProgress {
         try await send(get("tutor/progress", locale: locale), as: CoachProgress.self, operation: "Loading your progress")
     }

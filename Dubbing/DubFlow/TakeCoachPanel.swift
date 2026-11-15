@@ -137,7 +137,7 @@ struct TakeCoachPanel: View {
     private var message: String {
         switch measurement.level {
         case .silent: "The microphone heard no voice. Check it isn't covered, then record again."
-        case .quiet: "Your take is quiet. Move a little closer to the microphone and try again."
+        case .quiet: TakeMeasurement.quietAdvice
         case .clear, nil:
             if let overrun = measurement.overrunSeconds {
                 String(format: "Your take runs %.1f seconds past its window. Try a slightly quicker read so the ending stays in your dub.", overrun)
@@ -191,4 +191,9 @@ struct TakeCoachPanel: View {
             .fixedSize(horizontal: false, vertical: true)
             .accessibilityLabel(text)
     }
+}
+
+extension TakeMeasurement {
+    /// Shared by the measurement card and the take coach pop-up.
+    static let quietAdvice = "Your take is quiet. Move a little closer to the microphone and try again."
 }

@@ -8,7 +8,7 @@ import { ConfigurationError, requiredEnv } from "./lib/env";
 import { logEvent } from "./lib/log";
 import { createOpenAIClient } from "./lib/openai";
 import { createSessionToken, LiveAvatarError, sandboxAvatarId } from "./liveAvatar";
-import { createTutorSecret, LiveTutorError, practicePlan, realtimeModelId, scoreSheetRef, tutorInstructions } from "./liveTutor";
+import { createTakeCoachSecret, createTutorSecret, LiveTutorError, practicePlan, realtimeModelId, scoreSheetRef, takeCoachInstructions, tutorInstructions } from "./liveTutor";
 import { tutoringRefs } from "./tutoringRefs";
 import { composeReply } from "./tutoringReply";
 import { api } from "./_generated/api";
@@ -52,6 +52,12 @@ const replyRequest = z.object({
 const preferencesRequest = z.object({ preferences: z.unknown(), expectedVersion: z.number().int().min(0) });
 
 const liveSessionRequest = z.object({ clientDubId: z.uuid() });
+
+const takeCoachRequest = z.object({
+  sceneTitle: z.string().trim().min(1).max(200),
+  characterName: z.string().trim().min(1).max(200),
+  locale: z.string().regex(/^[a-z]{2,3}-[A-Z]{2}$/),
+});
 
 type ActionCtx = GenericActionCtx<GenericDataModel>;
 
@@ -251,6 +257,19 @@ export function registerTutoringRoutes(http: HttpRouter): void {
       }
       const secret = await createTutorSecret(createOpenAIClient(), realtimeModelId(), tutorInstructions(sheet, practicePlan(sheet.lines)));
       logEvent({ operation, status: "ok", httpStatus: 200 });
+      return json(200, secret);
+    }),
+  });
+
+  // The studio's take coach. Scene and character names only set the persona; nothing here is graded.
+  http.route({
+    path: "/tutor/take-coach",
+    method: "POST",
+    handler: authenticated(async (_ctx, request) => {
+      const body = await parseBody(request, takeCoachRequest);
+      if (body instanceof Response) return body;
+      const secret = await createTakeCoachSecret(createOpenAIClient(), realtimeModelId(), takeCoachInstructions(body));
+      logEvent({ operation: "tutor.takeCoach", status: "ok", httpStatus: 200 });
       return json(200, secret);
     }),
   });

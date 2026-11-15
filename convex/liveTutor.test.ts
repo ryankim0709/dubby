@@ -81,3 +81,27 @@ describe("POST /tutor/live-session", () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 });
+
+describe("POST /tutor/take-coach", () => {
+  let fetchSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    vi.stubEnv("OPENAI_API_KEY", "fixture-openai-key-do-not-use");
+    fetchSpy = vi.spyOn(globalThis, "fetch");
+  });
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    fetchSpy.mockRestore();
+  });
+
+  const scene = { sceneTitle: "SYNTHETIC fixture scene", characterName: "Fixture hero", locale: "en-US" };
+
+  it("answers 401 without an identity and 400 for a bad scene, before calling OpenAI", async () => {
+    const t = newBackend();
+    expect((await t.fetch("/tutor/take-coach", post(scene))).status).toBe(401);
+    const a = t.withIdentity(alice);
+    expect((await a.fetch("/tutor/take-coach", post({ ...scene, locale: "English" }))).status).toBe(400);
+    expect((await a.fetch("/tutor/take-coach", post({ ...scene, characterName: "  " }))).status).toBe(400);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+});

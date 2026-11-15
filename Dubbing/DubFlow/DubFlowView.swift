@@ -54,7 +54,7 @@ struct DubFlowView: View {
                     case .script(let request):
                         ScriptReviewView(request: request) { path.append(.studio($0)) }
                     case .studio(let setup):
-                        DubSessionView(setup: setup, initialTakes: [:], requiredKeptLines: completionRoom == nil ? 1 : setup.script.lines(spokenBy: setup.characterID).count) { path.append(.result(setup, $0)) }
+                        DubSessionView(setup: setup, account: account, initialTakes: [:], requiredKeptLines: completionRoom == nil ? 1 : setup.script.lines(spokenBy: setup.characterID).count) { path.append(.result(setup, $0)) }
                     case .result(let setup, let takes):
                         DubResultView(setup: setup, takes: takes, account: account, scoring: scoring, completionRoom: completionRoom, onDone: onClose, onKeepRecording: { path.removeLast() })
                     }

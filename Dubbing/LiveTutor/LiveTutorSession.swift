@@ -133,7 +133,7 @@ final class LiveTutorSession {
             phase = .live(.learnerSpeaking)
         case .learnerStoppedSpeaking:
             phase = .live(.listening)
-        case .tutorAudio(let itemID, let contentIndex, let pcm):
+        case .tutorAudio(_, let itemID, let contentIndex, let pcm):
             let samples = LiveTutorRealtime.samples(fromPCM16: pcm)
             try audio?.play(samples)
             timeline = timeline.scheduling(itemID: itemID, contentIndex: contentIndex, frames: samples.count, at: elapsed)
@@ -145,7 +145,7 @@ final class LiveTutorSession {
             // Errors such as cancelling a reply that already finished don't end the session; a fatal one closes the socket.
             Self.logger.warning("The Realtime API reported an error. code=\(code ?? "none", privacy: .public)")
             notice = message
-        case .learnerTranscript, .learnerTranscriptUnavailable, .tutorTranscript:
+        case .learnerTranscript, .learnerTranscriptUnavailable, .tutorTranscript, .responseCreated, .toolCall:
             break
         }
     }

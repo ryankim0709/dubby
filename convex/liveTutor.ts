@@ -135,6 +135,67 @@ export async function createTutorSecret(client: OpenAI, model: string, instructi
       },
     },
   });
+  return secretFrom(created, model);
+}
+
+function secretFrom(created: OpenAI.Realtime.ClientSecretCreateResponse, model: string): LiveTutorSecret {
   if (created.value.length === 0) throw new LiveTutorError("OpenAI returned an empty Realtime client secret");
   return { clientSecret: created.value, expiresAt: created.expires_at, model };
+}
+
+// The take coach: in the studio, after each recorded line, the character listens to the take and suggests
+// keeping it or trying again. The app sends each take as a message and asks for responses itself, so the
+// session has no turn detection and never hears the open microphone.
+
+export type TakeCoachScene = { sceneTitle: string; characterName: string; locale: string };
+
+/** The app reads the coach's choice from this call's arguments rather than from what it says. */
+export const takeCoachToolName = "suggest_next_step";
+
+export function takeCoachInstructions(scene: TakeCoachScene): string {
+  return [
+    `You are ${scene.characterName} from the scene "${scene.sceneTitle}", coaching a learner who is dubbing your lines in ${scene.locale} inside Dubby, a language-learning app. Stay in character, but never claim to be a real actor.`,
+    "",
+    "Each turn the learner sends one take of one line: the line as written, how its timing measured on their phone, and the recording.",
+    `When asked for a suggestion, listen to the recording, compare it with the line, and call ${takeCoachToolName}:`,
+    '- suggestion "retry" when a word is missing, swapped or hard to understand, a sound or stressed syllable is clearly off, or the timing measurement says the take started or ended noticeably off; otherwise "keep".',
+    "- tip: one sentence of at most twenty words with the single most useful fix, or what they did well when suggesting keep. Quote words from the line as written.",
+    "When asked to speak, say your tip to the learner in one or two short sentences, in English, saying quoted words as they sound in the line's language.",
+    "",
+    "Base pronunciation remarks only on what you hear in the recording. If the recording is unclear, suggest retry and say so. Never state scores or numbers other than the timing you were given.",
+  ].join("\n");
+}
+
+/** Mints a client secret for one studio visit's take coach: no turn detection, and the suggestion tool. */
+export async function createTakeCoachSecret(client: OpenAI, model: string, instructions: string): Promise<LiveTutorSecret> {
+  const created = await client.realtime.clientSecrets.create({
+    expires_after: { anchor: "created_at", seconds: clientSecretTtlSeconds },
+    session: {
+      type: "realtime",
+      model,
+      instructions,
+      output_modalities: ["audio"],
+      audio: {
+        input: { format: { type: "audio/pcm", rate: pcmRateHz }, turn_detection: null },
+        output: { format: { type: "audio/pcm", rate: pcmRateHz }, voice: tutorVoice },
+      },
+      tools: [
+        {
+          type: "function",
+          name: takeCoachToolName,
+          description: "Shows the learner whether to keep this take or record it again, with one tip.",
+          parameters: {
+            type: "object",
+            properties: {
+              suggestion: { type: "string", enum: ["retry", "keep"] },
+              tip: { type: "string" },
+            },
+            required: ["suggestion", "tip"],
+            additionalProperties: false,
+          },
+        },
+      ],
+    },
+  });
+  return secretFrom(created, model);
 }
