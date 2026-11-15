@@ -1,0 +1,99 @@
+/* eslint-disable */
+/**
+ * Generated `api` utility.
+ *
+ * THIS CODE IS AUTOMATICALLY GENERATED.
+ *
+ * To regenerate, run `npx convex dev`.
+ * @module
+ */
+
+import type * as assessments from "../assessments.js";
+import type * as attempts from "../attempts.js";
+import type * as coachCharacters from "../coachCharacters.js";
+import type * as coachReply from "../coachReply.js";
+import type * as crons from "../crons.js";
+import type * as history from "../history.js";
+import type * as http from "../http.js";
+import type * as integrations_contracts from "../integrations/contracts.js";
+import type * as integrations_providers from "../integrations/providers.js";
+import type * as lib_auth from "../lib/auth.js";
+import type * as lib_catalog from "../lib/catalog.js";
+import type * as lib_config from "../lib/config.js";
+import type * as lib_env from "../lib/env.js";
+import type * as lib_errors from "../lib/errors.js";
+import type * as lib_ingest from "../lib/ingest.js";
+import type * as lib_log from "../lib/log.js";
+import type * as lib_openai from "../lib/openai.js";
+import type * as lib_outcome from "../lib/outcome.js";
+import type * as lib_timeZone from "../lib/timeZone.js";
+import type * as lib_validators from "../lib/validators.js";
+import type * as liveAvatar from "../liveAvatar.js";
+import type * as media from "../media.js";
+import type * as projects from "../projects.js";
+import type * as scenes from "../scenes.js";
+import type * as takes from "../takes.js";
+import type * as users from "../users.js";
+
+import type {
+  ApiFromModules,
+  FilterApi,
+  FunctionReference,
+} from "convex/server";
+
+declare const fullApi: ApiFromModules<{
+  assessments: typeof assessments;
+  attempts: typeof attempts;
+  coachCharacters: typeof coachCharacters;
+  coachReply: typeof coachReply;
+  crons: typeof crons;
+  history: typeof history;
+  http: typeof http;
+  "integrations/contracts": typeof integrations_contracts;
+  "integrations/providers": typeof integrations_providers;
+  "lib/auth": typeof lib_auth;
+  "lib/catalog": typeof lib_catalog;
+  "lib/config": typeof lib_config;
+  "lib/env": typeof lib_env;
+  "lib/errors": typeof lib_errors;
+  "lib/ingest": typeof lib_ingest;
+  "lib/log": typeof lib_log;
+  "lib/openai": typeof lib_openai;
+  "lib/outcome": typeof lib_outcome;
+  "lib/timeZone": typeof lib_timeZone;
+  "lib/validators": typeof lib_validators;
+  liveAvatar: typeof liveAvatar;
+  media: typeof media;
+  projects: typeof projects;
+  scenes: typeof scenes;
+  takes: typeof takes;
+  users: typeof users;
+}>;
+
+/**
+ * A utility for referencing Convex functions in your app's public API.
+ *
+ * Usage:
+ * ```js
+ * const myFunctionReference = api.myModule.myFunction;
+ * ```
+ */
+export declare const api: FilterApi<
+  typeof fullApi,
+  FunctionReference<any, "public">
+>;
+
+/**
+ * A utility for referencing Convex functions in your app's internal API.
+ *
+ * Usage:
+ * ```js
+ * const myFunctionReference = internal.myModule.myFunction;
+ * ```
+ */
+export declare const internal: FilterApi<
+  typeof fullApi,
+  FunctionReference<any, "internal">
+>;
+
+export declare const components: {};
