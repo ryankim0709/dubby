@@ -144,13 +144,16 @@ nonisolated struct DubSetup: Hashable, Sendable {
     let characterID: Int
     /// Set when the dub is of a curated scene, whose prepared tracks replace the speech-band filter.
     let curated: CuratedSceneSelection?
+    /// The BCP-47 locale the lines are spoken in, which scoring grades against.
+    let locale: String
 
     /// A dub of a raw clip, scripted by transcription.
-    init(clip: ImportedClip, section: ClipSection, script: Script, characterID: Int) {
+    init(clip: ImportedClip, section: ClipSection, script: Script, characterID: Int, locale: String) {
         self.clip = clip
         self.section = section
         self.script = script
         self.characterID = characterID
+        self.locale = locale
         curated = nil
     }
 
@@ -161,6 +164,7 @@ nonisolated struct DubSetup: Hashable, Sendable {
         self.script = script
         characterID = curated.speakerID
         self.curated = curated
+        locale = curated.scene.locale
     }
 
     /// How a take that runs long is bounded in this dub.

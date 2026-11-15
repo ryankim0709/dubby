@@ -1,6 +1,6 @@
 # Grading contract
 
-Status: proposed v1. This document defines the intended grading response and progress semantics. The app records and exports dubs locally but does not grade language performance. No grading endpoint, provider integration, or runtime schema implements this contract yet. All example results are illustrative.
+Status: v1. This document defines the line-attempt grading response, the dub score sheet, and progress semantics. `convex/gradingContract.ts` is the runtime schema. Finished dubs are graded by the transcript evaluator described in [Dub score sheet](#dub-score-sheet-dub-v1); the Azure acoustic engine is implemented but needs its key to run. All example results are illustrative.
 
 ## Unit of grading and ownership
 
@@ -218,3 +218,41 @@ Validate required response fields, enum values, score bounds, null reasons, refe
 The contract does not select an assessment vendor or implement Swift models, Convex tables, endpoints, coaching prompts, or daily-summary queries. Those are follow-on implementation work. The existing saved-dub records and practice totals do not implement this grading contract.
 
 For an example of a speech service exposing acoustic and word-level measurements, see [Microsoft's pronunciation assessment documentation](https://learn.microsoft.com/en-us/azure/ai-services/speech-service/how-to-pronunciation-assessment). Its provider-specific scoring formula is separate from the proposed Dubby rubric above.
+
+## Dub score sheet (dub-v1)
+
+Every finished dub gets one score sheet: the evidence for that dub, scored the same way every time. When a learner finishes a dub, the app uploads each recorded take with its line's text and window, and the backend grades each take and assembles the sheet. The sheet is versioned; changing a weight, a formula, or the evaluator is a new sheet version, and sheets of different versions are never compared.
+
+### Line results
+
+Each take is graded into the line-attempt response defined above, so progress, coaching, and memory treat it like any other graded attempt.
+
+- **Evaluator.** OpenAI `whisper-1` transcribes the take with word timings, without the script as a hint, so it can't fill in the word the learner meant. Provenance is `openai-whisper`, model `whisper-1`, config `whisper-transcript-v1`, measurement `transcript_only`.
+- **Reference.** The line text from the dub's script is the reference. The line id is derived from the scene, the locale, and the normalized line text, so the same line in the same scene is one line across dubs.
+- **Scores.** `wordAccuracy` and `timingFit` use the formulas above. A transcript is not pronunciation or fluency evidence, so `pronunciation` and `fluency` are null with `insufficient_evidence`, `languageOverall` is null with `missing_components`, and every word's `pronunciationScore` is null.
+- **Word timings.** Whisper's word times are clipped to the recording. A word whose time span is empty after clipping has null timings rather than an invented span. `timingFit` is null with `insufficient_evidence` when no recognized word has a timing.
+- **Unscorable takes.** A take with no recognized words is `no_speech`. Locales whose words aren't separated by spaces (Japanese and Mandarin) are `unsupported_locale` and are not sent to the transcription provider; English, Spanish, French, German, and Korean are graded.
+- **Failures.** A provider or validation failure marks the take failed with a code. A failed take is not graded and never counts as zero.
+
+### Line score
+
+```text
+lineScore = round(0.70 × wordAccuracy + 0.30 × timingFit)
+```
+
+`lineScore` is computed from unrounded components and rounded half up. It is null when either component is null. Saying the line's words carries most of the weight; timing is the dubbing skill of fitting the actor's window.
+
+### Sheet
+
+| Field | Meaning |
+| --- | --- |
+| `sheetVersion` | `"dub-v1"`. |
+| `status` | `scoring` until every take is scored, unscorable, or failed; then `complete`. |
+| `dubScore` | Mean of the unrounded line scores of lines that have one, rounded half up. Null when no line has one. |
+| `wordAccuracy`, `timingFit` | Means of the unrounded component scores over lines that have them, rounded half up. |
+| `linesDubbed`, `linesScored`, `linesUnscorable`, `linesFailed` | Counts of uploaded takes by outcome. Unscorable and failed lines are listed but never averaged in as zero. |
+| `lines` | One entry per take in script order: the line text, what was recognized, its status, its line and component scores, the unscorable reason or failure code, and its word results. |
+
+### Progress and memory
+
+When a sheet completes, its scored and unscorable line results are ingested into tutoring as one dubbing session. Progress series stay separated by evaluator and measurement, so transcript-only results are never compared with acoustic ones. Tutoring writes score-free memory notes to Supermemory from those results: one per line attempt, one per dub (its lines and the words that differed across it), one trend per progress series (whether each measured skill is improving, declining, or steady since the first practice day, and which words are now right or still giving trouble), and one per recurring difficulty. The coach searches them in hybrid mode, which returns the notes as written as well as any facts Supermemory has extracted from them.

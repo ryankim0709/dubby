@@ -72,7 +72,7 @@ export interface AssessmentOutcome {
   provenance: AssessmentProvenance;
 }
 
-const roundHalfUp = (value: number): number => Math.floor(value + 0.5 + 1e-9);
+export const roundHalfUp = (value: number): number => Math.floor(value + 0.5 + 1e-9);
 
 /** 0.45 pronunciation + 0.35 word accuracy + 0.20 fluency, rounded half up, from unrounded components. */
 export function computeLanguageOverall(pronunciation: number, wordAccuracy: number, fluency: number): number {

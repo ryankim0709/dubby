@@ -16,11 +16,13 @@ enum DubFlowLaunch: Identifiable {
 /// The create-a-dub flow: pick a scene, frame a section, review the script, dub, and export.
 struct DubFlowView: View {
     let clips: LoadState<[LibraryClip]>
+    let scoring: DubScoringModel?
     let onClose: () -> Void
     @State private var path: [DubFlowStep]
 
-    init(launch: DubFlowLaunch, clips: LoadState<[LibraryClip]>, onClose: @escaping () -> Void) {
+    init(launch: DubFlowLaunch, clips: LoadState<[LibraryClip]>, scoring: DubScoringModel?, onClose: @escaping () -> Void) {
         self.clips = clips
+        self.scoring = scoring
         self.onClose = onClose
         switch launch {
         case .chooseScene:
@@ -42,7 +44,7 @@ struct DubFlowView: View {
                     case .studio(let setup):
                         DubSessionView(setup: setup) { path.append(.result(setup, $0)) }
                     case .result(let setup, let takes):
-                        DubResultView(setup: setup, takes: takes, onDone: onClose)
+                        DubResultView(setup: setup, takes: takes, scoring: scoring, onDone: onClose)
                     }
                 }
         }

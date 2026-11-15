@@ -1,7 +1,7 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 import { tutoringTables } from "./tutoringTables";
-import { assessmentContentFields, jobErrorV, jobStageV, jobStatusV, outcomeV } from "./lib/validators";
+import { assessmentContentFields, dubLineResultV, dubTakeStatusV, jobErrorV, jobStageV, jobStatusV, outcomeV } from "./lib/validators";
 import { timedWordV } from "./lib/transcription";
 
 /** Tables follow docs/convex-backend.md and contract v1 section 4. Ids are Convex ids; times are epoch milliseconds. */
@@ -33,6 +33,39 @@ export default defineSchema({
     passwordHash: v.string(),
     createdAt: v.number(),
   }).index("by_username", ["username"]),
+
+  /** A finished dub sent for scoring (dubs.ts). Keys are derived on the server; see docs/grading-contract.md. */
+  dubs: defineTable({
+    ownerId: v.id("users"),
+    clientDubId: v.string(),
+    sceneKey: v.string(),
+    sceneTitle: v.string(),
+    characterKey: v.string(),
+    characterName: v.string(),
+    locale: v.string(),
+    timeZone: v.string(),
+    capturedAt: v.number(),
+    createdAt: v.number(),
+    status: v.union(v.literal("scoring"), v.literal("complete")),
+    completedAt: v.optional(v.number()),
+  }).index("by_owner_client", ["ownerId", "clientDubId"]),
+
+  /** One recorded line of a dub and its grade. */
+  dubTakes: defineTable({
+    dubId: v.id("dubs"),
+    ownerId: v.id("users"),
+    lineIndex: v.number(),
+    lineKey: v.string(),
+    referenceText: v.string(),
+    windowStartMs: v.number(),
+    windowEndMs: v.number(),
+    storageId: v.id("_storage"),
+    status: dubTakeStatusV,
+    result: v.optional(dubLineResultV),
+    failure: v.optional(v.object({ code: v.string(), message: v.string() })),
+  })
+    .index("by_dub", ["dubId"])
+    .index("by_storage", ["storageId"]),
 
   scenes: defineTable({
     slug: v.string(),

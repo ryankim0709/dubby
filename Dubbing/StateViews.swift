@@ -206,8 +206,8 @@ struct TakeSummaryView: View {
             } else {
                 MeasurementRow(label: "Take length and mic level", value: nil)
             }
-            MeasurementRow(label: "Pronunciation, accuracy, fluency", value: nil)
-            Text("Pronunciation scoring isn't connected yet, so no score is shown.")
+            MeasurementRow(label: "Pronunciation and fluency", value: nil)
+            Text("Pronunciation and fluency aren't scored yet.")
                 .dubFont(12, weight: .regular)
                 .foregroundStyle(Palette.textSecondary)
         }

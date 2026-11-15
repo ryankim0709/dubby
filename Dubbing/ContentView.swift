@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ContentView: View {
     let account: AccountModel
+    let scoring: DubScoringModel?
     @State private var tab: AppTab = .discover
     @State private var clips: LoadState<[LibraryClip]> = .loading
     @State private var dubs: LoadState<[SavedDub]> = .loading
@@ -40,7 +41,7 @@ struct ContentView: View {
             }
         }
         .fullScreenCover(item: $launch, onDismiss: reloadDubs) { launch in
-            DubFlowView(launch: launch, clips: clips, onClose: { self.launch = nil })
+            DubFlowView(launch: launch, clips: clips, scoring: scoring, onClose: { self.launch = nil })
         }
         .fullScreenCover(isPresented: $isCoachPresented) {
             // The dub result screen has no coach entry yet. When it gains one it should pass a
@@ -89,5 +90,5 @@ struct ContentView: View {
 }
 
 #Preview {
-    ContentView(account: AccountModel(service: nil))
+    ContentView(account: AccountModel(service: nil), scoring: nil)
 }

@@ -81,6 +81,9 @@ with only some set.
 | `takes.accept({ attemptId })` | Keep a take for its line; moves only the pointer. |
 | `projects.complete({ projectId })` | Finish the dub once every line of the character has an accepted take. |
 | `history.list({ status?, limit? })` | My Dubs: the learner's projects, newest activity first. |
+| `dubs.generateUploadUrl()` | A one-time URL to POST one take of a finished dub to (16 kHz mono 16-bit WAV, `audio/wav`). |
+| `dubs.submit({ clientDubId, sceneTitle, characterName, locale, timeZone, capturedAt, takes })` | Record a finished dub and queue each take for grading. Each take is `{ lineIndex, referenceText, startMs, endMs, storageId }`; numbers are doubles. Idempotent on `clientDubId`. Returns `{ dubId, created }`. |
+| `dubs.scoreSheet({ clientDubId })` | The dub's live score sheet (`dub-v1`, defined in [the grading contract](grading-contract.md#dub-score-sheet-dub-v1)); null for an unknown dub. A completed sheet is ingested into tutoring for progress and memory. |
 
 Internal functions (not callable by clients): `scenes.seed`, `scenes.generateVideoUploadUrl`, `scenes.attachVideo`, `assessments.reassess`, and the job
 internals (`run`, `claim`, `saveOutcome`, `complete`, `recordFailure`, `reclaimStale`, `media.attemptAudio`).
