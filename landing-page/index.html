@@ -1,0 +1,440 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Dubby: Learn a language by playing your favorite character</title>
+  <meta name="description" content="Pick a scene, play the character, and get coached by them line by line. Then bring a friend in for the other role. Join the iPhone waitlist.">
+  <meta name="theme-color" content="#0F0F0F">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Dubby: Learn a language by playing your favorite character">
+  <meta property="og:description" content="Pick a scene, play the character, and get coached by them line by line. Join the iPhone waitlist.">
+  <meta property="og:image" content="/og.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="preload" href="/assets/LeagueGothic.ttf" as="font" type="font/ttf" crossorigin>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/config.js"></script>
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+
+  <header class="nav" data-nav>
+    <div class="nav-inner">
+      <a class="wordmark" href="#top" aria-label="Dubby home">DUB<span>BY</span></a>
+      <nav aria-label="Sections">
+        <a href="#how">How it works</a>
+        <a href="#coach">Coach</a>
+        <a href="#friends">Friends</a>
+        <a href="#faq">FAQ</a>
+      </nav>
+      <a class="btn btn-primary btn-small" href="#join">Join the waitlist</a>
+    </div>
+  </header>
+
+  <main id="main">
+    <!-- Hero -->
+    <section class="hero" id="top">
+      <div class="hero-copy">
+        <p class="badge">iPhone app · waitlist open</p>
+        <h1>Learn <span class="rotator" data-rotator aria-hidden="true"><span class="rotator-word" style="--c:var(--ko)">Korean</span></span><span class="sr-only">a language</span> by playing your favorite&nbsp;character.</h1>
+        <p class="lede">Pick a scene. Say their lines. They coach you through every take. Then bring a friend in for the other role.</p>
+
+        <form class="inline-form" data-waitlist-form novalidate>
+          <label class="sr-only" for="hero-email">Email address</label>
+          <input id="hero-email" name="email" type="email" inputmode="email" autocomplete="email" placeholder="you@email.com" required>
+          <input class="hp" name="website" tabindex="-1" autocomplete="off" aria-hidden="true">
+          <input type="hidden" name="plan" value="free">
+          <button class="btn btn-primary" type="submit">Join the waitlist</button>
+          <p class="form-status" role="status" aria-live="polite"></p>
+        </form>
+        <p class="fineprint">Free to join. No card. We only email you about Dubby.</p>
+      </div>
+
+      <div class="hero-stage" aria-hidden="true">
+        <div class="aura"><i class="aura-pink"></i><i class="aura-green"></i><i class="aura-amber"></i><i class="aura-violet"></i></div>
+        <div class="phone phone-side phone-left"><div class="screen" data-screen-src="discover"></div></div>
+        <div class="phone phone-center"><div class="screen" data-screen-src="studio"></div></div>
+        <div class="phone phone-side phone-right"><div class="screen" data-screen-src="coach"></div></div>
+      </div>
+    </section>
+
+    <!-- Poster wall: the scenes and cast carry the colour, as they do in the app -->
+    <section class="wall" aria-label="Scenes and characters">
+      <div class="wall-row" data-wall-row>
+        <span class="wcard wposter" style="--a:#3D1A2A;--b:#E58FB4"><em>English</em><b>The Lunch Table</b></span>
+        <span class="wcard wrole" style="--a:#5C8A5A;--b:#0D1A12"><b>Seo-jun</b><small>Always late, always sorry</small></span>
+        <span class="wcard wposter" style="--a:#1C1208;--b:#C7923A"><em>Spanish</em><b>Corazón de Fuego</b></span>
+        <span class="wcard wrole" style="--a:#F2A7C3;--b:#5A1E3A"><b>Bree</b><small>Runs the lunch table</small></span>
+        <span class="wcard wposter" style="--a:#0D1A12;--b:#5C8A5A"><em>Korean</em><b>Rain Check</b></span>
+        <span class="wcard wrole" style="--a:#C7923A;--b:#2E1D0C"><b>Sofía</b><small>Knows that handwriting</small></span>
+      </div>
+      <div class="wall-row wall-row-rev" data-wall-row>
+        <span class="wcard wrole" style="--a:#A9C7B0;--b:#1E3326"><b>Ji-woo</b><small>Waited in the rain</small></span>
+        <span class="wcard wdub" style="--a:#1C1208;--b:#C7923A"><span class="wdub-who"><i style="--a:#5EC8D8;--b:#2A5F86">S</i><i style="--a:#7FD49B;--b:#2F6B45">L</i></span><b>telenovela energy only</b><small>Sam as Mateo · Leo as Sofía</small></span>
+        <span class="wcard wrole" style="--a:#E8C9A8;--b:#4A3324"><b>Nia</b><small>First day, no plan</small></span>
+        <span class="wcard wdub" style="--a:#0D1A12;--b:#5C8A5A"><span class="wdub-who"><i style="--a:#F27BA8;--b:#8E2C5C">P</i></span><b>first Korean dub!! <span lang="ko">약속해</span></b><small>Priya as Ji-woo</small></span>
+        <span class="wcard wrole" style="--a:#7A5230;--b:#1C1208"><b>Mateo</b><small>Shouldn't have opened it</small></span>
+        <span class="wcard wdub" style="--a:#3D1A2A;--b:#E58FB4"><span class="wdub-who"><i style="--a:#7FD49B;--b:#2F6B45">L</i></span><b>nobody says no to Bree</b><small>Leo as Bree</small></span>
+      </div>
+    </section>
+
+    <!-- Statement lit word by word as it scrolls past -->
+    <section class="statement" aria-label="Why scenes">
+      <p data-light-text>Flashcards teach you words. Scenes teach you how people really talk.</p>
+    </section>
+
+    <!-- The journey: a sticky phone swaps screens as each step scrolls past -->
+    <section class="journey" id="how">
+      <h2 class="section-title">From poster to premiere in five taps.</h2>
+      <div class="journey-grid">
+        <div class="journey-phone" aria-hidden="true">
+          <div class="phone phone-sticky">
+            <div class="step-glow" data-step-glow></div>
+            <div class="screen-stack">
+              <div class="screen is-active" data-screen-src="discover" data-step-screen="discover"></div>
+              <div class="screen" data-screen-src="role" data-step-screen="role"></div>
+              <div class="screen" data-screen-src="studio" data-step-screen="studio"></div>
+              <div class="screen" data-screen-src="coach" data-step-screen="coach"></div>
+              <div class="screen" data-screen-src="post" data-step-screen="post"></div>
+            </div>
+          </div>
+        </div>
+
+        <ol class="steps">
+          <li class="step is-active" data-step="discover">
+            <div class="step-phone phone" aria-hidden="true"><div class="screen" data-screen-src="discover"></div></div>
+            <h3>Pick a scene.</h3>
+            <p>Swipe a deck of short scenes, each under a minute. A Korean rain-soaked apology, a Spanish letter nobody should have opened, an English lunch-table power play.</p>
+          </li>
+          <li class="step" data-step="role">
+            <div class="step-phone phone" aria-hidden="true"><div class="screen" data-screen-src="role"></div></div>
+            <h3>Choose your role.</h3>
+            <p>Every scene has a cast. Play the character you like. Everyone else keeps talking, so you're always performing opposite someone.</p>
+          </li>
+          <li class="step" data-step="studio">
+            <div class="step-phone phone" aria-hidden="true"><div class="screen" data-screen-src="studio"></div></div>
+            <h3>Hit your mark.</h3>
+            <p>See the line and its translation, get a three-beat count-in, and speak while the scene rolls. Your waveform lands right under the actor's, so you can see where you rushed.</p>
+          </li>
+          <li class="step" data-step="coach" id="coach">
+            <div class="step-phone phone" aria-hidden="true"><div class="screen" data-screen-src="coach"></div></div>
+            <h3>Get coached <span class="holo-text">in character</span>.</h3>
+            <p>After each take, the character you're dubbing appears as a hologram and tells you how your timing landed and what to try next. Then retry, or keep it.</p>
+          </li>
+          <li class="step" data-step="post">
+            <div class="step-phone phone" aria-hidden="true"><div class="screen" data-screen-src="post"></div></div>
+            <h3>Post it.</h3>
+            <p>Your voice goes into the scene, music and all. Share it to the Dubby feed or straight to your Instagram story, and let your friends react.</p>
+          </li>
+        </ol>
+      </div>
+    </section>
+
+    <!-- Social: co-dubs, the feed, and the group chat -->
+    <!-- Social: invite a friend, they get a text from Dubby's Keiki agent, you watch the duet -->
+    <section class="friends" id="friends" aria-labelledby="friends-title">
+      <div class="friends-glow" aria-hidden="true"></div>
+      <h2 class="section-title" id="friends-title">Better with friends.</h2>
+      <p class="section-sub">Every scene has two parts. Give one to a friend.</p>
+
+      <ol class="friends-grid">
+        <li class="friend-col">
+          <div class="phone" aria-hidden="true"><div class="screen" data-screen-src="invite"></div></div>
+          <div class="friend-copy">
+            <span class="friend-step">1</span>
+            <h3>Pick a friend.</h3>
+            <p>Record your character, then choose who plays the other one.</p>
+          </div>
+        </li>
+        <li class="friend-col friend-col-center">
+          <div class="phone" aria-hidden="true"><div class="screen" data-screen-src="imessage"></div></div>
+          <div class="friend-copy">
+            <span class="friend-step">2</span>
+            <h3>They get a text.</h3>
+            <p>Dubby's agent texts them on iMessage with their part. They can text back with questions before they record. Built on <a href="https://consumermobilehackathon.com/" rel="noopener">Keiki</a>.</p>
+          </div>
+        </li>
+        <li class="friend-col">
+          <div class="phone" aria-hidden="true"><div class="screen" data-screen-src="duet"></div></div>
+          <div class="friend-copy">
+            <span class="friend-step">3</span>
+            <h3>Watch it together.</h3>
+            <p>Both voices in one scene, with a score for each of you. Post it, or swap roles and go again.</p>
+          </div>
+        </li>
+      </ol>
+    </section>
+
+    <section class="faq" id="faq" aria-labelledby="faq-title">
+      <h2 class="section-title" id="faq-title">Questions.</h2>
+      <div class="faq-list">
+        <details>
+          <summary>When can I use it?</summary>
+          <p>Dubby is coming to iPhone. Founding members get in first, then the rest of the waitlist.</p>
+        </details>
+        <details>
+          <summary>Which languages?</summary>
+          <p>The first scenes are in Korean, Spanish, and English. Tell us what you want to speak when you sign up; that decides what we shoot next.</p>
+        </details>
+        <details>
+          <summary>Do I need to be good at acting?</summary>
+          <p>Not at all. The coach is about timing and speaking clearly, not drama school. Over-acting is encouraged, though.</p>
+        </details>
+        <details>
+          <summary>Can I dub with friends who aren't on Dubby yet?</summary>
+          <p>Yes. Pick them from your contacts and Dubby texts them their part. Their lines drop into the same scene as yours.</p>
+        </details>
+        <details>
+          <summary>Who hears my recordings?</summary>
+          <p>Your takes are yours. Nothing goes on the feed unless you choose to post it.</p>
+        </details>
+        <details>
+          <summary>What do I need?</summary>
+          <p>An iPhone running iOS 26 or later. Headphones help the coach hear you over the scene.</p>
+        </details>
+        <details>
+          <summary>How does the founding plan work?</summary>
+          <p>Pick Founding when you join and pay $4.99 a month through Whop's secure checkout. That price stays yours for life. The free plan never asks for a card.</p>
+        </details>
+      </div>
+    </section>
+
+    <!-- Signup and founding checkout -->
+    <section class="join" id="join" aria-labelledby="join-title">
+      <div class="join-glow" aria-hidden="true"></div>
+      <div class="fan" aria-hidden="true">
+        <span class="wcard wrole" style="--a:#A9C7B0;--b:#1E3326"><b>Ji-woo</b></span>
+        <span class="wcard wposter" style="--a:#3D1A2A;--b:#E58FB4"><b>The Lunch Table</b></span>
+        <span class="wcard wposter" style="--a:#0D1A12;--b:#5C8A5A"><b>Rain Check</b></span>
+        <span class="wcard wposter" style="--a:#1C1208;--b:#C7923A"><b>Corazón de Fuego</b></span>
+        <span class="wcard wrole" style="--a:#F2A7C3;--b:#5A1E3A"><b>Bree</b></span>
+      </div>
+      <h2 id="join-title">Your scene is ready.</h2>
+      <p class="section-sub">Get on the list now. Founding members lock in their price for life.</p>
+
+      <form class="join-form" data-waitlist-form novalidate>
+        <fieldset class="plan-cards">
+          <legend class="sr-only">Plan</legend>
+          <label class="plan-card">
+            <input type="radio" name="plan" value="free" checked>
+            <span class="plan-card-body">
+              <span class="plan-name">Free</span>
+              <span class="plan-price">$0</span>
+              <span class="plan-perks">New scenes every week · timing coach · co-dubs with friends</span>
+            </span>
+          </label>
+          <label class="plan-card">
+            <input type="radio" name="plan" value="founding">
+            <span class="plan-card-body">
+              <span class="plan-name">Founding <em>Locked for life</em></span>
+              <span class="plan-price">$4.99<small>/mo</small></span>
+              <span class="plan-perks">Everything in Free · unlimited pronunciation tutor · first access to new scenes</span>
+            </span>
+          </label>
+        </fieldset>
+        <div class="field">
+          <label for="join-email">Email</label>
+          <input id="join-email" name="email" type="email" inputmode="email" autocomplete="email" placeholder="you@email.com" required>
+        </div>
+        <div class="field">
+          <label for="join-language">I want to speak</label>
+          <select id="join-language" name="language">
+            <option value="">Choose a language</option>
+            <option>Korean</option>
+            <option>Spanish</option>
+            <option>English</option>
+            <option>Japanese</option>
+            <option>French</option>
+            <option>Mandarin</option>
+            <option>Something else</option>
+          </select>
+        </div>
+        <input class="hp" name="website" tabindex="-1" autocomplete="off" aria-hidden="true">
+        <button class="btn btn-primary btn-wide" type="submit" data-submit-free="Join the waitlist" data-submit-founding="Continue to payment">Join the waitlist</button>
+        <p class="form-status" role="status" aria-live="polite"></p>
+        <p class="fineprint" data-plan-note>Free to join. No card needed.</p>
+      </form>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <a class="wordmark" href="#top" aria-label="Dubby home">DUB<span>BY</span></a>
+    <p>© 2026 Dubby. App screens are previews of the iPhone app in development. Scenes shown are Dubby Originals.</p>
+  </footer>
+
+  <!-- Screen templates, cloned into every phone that names them in data-screen-src -->
+  <template id="screen-discover">
+    <div class="ui ui-discover">
+      <div class="statusbar"><span>9:41</span><span class="sb-icons"></span></div>
+      <div class="ui-top"><span class="wordmark wordmark-ui">DUB<span>BY</span></span></div>
+      <div class="lang-tabs"><b>All</b><span>Korean</span><span>Spanish</span><span>English</span></div>
+      <div class="deck">
+        <div class="poster poster-back2" style="--a:#3D1A2A;--b:#E58FB4"><span class="poster-title">The Lunch Table</span></div>
+        <div class="poster poster-back1" style="--a:#1C1208;--b:#C7923A"><span class="poster-title">Corazón de Fuego</span></div>
+        <div class="poster poster-front" style="--a:#0D1A12;--b:#5C8A5A">
+          <span class="pill">Korean</span>
+          <span class="poster-title">Rain Check</span>
+        </div>
+      </div>
+      <p class="deck-caption"><b>Late again</b><span>2026 · Korean</span></p>
+      <div class="dots"><i></i><i class="on"></i><i></i></div>
+      <p class="ui-h">Most dubbed</p>
+      <div class="rank"><b>1</b><span class="thumb" style="--a:#3D1A2A;--b:#E58FB4"></span><span class="rank-text"><b>Get in, we're going</b><span>The Lunch Table</span></span><em>8.1K</em></div>
+      <div class="rank"><b class="dim">2</b><span class="thumb" style="--a:#0D1A12;--b:#5C8A5A"></span><span class="rank-text"><b>Late again</b><span>Rain Check</span></span><em>5.3K</em></div>
+    </div>
+  </template>
+
+  <template id="screen-role">
+    <div class="ui ui-role">
+      <div class="statusbar"><span>9:41</span><span class="sb-icons"></span></div>
+      <p class="ui-title">Choose your role</p>
+      <p class="ui-sub">Late again · Rain Check</p>
+      <div class="roles">
+        <div class="role is-picked" style="--a:#5C8A5A;--b:#0D1A12">
+          <span class="role-name">Seo-jun</span>
+          <span class="role-tag">Always late, always sorry</span>
+          <span class="role-lines">2 lines</span>
+        </div>
+        <div class="role" style="--a:#A9C7B0;--b:#1E3326">
+          <span class="role-name">Ji-woo</span>
+          <span class="role-tag">Waited in the rain</span>
+          <span class="role-lines">2 lines</span>
+        </div>
+      </div>
+      <p class="ui-body">Ji-woo has waited an hour at the bus stop. Seo-jun finally runs up, soaked, with an apology he's made before.</p>
+      <span class="ui-btn">Dub as Seo-jun</span>
+    </div>
+  </template>
+
+  <template id="screen-studio">
+    <div class="ui ui-studio">
+      <div class="statusbar"><span>9:41</span><span class="sb-icons"></span></div>
+      <div class="stage" style="--a:#0D1A12;--b:#5C8A5A">
+        <span class="rec-badge"><i></i>REC</span>
+        <span class="stage-sub" lang="ko">미안해. 다시는 안 늦을게.</span>
+      </div>
+      <div class="progress"><span>Line 2 of 2</span><span>1 kept</span></div>
+      <div class="segments"><i class="done"></i><i class="now"></i></div>
+      <p class="speaker">You · Seo-jun</p>
+      <p class="line" lang="ko">미안해. 다시는 안 늦을게.</p>
+      <p class="translation">I'm sorry. I won't be late again.</p>
+      <div class="wave-panel">
+        <p>Original</p><div class="wave wave-orig" data-wave="34" data-seed="1"></div>
+        <p>You</p><div class="wave wave-you" data-wave="34" data-seed="2"></div>
+      </div>
+      <div class="controls">
+        <span class="ctl"><i class="ctl-icon play"></i>Listen</span>
+        <span class="ctl ctl-rec"><i class="rec-btn"></i>Cancel</span>
+        <span class="ctl"><i class="ctl-icon check"></i>Keep</span>
+      </div>
+    </div>
+  </template>
+
+  <template id="screen-coach">
+    <div class="ui ui-coach">
+      <div class="statusbar"><span>9:41</span><span class="sb-icons"></span></div>
+      <div class="holo">
+        <div class="holo-figure"><span>S</span></div>
+        <div class="holo-beam"></div>
+        <div class="holo-pad"></div>
+      </div>
+      <div class="coach-panel">
+        <div class="coach-head">
+          <span class="coach-name">Seo-jun</span>
+          <span class="coach-score"><b>86</b><small>Timing</small></span>
+        </div>
+        <p class="coach-verdict">Right on the beat</p>
+        <p class="coach-tip" data-type-text>You came in on cue. Hold 늦을게 a little longer; I stretch it because I mean it this time.</p>
+      </div>
+      <div class="coach-actions"><span class="ui-btn ui-btn-2">Retry</span><span class="ui-btn">Keep</span></div>
+    </div>
+  </template>
+
+  <template id="screen-post">
+    <div class="ui ui-post">
+      <div class="statusbar"><span>9:41</span><span class="sb-icons"></span></div>
+      <p class="ui-title">Post your dub</p>
+      <p class="ui-sub">Late again · you as Seo-jun</p>
+      <div class="wrap-video" style="--a:#0D1A12;--b:#5C8A5A">
+        <span class="play-btn"></span>
+        <span class="stage-sub" lang="ko">미안해. 다시는 안 늦을게.</span>
+      </div>
+      <p class="caption-field">first Korean dub!! <span lang="ko">약속해</span><i class="caret"></i></p>
+      <div class="destinations">
+        <span class="dest is-on"><i class="dest-icon dest-dubby"><b>D</b></i>Dubby feed</span>
+        <span class="dest is-on"><i class="dest-icon dest-story"></i>Instagram story</span>
+        <span class="dest"><i class="dest-icon dest-reel"></i>TikTok</span>
+        <span class="dest"><i class="dest-icon dest-msg"></i>Messages</span>
+      </div>
+      <span class="ui-btn">Post</span>
+    </div>
+  </template>
+
+  <template id="screen-invite">
+    <div class="ui ui-invite">
+      <div class="statusbar"><span>9:41</span><span class="sb-icons"></span></div>
+      <p class="ui-title">Who's playing Bree?</p>
+      <p class="ui-sub">Your lines as Nia are saved.</p>
+      <div class="invite-scene" style="--a:#3D1A2A;--b:#E58FB4">
+        <span class="poster-title">The Lunch Table</span>
+        <span class="invite-roles"><span class="role-chip done">Nia · you</span><span class="role-chip open">Bree · open</span></span>
+      </div>
+      <ul class="contacts">
+        <li class="is-picked"><i style="--a:#A78BFA;--b:#5B3FC4">M</i><span><b>Maya</b><small>Dubbed 12 scenes</small></span><em></em></li>
+        <li><i style="--a:#5EC8D8;--b:#2A5F86">S</i><span><b>Sam</b><small>Learning Spanish</small></span><em></em></li>
+        <li><i style="--a:#FF8A5C;--b:#C2311F">J</i><span><b>Jordan</b><small>Learning Korean</small></span><em></em></li>
+        <li><i style="--a:#7FD49B;--b:#2F6B45">L</i><span><b>Leo</b><small>Not on Dubby yet</small></span><em></em></li>
+      </ul>
+      <span class="ui-btn">Send invite to Maya</span>
+    </div>
+  </template>
+
+  <template id="screen-imessage">
+    <div class="ui ui-imessage">
+      <div class="statusbar"><span>9:41</span><span class="sb-icons"></span></div>
+      <div class="im-head">
+        <i class="im-avatar"><b>D</b></i>
+        <b>Dubby</b>
+        <small>iMessage · agent by Keiki</small>
+      </div>
+      <div class="im-thread">
+        <p class="im-time">Today 6:12 PM</p>
+        <p class="bubble-in">Hey Maya! Your friend just dubbed Nia in The Lunch Table and saved Bree's part for you.</p>
+        <div class="im-card bubble-in">
+          <span class="im-card-art" style="--a:#3D1A2A;--b:#E58FB4"><span class="poster-title">The Lunch Table</span></span>
+          <b>Play Bree in “Get in, we're going”</b>
+          <small>Dubby · 2 lines · 30 seconds</small>
+        </div>
+        <p class="bubble-out">wait what do I have to say</p>
+        <p class="bubble-in">Just two lines. The first one: “Get in. We're going to the mall.” Say it like you own the school.</p>
+        <p class="bubble-out">ok I'm in</p>
+      </div>
+      <div class="im-composer"><span>iMessage</span></div>
+    </div>
+  </template>
+
+  <template id="screen-duet">
+    <div class="ui ui-duet">
+      <div class="statusbar"><span>9:41</span><span class="sb-icons"></span></div>
+      <p class="ui-title">That's a wrap</p>
+      <p class="ui-sub">Get in, we're going · co-dub</p>
+      <div class="wrap-video" style="--a:#3D1A2A;--b:#E58FB4">
+        <span class="play-btn"></span>
+        <span class="stage-sub">On Wednesdays, we never say no.</span>
+      </div>
+      <div class="duet-scores">
+        <div><i style="--a:#FFB547;--b:#B0541F">Y</i><span><b>You</b><small>as Nia</small></span><strong>88</strong></div>
+        <div><i style="--a:#A78BFA;--b:#5B3FC4">M</i><span><b>Maya</b><small>as Bree</small></span><strong>92</strong></div>
+      </div>
+      <p class="duet-note">Maya wins on timing. Rematch?</p>
+      <span class="ui-btn">Post to the feed</span>
+      <span class="ui-btn ui-btn-2">Swap roles and go again</span>
+    </div>
+  </template>
+</body>
+</html>

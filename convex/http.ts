@@ -11,6 +11,8 @@ import { logEvent } from "./lib/log";
 import { TranscriptionResponseError } from "./lib/transcription";
 import { registerTutoringRoutes } from "./tutoringHttp";
 import { transcribePublishedScene } from "./sceneTranscription";
+import { parseWaitlistSignup } from "./waitlist";
+import { paidSignupFromEvent, verifyWhopSignature } from "./whop";
 
 // The coach and tutoring routes (tutoringHttp.ts) require a signed-in caller where they spend provider credit and
 // answer 401 before any provider call; /coach/characters, /scenes, and /health are public and spend nothing.
@@ -102,6 +104,98 @@ http.route({
       if (error instanceof TranscriptionResponseError) return json(502, { error: error.message, code: "provider_failed" });
       throw error;
     }
+  }),
+});
+
+// The landing page is served from Vercel, a different origin, so the signup route answers CORS preflights.
+// It's public on purpose: anyone may join the waitlist, and it stores only what the form sends.
+const waitlistCors = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type",
+  "Access-Control-Max-Age": "86400",
+};
+
+function waitlistJson(status: number, body: object): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "Content-Type": "application/json", ...waitlistCors },
+  });
+}
+
+http.route({
+  path: "/waitlist",
+  method: "OPTIONS",
+  handler: httpActionGeneric(async () => new Response(null, { status: 204, headers: waitlistCors })),
+});
+
+http.route({
+  path: "/waitlist",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    const operation = "waitlist.join";
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      logEvent({ operation, status: "rejected", errorCode: "invalid_json", httpStatus: 400 });
+      return waitlistJson(400, { error: "Send a JSON object" });
+    }
+    const parsed = parseWaitlistSignup(body);
+    if (parsed.kind === "invalid") {
+      logEvent({ operation, status: "rejected", errorCode: "invalid_argument", httpStatus: 400 });
+      return waitlistJson(400, { error: parsed.error });
+    }
+    if (parsed.kind === "bot") {
+      logEvent({ operation, status: "skipped", errorCode: "honeypot", httpStatus: 200 });
+      return waitlistJson(200, { ok: true, created: true });
+    }
+    const { created } = await ctx.runMutation(internal.waitlist.join, parsed.signup);
+    logEvent({ operation, status: "ok", httpStatus: 200 });
+    return waitlistJson(200, { ok: true, created });
+  }),
+});
+
+// Whop calls this when a founding member pays on the landing page. The signature is checked before anything is read.
+http.route({
+  path: "/whop/webhook",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    const operation = "whop.webhook";
+    const secret = process.env.WHOP_WEBHOOK_SECRET;
+    if (secret === undefined || secret === "") {
+      logEvent({ operation, status: "failed", errorCode: "not_configured", httpStatus: 503 });
+      return json(503, { error: "Whop webhook isn't configured" });
+    }
+    const body = await request.text();
+    const verified = await verifyWhopSignature({
+      secret,
+      id: request.headers.get("webhook-id"),
+      timestamp: request.headers.get("webhook-timestamp"),
+      signatureHeader: request.headers.get("webhook-signature"),
+      body,
+      nowSeconds: Math.floor(Date.now() / 1000),
+    });
+    if (!verified) {
+      logEvent({ operation, status: "rejected", errorCode: "bad_signature", httpStatus: 401 });
+      return json(401, { error: "Invalid signature" });
+    }
+    let event: unknown;
+    try {
+      event = JSON.parse(body);
+    } catch {
+      logEvent({ operation, status: "rejected", errorCode: "invalid_json", httpStatus: 400 });
+      return json(400, { error: "Invalid JSON" });
+    }
+    const paid = paidSignupFromEvent(event);
+    if (paid === null) {
+      // Other event types, or a payment without a usable email: acknowledge so Whop doesn't retry.
+      logEvent({ operation, status: "skipped", httpStatus: 200 });
+      return json(200, { ok: true });
+    }
+    await ctx.runMutation(internal.whop.markPaid, paid);
+    logEvent({ operation, status: "ok", httpStatus: 200 });
+    return json(200, { ok: true });
   }),
 });
 

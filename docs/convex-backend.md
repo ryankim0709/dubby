@@ -39,6 +39,7 @@ spending route then rejects, because no auth provider exists to produce an ident
 | `LIVEAVATAR_API_KEY`, `LIVEAVATAR_AVATAR_ID_*`, `LIVEAVATAR_VOICE_ID_*`, `LIVEAVATAR_SANDBOX` | The talking coach (`POST /coach/session-token`). | key: yes |
 | `AZURE_SPEECH_KEY` | Azure pronunciation assessment, the assessment engine. Unset (or without a region or endpoint): jobs fail with `engine_not_configured`. | yes |
 | `AZURE_SPEECH_REGION` or `AZURE_SPEECH_ENDPOINT` | Where the Speech resource lives. The region (for example `eastus`) builds the regional host; the endpoint is the full recognition URL without a query string, for a resource with a custom domain, and wins when both are set. | no |
+| `WHOP_WEBHOOK_SECRET` | The landing page's founding-plan payments (`POST /whop/webhook`). Unset: the route answers 503. Set it exactly as Whop shows it (`ws_…`). | yes |
 | `DEV_ONLY_TEST_JWT_ISSUER`, `DEV_ONLY_TEST_JWT_AUDIENCE`, `DEV_ONLY_TEST_JWT_JWKS` | **Local development only.** Enables a test sign-in whose private key sits on a developer machine. **Never set these on a shared, preview, or production deployment.** All three must be set for the provider to exist. | no (but dangerous) |
 
 How unset variables behave: Convex evaluates `auth.config.ts` on the deployment at push time and
@@ -90,6 +91,8 @@ internals (`run`, `claim`, `saveOutcome`, `complete`, `recordFailure`, `reclaimS
 | --- | --- | --- |
 | `GET /health` | none | `{ ok: true, service: "dubby-backend", schemaVersion: 1 }`. Constants only. |
 | `GET /coach/characters` | none | Unchanged. |
+| `POST /waitlist` | none | Landing-page signup `{ email, plan?: "free" \| "founding", language?, source?, website? }`. CORS open to any origin. One row per lowercased email in `waitlist`; `founding` upgrades and never downgrades. A filled `website` honeypot gets `200` and stores nothing. `400` on bad input. |
+| `POST /whop/webhook` | Whop signature | Whop `payment.succeeded`. Verifies the Standard Webhooks signature (`webhook-id`, `webhook-timestamp`, `webhook-signature`, HMAC-SHA256 with `WHOP_WEBHOOK_SECRET`, 5-minute window), then sets `paidAt` and `whopPaymentId` on the waitlist row for `data.metadata.email` (falling back to `customer_email`), adding the row if needed. `401` bad signature, `503` secret unset, `200` for other events. |
 | `POST /coach/session-token` | Bearer | Unchanged body and response. 401 before any provider call; 400, 404, 503 as before. |
 | `POST /coach/reply` | Bearer | Same. Still served by the baseline coach code (see Known gaps). |
 | `GET /media/attempts/{attemptId}/audio` | Bearer | Streams the original recording to its owner, with byte ranges. 404 for anyone else. Recordings never get a raw storage URL. |

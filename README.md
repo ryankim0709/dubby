@@ -66,6 +66,7 @@ Capy helps us build the product, Convex operates its cloud services, Revyl verif
 ├── CLAUDE.md                         Imports AGENTS.md for Claude Code
 ├── .github/pull_request_template.md  Sections for pull request descriptions
 ├── .gitignore                        Local Xcode state, build output, node_modules, and local clips in Media/
+├── landing-page/                     Waitlist site for Vercel; signups go to Convex POST /waitlist (see its README)
 ├── docs/
 │   └── grading-contract.md           Proposed assessment API and learning-progress semantics
 ├── package.json, package-lock.json   Convex backend dependencies (convex, OpenAI and Supermemory SDKs, zod, TypeScript, Vitest)
