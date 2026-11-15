@@ -29,7 +29,8 @@ spending route then rejects, because no auth provider exists to produce an ident
 | `OPENAI_API_KEY` | The only LLM key. Used by runtime LLM workloads through `convex/lib/openai.ts`. Unset: routes that need it answer 503. | yes |
 | `ANTHROPIC_API_KEY` | Read only by the not-yet-migrated coach reply until Tutoring's change lands, then retired. | yes |
 | `LIVEAVATAR_API_KEY`, `LIVEAVATAR_AVATAR_ID_*`, `LIVEAVATAR_VOICE_ID_*`, `LIVEAVATAR_SANDBOX` | The talking coach (`POST /coach/session-token`). | key: yes |
-| `AZURE_SPEECH_KEY`, `AZURE_SPEECH_REGION` or `AZURE_SPEECH_ENDPOINT` | The pronunciation engine, once it is wired in. Until then assessment jobs fail with `engine_not_configured`. | key: yes |
+| `AZURE_SPEECH_KEY` | Azure pronunciation assessment, the assessment engine. Unset (or without a region or endpoint): jobs fail with `engine_not_configured`. | yes |
+| `AZURE_SPEECH_REGION` or `AZURE_SPEECH_ENDPOINT` | Where the Speech resource lives. The region (for example `eastus`) builds the regional host; the endpoint is the full recognition URL without a query string, for a resource with a custom domain, and wins when both are set. | no |
 | `DEV_ONLY_TEST_JWT_ISSUER`, `DEV_ONLY_TEST_JWT_AUDIENCE`, `DEV_ONLY_TEST_JWT_JWKS` | **Local development only.** Enables a test sign-in whose private key sits on a developer machine. **Never set these on a shared, preview, or production deployment.** All three must be set for the provider to exist. | no (but dangerous) |
 
 How unset variables behave: Convex evaluates `auth.config.ts` on the deployment at push time and
@@ -93,7 +94,7 @@ The app uploads WAV audio (`audio/wav`, 16 kHz mono 16-bit PCM), at most 30 s an
 its original take locally. `attempts.create` checks the stored upload's content type and size, that the
 project and line belong to the caller, a plausible `capturedAt` (at most 5 minutes ahead and 30 days
 behind the server clock), and that no other attempt already claimed the storage id. The encoding
-itself is checked by the engine, which fails the job with `invalid_input` on a wrong format.
+itself is checked by the engine before any provider call, which fails the job with `invalid_input` (not retryable) on a wrong format or a length over 30 s.
 An attempt records the learner's time zone at capture time, from `timeZone` or the profile fallback.
 
 ## Assessment jobs
@@ -135,12 +136,22 @@ stateDiagram-v2
 
 ### Plugging in the engine and coaching
 
-Both are registered in `convex/integrations/providers.ts`, which returns `null` until wired. The engine
-seam in `convex/integrations/contracts.ts` takes the assessment adapter's `AssessAttemptInput` plus the
-audio and returns its `AssessmentOutcome`, with the adapter's error kinds (`AssessmentError`). Wiring the
-pronunciation service is one file: construct an engine that inspects the WAV, calls the provider, and
-calls the adapter. The backend passes its job id as `assessmentId` for correlation; the stored assessment
-gets its own database id. Test doubles live only in test files.
+Both are registered in `convex/integrations/providers.ts`. The engine seam in
+`convex/integrations/contracts.ts` takes the assessment adapter's `AssessAttemptInput` plus the audio and
+returns its `AssessmentOutcome` (response, evidence, and the evaluator provenance the job stores), with the
+adapter's error kinds (`AssessmentError`). The backend passes its job id as `assessmentId` for
+correlation; the stored assessment gets its own database id. Test doubles live only in test files.
+
+The engine is Azure pronunciation assessment (`convex/integrations/azureEngine.ts`). It is registered
+when `AZURE_SPEECH_KEY` and a region or endpoint are set; otherwise `getAssessmentEngine` returns `null`.
+For each job it checks the WAV (16 kHz mono 16-bit PCM, at most 30 s), calls Azure with up to 3 tries
+for network failures, 408, 429, and 5xx, and hands the response to the adapter. The duration it assesses
+against is the WAV's own, not the client-reported length; the backend still rejects word boundaries
+that run more than 250 ms past the reported length. A retry writes one log line with the job id,
+attempt number, and status code, never the key, audio, or transcript. A 401 or 403 is `provider_auth`
+and is not retried. No coaching provider is registered yet, so a scored job stores its outcome and ends
+as `coach_not_configured`; once one is registered, `assessments.retry` finishes the job without calling
+Azure again.
 
 ## Scene catalog
 
@@ -182,7 +193,7 @@ npm run smoke:local
   the baseline Anthropic code and needs `ANTHROPIC_API_KEY`.
 - Calling Tutoring's ingestion after an assessment is stored is not wired; `convex/lib/ingest.ts`
   builds the payload and is tested. Deletion hooks are not wired either.
-- No engine or coaching implementation is registered, so jobs end in `engine_not_configured`.
+- No coaching provider is registered, so jobs end in `coach_not_configured` after the engine has scored them. The Azure engine has only been exercised against synthetic fixtures and a fake `fetch`, never a live Speech resource.
 - Export upload (`projects.exportStorageId`), progress analytics, and account deletion are not built.
 - A Convex storage id is unguessable but not bound to the user who uploaded it until `attempts.create`
   claims it.

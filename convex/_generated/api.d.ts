@@ -23,6 +23,7 @@ import type * as coachReply from "../coachReply.js";
 import type * as crons from "../crons.js";
 import type * as history from "../history.js";
 import type * as http from "../http.js";
+import type * as integrations_azureEngine from "../integrations/azureEngine.js";
 import type * as integrations_contracts from "../integrations/contracts.js";
 import type * as integrations_providers from "../integrations/providers.js";
 import type * as lib_auth from "../lib/auth.js";
@@ -65,6 +66,7 @@ declare const fullApi: ApiFromModules<{
   crons: typeof crons;
   history: typeof history;
   http: typeof http;
+  "integrations/azureEngine": typeof integrations_azureEngine;
   "integrations/contracts": typeof integrations_contracts;
   "integrations/providers": typeof integrations_providers;
   "lib/auth": typeof lib_auth;
