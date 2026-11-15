@@ -75,12 +75,25 @@ Per the crew rules, a verification claim names the commit SHA, Revyl build id (o
 | --- | --- | --- | --- |
 | iOS build and unit tests | The `Dubbing` scheme compiles for the iOS 26 simulator and `DubbingTests` pass | `ios-ci.yml`; the script on a Mac or Revyl | Yes |
 | App bundle scan | The built `Dubbing.app` holds no OpenAI key (literal or the `OPENAI_API_KEY` name), no direct `api.openai.com` or Anthropic endpoint, and no other LLM vendor endpoint | Inside `ios-build-test.sh` | Yes |
+| LLM provider policy | Runtime code uses OpenAI only, through the Responses API (below) | `qa-policy.yml`, job "LLM provider policy (OpenAI-only runtime)" | Yes |
 | Secret scan | The commits a change adds contain no secrets (gitleaks 8.30.1, checksum-pinned, no allowlist) | `qa-policy.yml`, job "Secret scan (gitleaks 8.30.1)" | Yes |
 | Physical iPhone | Microphone fidelity, audio routes and interruptions, Bluetooth, on-device speech models, share sheet | A person with a device | Not automated; a simulator cannot prove these |
 
+### LLM provider policy check
+
+Every AI agent in the deployed app uses OpenAI only, through the official SDK and the Responses API, with `OPENAI_API_KEY` on the Convex backend only. `scripts/qa/check-llm-provider.sh` enforces it and prints `file:line  [rule]` for each violation without printing matched values:
+
+| Rule | Fires on | In |
+| --- | --- | --- |
+| `non-openai-vendor` | Anthropic or Claude references, Google, Cohere, Mistral, Groq, Vercel AI SDK, OpenRouter, Together, DeepSeek, xAI, Bedrock, and Perplexity SDKs, endpoints, or key names | `convex/`, `Dubbing/`, `Config/`, root `package.json` and `package-lock.json` |
+| `openai-non-responses` | Chat completions, legacy completions, assistants, and threads | `convex/`, `Dubbing/`, `Config/` |
+| `openai-in-app` | `OPENAI_API_KEY`, a literal `sk-` key, `api.openai.com`, or an OpenAI client library | `Dubbing/`, `Config/`, `DubbingTests/` (fixtures included), `DubbingUITests/`, `Dubbing.xcodeproj/` |
+
+Docs, `.agents/`, `node_modules`, `convex/_generated`, and the check's own fixtures are not scanned. `scripts/qa/check-llm-provider.sh --self-test` runs the rules against the fixture trees in `scripts/qa/fixtures/llm-provider/` (one clean tree and one tree per rule case) and fails if a rule stops firing. The CI job runs the self-tests first, then the check, with no `continue-on-error`, so it stays red until the OpenAI migration removes every Anthropic reference from runtime code.
+
 ### Secret scan and bundle scan
 
-The secret scan runs gitleaks over the commits a pull request or push adds. It has no allowlist, so a finding means a credential must be removed and rotated. The bundle scan (`scripts/qa/scan-app-bundle.sh <Dubbing.app>`, self-test with `--self-test`) runs on every build and checks the compiled app, including the binary, for an OpenAI key (literal or the `OPENAI_API_KEY` name), direct `api.openai.com` or Anthropic endpoints, and other LLM vendor endpoints. CI runs its self-test in `qa-policy.yml`, job "App bundle scan self-test".
+The secret scan runs gitleaks over the commits a pull request or push adds. It has no allowlist, so a finding means a credential must be removed and rotated. The bundle scan (`scripts/qa/scan-app-bundle.sh <Dubbing.app>`, self-test with `--self-test`) runs on every build and checks the compiled app, including the binary, for the same provider key and endpoint patterns.
 
 ## Known gaps
 
