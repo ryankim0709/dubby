@@ -61,7 +61,7 @@ with only some set.
 | `users.ensure()` | Register the signed-in learner. Returns `{ userId, created }`. |
 | `users.setTimeZone({ timeZone })` | IANA zone, used as the fallback for each attempt's local day. |
 | `scenes.list()` | Published scenes with their characters. |
-| `scenes.get({ sceneId })` | A published scene with provenance and the newest revision of every line. Media files ship inside the app. |
+| `scenes.get({ sceneId })` | A published scene with provenance, the newest revision of every line, and `videoUrl` for its stored video (null when none is attached). |
 | `projects.start({ sceneId, characterId })` | Start dubbing one character; repeating it while active returns the same project. |
 | `projects.get({ projectId })` | Project state with its accepted takes. |
 | `attempts.generateUploadUrl()` | A one-time URL to POST the recording to. |
@@ -73,7 +73,7 @@ with only some set.
 | `projects.complete({ projectId })` | Finish the dub once every line of the character has an accepted take. |
 | `history.list({ status?, limit? })` | My Dubs: the learner's projects, newest activity first. |
 
-Internal functions (not callable by clients): `scenes.seed`, `assessments.reassess`, and the job
+Internal functions (not callable by clients): `scenes.seed`, `scenes.generateVideoUploadUrl`, `scenes.attachVideo`, `assessments.reassess`, and the job
 internals (`run`, `claim`, `saveOutcome`, `complete`, `recordFailure`, `reclaimStale`, `media.attemptAudio`).
 
 ### HTTP routes
@@ -167,6 +167,16 @@ It validates finite times with `0 <= start < end <= durationSeconds`, resolvable
 lines, and no overlap among one character's lines. Re-running it with the same manifest changes
 nothing. A changed line must carry a higher `referenceVersion`, which inserts a new row; attempts keep
 the exact row they were recorded against. File entries and word timings are ignored.
+
+The scene's video lives in Convex file storage. Seed the scene first, then upload and attach the file;
+`_storage` records its SHA-256, size, and content type. Attaching a new video deletes the old one, and
+re-seeding keeps the attached video.
+
+```sh
+URL=$(npx convex run scenes:generateVideoUploadUrl | tr -d '"')
+curl -X POST -H "Content-Type: video/mp4" --data-binary @clip.mp4 "$URL"   # returns {"storageId": ...}
+npx convex run scenes:attachVideo '{"slug":"<scene slug>","videoId":"<storageId>"}'
+```
 
 ## Checks
 

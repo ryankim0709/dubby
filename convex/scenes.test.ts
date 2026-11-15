@@ -64,3 +64,47 @@ describe("scenes.seed", () => {
     expect(await t.withIdentity(alice).query(api.scenes.list, {})).toHaveLength(1);
   });
 });
+
+describe("scenes.attachVideo", () => {
+  it("serves the attached video, keeps it across re-seeds, and deletes the one it replaces", async () => {
+    const t = newBackend();
+    const store = (type: string) => t.run(async (ctx) => await ctx.storage.store(new Blob([new Uint8Array(16)], { type })));
+    const { sceneId } = await t.mutation(internal.scenes.seed, manifest());
+    const first = await store("video/mp4");
+    await t.mutation(internal.scenes.attachVideo, { slug: "synthetic-fixture-scene", videoId: first });
+    await t.mutation(internal.scenes.seed, manifest());
+    expect((await t.withIdentity(alice).query(api.scenes.get, { sceneId }))?.videoUrl).toEqual(expect.any(String));
+
+    await expectAppError(t.mutation(internal.scenes.attachVideo, { slug: "synthetic-fixture-scene", videoId: await store("text/plain") }), "INVALID_UPLOAD");
+    await expectAppError(t.mutation(internal.scenes.attachVideo, { slug: "missing-scene", videoId: first }), "NOT_FOUND");
+
+    const second = await store("video/mp4");
+    await t.mutation(internal.scenes.attachVideo, { slug: "synthetic-fixture-scene", videoId: second });
+    expect(await t.run(async (ctx) => [await ctx.storage.getUrl(first), (await ctx.db.get("scenes", sceneId))?.videoId])).toEqual([null, second]);
+  });
+});
+
+describe("GET /scenes", () => {
+  it("lists only published scenes that have a video, without sign-in", async () => {
+    const t = newBackend();
+    const video = () => t.run(async (ctx) => await ctx.storage.store(new Blob([new Uint8Array(16)], { type: "video/mp4" })));
+    await t.mutation(internal.scenes.seed, manifest());
+    await t.mutation(internal.scenes.seed, manifest([line], { sceneId: "synthetic-hidden-scene", published: false }));
+    await t.mutation(internal.scenes.seed, manifest([line], { sceneId: "synthetic-silent-scene" }));
+    await t.mutation(internal.scenes.attachVideo, { slug: "synthetic-fixture-scene", videoId: await video() });
+    await t.mutation(internal.scenes.attachVideo, { slug: "synthetic-hidden-scene", videoId: await video() });
+
+    const response = await t.fetch("/scenes", { method: "GET" });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      scenes: [
+        {
+          slug: "synthetic-fixture-scene",
+          title: "SYNTHETIC TEST FIXTURE scene",
+          durationSeconds: 10,
+          video: { url: expect.any(String), sha256: expect.any(String), byteSize: 16, contentType: "video/mp4" },
+        },
+      ],
+    });
+  });
+});

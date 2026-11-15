@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import type { Doc } from "./_generated/dataModel";
-import { internalMutation, query } from "./_generated/server";
+import { internalMutation, internalQuery, query } from "./_generated/server";
 import { requireLearner } from "./lib/auth";
 import { lineView } from "./lib/catalog";
 import { appError } from "./lib/errors";
@@ -64,10 +64,12 @@ export const list = query({
   },
 });
 
-/** A published scene with its characters and the newest revision of each line. Media files ship inside the app. */
+/** A published scene with its characters, the newest revision of each line, and a URL for its stored video. */
 export const get = query({
   args: { sceneId: v.id("scenes") },
-  returns: nullable(v.object({ ...sceneSummaryV.fields, provenance: v.any(), lines: v.array(lineViewV) })),
+  returns: nullable(
+    v.object({ ...sceneSummaryV.fields, provenance: v.any(), videoUrl: nullable(v.string()), lines: v.array(lineViewV) }),
+  ),
   handler: async (ctx, { sceneId }) => {
     await requireLearner(ctx);
     const scene = await ctx.db.get("scenes", sceneId);
@@ -87,6 +89,7 @@ export const get = query({
     return {
       ...summary(scene, characters),
       provenance: scene.provenance,
+      videoUrl: scene.videoId === undefined ? null : await ctx.storage.getUrl(scene.videoId),
       lines: [...newest.values()].sort((a, b) => a.startSeconds - b.startSeconds || a.order - b.order).map(lineView),
     };
   },
@@ -179,7 +182,9 @@ export const seed = internalMutation({
       sceneId = await ctx.db.insert("scenes", { slug: manifest.sceneId, ...sceneFields });
     } else {
       sceneId = existingScene._id;
-      await ctx.db.replace(sceneId, { slug: manifest.sceneId, ...sceneFields });
+      // The manifest doesn't carry the uploaded video, so re-seeding must keep it.
+      const video = existingScene.videoId === undefined ? {} : { videoId: existingScene.videoId };
+      await ctx.db.replace(sceneId, { slug: manifest.sceneId, ...sceneFields, ...video });
     }
 
     const characterDocIds = new Map<string, Doc<"characters">["_id"]>();
@@ -234,5 +239,69 @@ export const seed = internalMutation({
     }
     logEvent({ operation: "scenes.seed", status: "ok", count: linesInserted });
     return { sceneId, linesInserted, linesUnchanged };
+  },
+});
+
+/** A short-lived URL to POST a scene video to; the response body is `{ "storageId": ... }`. Internal, like `seed`. */
+export const generateVideoUploadUrl = internalMutation({
+  args: {},
+  returns: v.string(),
+  handler: async (ctx) => await ctx.storage.generateUploadUrl(),
+});
+
+/** Points a seeded scene at an uploaded video and deletes the video it replaces, so storage holds no orphans. */
+export const attachVideo = internalMutation({
+  args: { slug: v.string(), videoId: v.id("_storage") },
+  returns: v.id("scenes"),
+  handler: async (ctx, { slug, videoId }) => {
+    const scene = await ctx.db.query("scenes").withIndex("by_slug", (q) => q.eq("slug", slug)).unique();
+    if (scene === null) throw appError("NOT_FOUND", `no scene has slug ${slug}; seed it first`);
+    const file = await ctx.db.system.get("_storage", videoId);
+    if (file === null) throw appError("INVALID_UPLOAD", `no stored file has id ${videoId}`);
+    if (!file.contentType?.startsWith("video/")) {
+      throw appError("INVALID_UPLOAD", `stored file ${videoId} has content type ${file.contentType ?? "none"}, not video/*`);
+    }
+    if (scene.videoId !== undefined && scene.videoId !== videoId) await ctx.storage.delete(scene.videoId);
+    await ctx.db.patch("scenes", scene._id, { videoId });
+    logEvent({ operation: "scenes.attachVideo", status: "ok" });
+    return scene._id;
+  },
+});
+
+const catalogEntryV = v.object({
+  slug: v.string(),
+  title: v.string(),
+  durationSeconds: v.number(),
+  video: v.object({ url: v.string(), sha256: v.string(), byteSize: v.number(), contentType: v.string() }),
+});
+
+/**
+ * Published scenes that have a stored video, for the public `GET /scenes` route. The app downloads each
+ * video once and checks it against `sha256` (base64, as `_storage` records it).
+ */
+export const catalog = internalQuery({
+  args: {},
+  returns: v.array(catalogEntryV),
+  handler: async (ctx) => {
+    const scenes = await ctx.db
+      .query("scenes")
+      .withIndex("by_published", (q) => q.eq("published", true))
+      .collect();
+    const entries = await Promise.all(
+      scenes.map(async (scene) => {
+        if (scene.videoId === undefined) return null;
+        const file = await ctx.db.system.get("_storage", scene.videoId);
+        const url = await ctx.storage.getUrl(scene.videoId);
+        if (file === null || url === null) throw new Error(`scene ${scene.slug} points at missing file ${scene.videoId}`);
+        if (file.contentType === undefined) throw new Error(`scene ${scene.slug} video ${scene.videoId} has no content type`);
+        return {
+          slug: scene.slug,
+          title: scene.title,
+          durationSeconds: scene.durationSeconds,
+          video: { url, sha256: file.sha256, byteSize: file.size, contentType: file.contentType },
+        };
+      }),
+    );
+    return entries.filter((entry) => entry !== null);
   },
 });
