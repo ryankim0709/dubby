@@ -7,7 +7,7 @@ import { logEvent } from "./lib/log";
 import { registerTutoringRoutes } from "./tutoringHttp";
 
 // The coach and tutoring routes (tutoringHttp.ts) require a signed-in caller where they spend provider credit and
-// answer 401 before any provider call; /coach/characters and /health are public and spend nothing.
+// answer 401 before any provider call; /coach/characters, /scenes, and /health are public and spend nothing.
 
 function json(status: number, body: object): Response {
   return new Response(JSON.stringify(body), {
@@ -39,6 +39,17 @@ http.route({
 });
 
 registerTutoringRoutes(http);
+
+// Public because the app has no sign-in yet; it exposes only what a published scene already shows.
+http.route({
+  path: "/scenes",
+  method: "GET",
+  handler: httpAction(async (ctx) => {
+    const scenes = await ctx.runQuery(internal.scenes.catalog, {});
+    logEvent({ operation: "scenes.catalog", status: "ok", count: scenes.length, httpStatus: 200 });
+    return json(200, { scenes });
+  }),
+});
 
 const audioPath = /^\/media\/attempts\/([^/]+)\/audio$/;
 const rangeHeader = /^bytes=(\d*)-(\d*)$/;

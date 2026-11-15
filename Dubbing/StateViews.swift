@@ -136,13 +136,6 @@ struct MeasurementRow: View {
     }
 }
 
-/// What a shown piece of feedback rests on. Only an acoustic speech measurement may carry a pronunciation score.
-nonisolated enum FeedbackBasis: String, Sendable {
-    case acoustic
-    case scriptAgreement = "script_agreement"
-    case none
-}
-
 extension TakeMeasurement {
     /// Take length and mic level are the only things measured, and neither says anything about pronunciation,
     /// so there is no pronunciation score to show and none exists in the UI.

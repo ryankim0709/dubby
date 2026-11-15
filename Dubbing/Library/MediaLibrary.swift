@@ -23,7 +23,11 @@ nonisolated enum MediaLibrary {
                 durationSeconds: try await MediaPipeline.loadDuration(of: url)
             ))
         }
-        return clips.sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
+        return sortedByTitle(clips)
+    }
+
+    static func sortedByTitle(_ clips: [LibraryClip]) -> [LibraryClip] {
+        clips.sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
     }
 
     /// Turns a file name like `anakin-confronts-obi-wan` into `Anakin Confronts Obi Wan`.

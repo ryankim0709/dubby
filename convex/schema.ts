@@ -22,6 +22,8 @@ export default defineSchema({
     published: v.boolean(),
     /** The scene manifest's provenance object, stored as supplied. */
     provenance: v.any(),
+    /** The scene's video in Convex file storage; `_storage` holds its SHA-256, size, and content type. */
+    videoId: v.optional(v.id("_storage")),
   })
     .index("by_slug", ["slug"])
     .index("by_published", ["published"]),

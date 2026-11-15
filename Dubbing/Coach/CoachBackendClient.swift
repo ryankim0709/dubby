@@ -94,14 +94,15 @@ nonisolated struct CoachBackendClient: CoachTutorService {
     let baseURL: URL
     let tokens: any CoachAuthTokenProvider
 
-    /// Reads the backend URL that the COACH_BACKEND_URL build setting writes into Info.plist.
     static func configured(in bundle: Bundle, tokens: any CoachAuthTokenProvider) throws -> CoachBackendClient {
-        guard
-            let value = bundle.object(forInfoDictionaryKey: "CoachBackendURL") as? String,
-            !value.isEmpty,
-            let url = URL(string: value)
-        else { throw CoachError.backendNotConfigured }
+        guard let url = configuredBaseURL(in: bundle) else { throw CoachError.backendNotConfigured }
         return CoachBackendClient(baseURL: url, tokens: tokens)
+    }
+
+    /// The backend URL that the COACH_BACKEND_URL build setting writes into Info.plist, or nil when it's unset.
+    static func configuredBaseURL(in bundle: Bundle) -> URL? {
+        guard let value = bundle.object(forInfoDictionaryKey: "CoachBackendURL") as? String, !value.isEmpty else { return nil }
+        return URL(string: value)
     }
 
     /// The coach roster is public, so it is the one route sent without a token.
