@@ -144,7 +144,7 @@ struct CoachPreferencesView: View {
             VStack(spacing: 12) {
                 EmptyStateView(systemImage: "exclamationmark.triangle", title: "Couldn't load your preferences", message: message)
                 Button("Try again") { Task { await preferences.load() } }
-                    .buttonStyle(OutlineCapsuleButtonStyle())
+                    .buttonStyle(SecondaryButtonStyle())
             }
             .padding(16)
             Spacer()

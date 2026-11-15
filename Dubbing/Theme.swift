@@ -1,20 +1,62 @@
+import CoreText
 import SwiftUI
 import UIKit
 
-/// Color tokens taken from the Dubby mockups.
+/// Screening-room tokens: neutral charcoal lit by a soft glow behind the content, white for
+/// what's selected or actionable and grey for everything else. The only hues are functional:
+/// recording red while the mic is live, and hologram cyan reserved for the coach.
 enum Palette {
-    static let background = Color(hex: 0x100D19)
-    static let surface = Color(hex: 0x252131)
-    static let track = Color(hex: 0x4B435B)
-    static let segmentInactive = Color(hex: 0x383043)
-    static let divider = Color(hex: 0x373043)
-    static let accent = Color(hex: 0xA78BFA)
-    static let accentText = Color(hex: 0xB5A0FF)
-    static let onAccent = Color(hex: 0x100D19)
-    static let textPrimary = Color(hex: 0xEDEDED)
-    static let textSecondary = Color(hex: 0xCDCDCD)
-    static let placeholder = Color(hex: 0xA6A1B5)
-    static let streak = Color(hex: 0xFFB65C)
+    static let background = Color(hex: 0x0F0F0F)
+    /// The light pooling behind the top of each screen, fading out to `background`.
+    static let backgroundGlow = Color(hex: 0x2C2C2C)
+    static let surface = Color(hex: 0x1C1C1C)
+    static let surfaceRaised = Color(hex: 0x2A2A2A)
+    static let hairline = Color(hex: 0x2C2C2C)
+    static let track = Color(hex: 0x3A3A3A)
+    static let segmentInactive = Color(hex: 0x3A3A3A)
+    static let divider = Color(hex: 0x2C2C2C)
+    static let textPrimary = Color(hex: 0xF2F2F2)
+    static let textSecondary = Color(hex: 0x9A9A9A)
+    static let placeholder = Color(hex: 0x7C7C7C)
+    static let accent = Color(hex: 0xF2F2F2)
+    static let accentText = Color(hex: 0xF2F2F2)
+    static let streak = Color(hex: 0x9A9A9A)
+    static let onAccent = Color(hex: 0x0F0F0F)
+    /// Switches keep the system's green: a white track would hide the white knob.
+    static let toggleOn = Color(hex: 0x34C759)
+    static let record = Color(hex: 0xFF4D3D)
+    static let holo = Color(hex: 0x6FF2FF)
+    static let shelfWood = Color(hex: 0x2E2E2E)
+    static let shelfWoodShadow = Color(hex: 0x141414)
+}
+
+/// Corner radii from the reference: big soft posters, slightly tighter cards and controls.
+enum Radius {
+    static let poster: CGFloat = 22
+    static let card: CGFloat = 18
+    static let control: CGFloat = 16
+}
+
+/// The screen ground: charcoal with a soft glow behind the top-centre content.
+struct ScreenBackground: View {
+    var body: some View {
+        ZStack {
+            Palette.background
+            RadialGradient(
+                colors: [Palette.backgroundGlow, Palette.background],
+                center: UnitPoint(x: 0.5, y: 0.28),
+                startRadius: 0,
+                endRadius: 460
+            )
+        }
+        .ignoresSafeArea()
+    }
+}
+
+extension View {
+    func screenBackground() -> some View {
+        background { ScreenBackground() }
+    }
 }
 
 extension Color {
@@ -27,7 +69,28 @@ extension Color {
     }
 }
 
+/// League Gothic is used only where it imitates printed poster art (titles on placeholder
+/// posters, DVD cases, the wordmark); SF carries all interface text, headings included.
+enum DisplayFont {
+    static let postScriptName = "LeagueGothic-Regular"
+
+    /// The generated Info.plist can't list UIAppFonts, so the bundled face is registered for this process at launch.
+    static func register() {
+        guard let url = Bundle.main.url(forResource: "LeagueGothic", withExtension: "ttf") else {
+            preconditionFailure("LeagueGothic.ttf is missing from the app bundle")
+        }
+        var error: Unmanaged<CFError>?
+        if !CTFontManagerRegisterFontsForURL(url as CFURL, .process, &error) {
+            preconditionFailure("Couldn't register League Gothic: \(String(describing: error?.takeRetainedValue()))")
+        }
+    }
+}
+
 extension View {
+    func displayFont(_ size: CGFloat) -> some View {
+        font(.custom(DisplayFont.postScriptName, size: size, relativeTo: .largeTitle))
+    }
+
     /// System font at the mockup's point size for the default text size, scaled with Dynamic Type
     /// by the text style closest to that size.
     func dubFont(_ size: CGFloat, weight: Font.Weight) -> some View {
@@ -86,28 +149,45 @@ func adaptiveGridColumns(spacing: CGFloat, isAccessibilitySize: Bool) -> [GridIt
 
 struct PrimaryButtonStyle: ButtonStyle {
     let cornerRadius: CGFloat
+    @Environment(\.isEnabled) private var isEnabled
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .dubFont(16, weight: .medium)
+            .dubFont(17, weight: .semibold)
             .foregroundStyle(Palette.onAccent)
-            .frame(maxWidth: .infinity, minHeight: 50)
-            .background(Palette.accent, in: RoundedRectangle(cornerRadius: cornerRadius))
-            .opacity(configuration.isPressed ? 0.8 : 1)
+            .padding(.horizontal, 20)
+            .frame(maxWidth: .infinity, minHeight: 52)
+            .background(Palette.accent.opacity(isEnabled ? 1 : 0.35), in: RoundedRectangle(cornerRadius: cornerRadius))
+            .scaleEffect(configuration.isPressed ? 0.98 : 1)
     }
 }
 
-struct OutlineCapsuleButtonStyle: ButtonStyle {
+struct SecondaryButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
-        HStack(spacing: 8) {
-            configuration.label
+        HStack(spacing: 8) { configuration.label }
+            .dubFont(17, weight: .semibold)
+            .foregroundStyle(Palette.textPrimary)
+            .padding(.horizontal, 16)
+            .frame(minHeight: 48)
+            .background(Palette.surfaceRaised, in: RoundedRectangle(cornerRadius: Radius.control))
+            .opacity(configuration.isPressed ? 0.75 : 1)
+    }
+}
+
+struct MetaPill: View {
+    let text: String
+    let systemImage: String?
+
+    var body: some View {
+        HStack(spacing: 4) {
+            if let systemImage { Image(systemName: systemImage) }
+            Text(text)
         }
-        .dubFont(14, weight: .medium)
+        .dubFont(13, weight: .semibold)
         .foregroundStyle(Palette.textPrimary)
-        .padding(.horizontal, 16)
-        .frame(minHeight: 36)
-        .overlay(Capsule().strokeBorder(Palette.track, lineWidth: 1))
-        .opacity(configuration.isPressed ? 0.7 : 1)
+        .padding(.horizontal, 10)
+        .frame(minHeight: 26)
+        .background(.black.opacity(0.45), in: Capsule())
     }
 }
 
@@ -139,8 +219,19 @@ struct WaveformView: View {
 /// The first frame-ish thumbnail of a video, loaded off the main actor.
 struct VideoThumbnail: View {
     let url: URL
+    let time: Double?
     @State private var image: CGImage?
     @State private var failure: String?
+
+    init(url: URL) {
+        self.url = url
+        time = nil
+    }
+
+    init(url: URL, time: Double) {
+        self.url = url
+        self.time = time
+    }
 
     var body: some View {
         Palette.surface
@@ -156,14 +247,24 @@ struct VideoThumbnail: View {
                 }
             }
             .clipped()
-            .task(id: url) {
+            .task(id: ThumbnailRequest(url: url, time: time)) {
                 do {
-                    image = try await MediaPipeline.thumbnails(for: url, count: 1, maximumSize: CGSize(width: 480, height: 270)).first
+                    failure = nil
+                    if let time {
+                        image = try await MediaPipeline.thumbnail(for: url, at: time, maximumSize: CGSize(width: 640, height: 640))
+                    } else {
+                        image = try await MediaPipeline.thumbnails(for: url, count: 1, maximumSize: CGSize(width: 640, height: 640)).first
+                    }
                 } catch {
                     failure = error.localizedDescription
                 }
             }
     }
+}
+
+private struct ThumbnailRequest: Equatable {
+    let url: URL
+    let time: Double?
 }
 
 /// A centered message for screens with nothing real to show yet.
@@ -186,8 +287,8 @@ struct EmptyStateView: View {
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)
-        .padding(24)
-        .background(Palette.surface, in: RoundedRectangle(cornerRadius: 16))
+        .padding(.horizontal, 24)
+        .padding(.vertical, 40)
         .accessibilityElement(children: .combine)
     }
 }

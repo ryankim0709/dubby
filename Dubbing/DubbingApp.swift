@@ -7,6 +7,7 @@ struct DubbingApp: App {
     @State private var scoring: DubScoringModel?
 
     init() {
+        DisplayFont.register()
         LaunchConfiguration.current.prepareProcess()
         let account = AccountModel.live(in: .main)
         _account = State(initialValue: account)
