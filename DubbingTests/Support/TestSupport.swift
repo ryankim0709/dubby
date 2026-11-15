@@ -1,5 +1,4 @@
 import Foundation
-import Testing
 
 /// Loads files from `DubbingTests/Fixtures`, which Xcode copies into the test bundle.
 /// Fixtures must be synthetic or properly licensed; never add personal recordings.
@@ -10,10 +9,24 @@ enum TestFixtures {
     }
 
     static func url(named name: String, extension fileExtension: String) throws -> URL {
-        try #require(
-            Bundle(for: BundleAnchor.self).url(forResource: name, withExtension: fileExtension),
-            "Missing fixture \(name).\(fileExtension) in the DubbingTests bundle; add it under DubbingTests/Fixtures."
-        )
+        guard let url = Bundle(for: BundleAnchor.self).url(forResource: name, withExtension: fileExtension) else {
+            throw TestFixtureError.missing("\(name).\(fileExtension)")
+        }
+        return url
+    }
+}
+
+/// Thrown instead of using `#require`, which records a test issue even when the caller expects the throw.
+/// A test that lets it propagate still fails, and its message names the missing file.
+struct TestFixtureError: Error, CustomStringConvertible, Equatable {
+    let fileName: String
+
+    static func missing(_ fileName: String) -> TestFixtureError {
+        TestFixtureError(fileName: fileName)
+    }
+
+    var description: String {
+        "Missing fixture \(fileName) in the DubbingTests bundle; add it under DubbingTests/Fixtures."
     }
 }
 

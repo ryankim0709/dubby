@@ -1,1 +1,0 @@
-const key = process.env.ANTHROPIC_API_KEY;
