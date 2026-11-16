@@ -3,6 +3,9 @@ import Foundation
 
 /// Pure steps that turn transcribed words and line audio into a dub script and a dub mix plan.
 nonisolated enum ScriptBuilder {
+    private static let maximumCastLineDuration: Double = 8
+    private static let minimumCastLineDuration: Double = 1
+
     /// Splits timed words into lines at long pauses, or at shorter pauses after sentence-ending punctuation.
     static func segmentLines(words: [TranscribedWord], pauseThreshold: Double, sentencePause: Double) -> [LineDraft] {
         var lines: [LineDraft] = []
@@ -48,9 +51,8 @@ nonisolated enum ScriptBuilder {
         return Script(lines: lines, speakers: speakers)
     }
 
-    /// Splits section words into lines like `segmentLines`, and also where a word after a pause of `turnPause`
-    /// or more belongs to someone other than the line's main speaker so far, so a quick reply gets its own line.
-    /// Each line goes to whoever speaks most of it, which absorbs a word whose timing straddles a speaker change.
+    /// Keeps a character's turn together, splitting long turns at sentence ends or pauses where possible.
+    /// Speaker changes at pauses or sentence ends stay separate; majority duration absorbs words that straddle a turn.
     static func castLines(
         words: [TranscribedWord],
         cast: SceneCast,
@@ -72,18 +74,53 @@ nonisolated enum ScriptBuilder {
                 let previous = sorted[previousIndex]
                 let gap = sorted[index].start - previous.end
                 let endsSentence = previous.text.last.map { ".?!".contains($0) } ?? false
-                let changesSpeaker = gap >= turnPause && speakers[index] != mainSpeaker(of: group)
-                if !(gap >= pauseThreshold || (endsSentence && gap >= sentencePause) || changesSpeaker) {
+                let turnBoundary = gap >= turnPause || (endsSentence && gap >= sentencePause)
+                let changesSpeaker = turnBoundary && speakers[index] != mainSpeaker(of: group)
+                if !changesSpeaker {
                     groups[groups.count - 1].append(index)
                     continue
                 }
             }
             groups.append([index])
         }
-        return groups.compactMap { group in
-            guard let line = draft(from: group.map { sorted[$0] }), let character = mainSpeaker(of: group) else { return nil }
-            return CastLine(line: line, character: character)
+        return groups.flatMap { group -> [CastLine] in
+            guard let character = mainSpeaker(of: group) else { return [] }
+            return boundedCastLines(words: group.map { sorted[$0] }, pauseThreshold: pauseThreshold, sentencePause: sentencePause)
+                .map { CastLine(line: $0, character: character) }
         }
+    }
+
+    private static func boundedCastLines(words: [TranscribedWord], pauseThreshold: Double, sentencePause: Double) -> [LineDraft] {
+        var lines: [LineDraft] = []
+        var startIndex: Int = 0
+        while startIndex < words.count {
+            let remaining = words[startIndex...]
+            let last = words[words.count - 1]
+            if last.end - words[startIndex].start <= maximumCastLineDuration {
+                if let line = draft(from: Array(remaining)) { lines.append(line) }
+                break
+            }
+
+            let boundaries = ((startIndex + 1)..<words.count).filter { index in
+                words[index - 1].end - words[startIndex].start <= maximumCastLineDuration
+            }
+            // Leave at least a second on both sides rather than orphaning a final word at the duration cap.
+            let balanced = boundaries.filter { index in
+                words[index - 1].end - words[startIndex].start >= minimumCastLineDuration
+                    && last.end - words[index].start >= minimumCastLineDuration
+            }
+            let candidates = balanced.isEmpty ? boundaries : balanced
+            let sentenceEnd = candidates.last { index in
+                let previous = words[index - 1]
+                return previous.text.last.map { ".?!".contains($0) } == true && words[index].start - previous.end >= sentencePause
+            }
+            let pause = candidates.last { words[$0].start - words[$0 - 1].end >= pauseThreshold }
+            // A single measured word can exceed the cap; preserve it intact and continue with the next word.
+            let endIndex = sentenceEnd ?? pause ?? candidates.last ?? (startIndex + 1)
+            if let line = draft(from: Array(words[startIndex..<endIndex])) { lines.append(line) }
+            startIndex = endIndex
+        }
+        return lines
     }
 
     /// The editable script for cast lines. Every cast character is a speaker, named when the backend could tell.

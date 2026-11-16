@@ -3,6 +3,33 @@ import Testing
 @testable import Dubbing
 
 struct ScriptPreparationTests {
+    @Test func preparesOneRecordingLineForASameCharacterContinuation() async throws {
+        let folder = try TemporaryDirectory(prefix: "GroupedScriptPreparationTests")
+        let clip = ImportedClip(url: try TestFixtures.twoToneVideo(), title: "Synthetic scene", durationSeconds: 3, origin: .published, workingDirectory: folder.url)
+        let language = SpokenLanguage(identifier: "en-US", name: "English")
+        let request = TranscriptionRequest(clip: clip, section: ClipSection(start: 0, end: 3), sceneLanguage: language, dubLanguage: language)
+        let transcript = SceneTranscript(locale: language.identifier, durationSeconds: 3, words: [
+            TranscribedWord(text: "A sentence.", start: 0.3, end: 1),
+            TranscribedWord(text: "Continues.", start: 1.8, end: 2.3),
+        ])
+        let cast = SceneCast(characters: [SceneCast.Character(name: "Voice", portraitSeconds: nil, faceCenterX: nil)], segments: [
+            SceneCast.Segment(start: 0.3, end: 1, character: 0),
+            SceneCast.Segment(start: 1.8, end: 2.3, character: 0),
+        ])
+
+        let prepared = try await ScriptPreparation.prepare(request, dialogue: .published(transcript, cast))
+        guard case .cast(let script, _) = prepared.source else {
+            Issue.record("Published dialogue must preserve its shared cast")
+            return
+        }
+        #expect(script.lines.count == 1)
+        let line = try #require(script.lines.first)
+        #expect(line.text == "A sentence. Continues.")
+        #expect(line.start == 0.3 && line.end == 2.3 && line.speakerID == 0)
+        #expect(line.envelope.count == 48)
+        #expect(try FileManager.default.contentsOfDirectory(atPath: folder.url.path()).isEmpty)
+    }
+
     @Test func preparesDifferentSectionsFromTheSamePublishedDialogue() async throws {
         let folder = try TemporaryDirectory(prefix: "ScriptPreparationTests")
         let clip = ImportedClip(url: try TestFixtures.twoToneVideo(), title: "Synthetic scene", durationSeconds: 3, origin: .published, workingDirectory: folder.url)

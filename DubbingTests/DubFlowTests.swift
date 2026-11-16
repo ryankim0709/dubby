@@ -93,6 +93,76 @@ struct SceneCastTests {
         #expect(script.lines.map(\.speakerID) == [0, 1, 0])
     }
 
+    @Test(arguments: ["peace,", "peace."])
+    func sameCharacterKeepsShortFragmentsTogetherAcrossPauses(peace: String) {
+        let words = [
+            TranscribedWord(text: "I", start: 9.66, end: 9.8),
+            TranscribedWord(text: "have", start: 9.8, end: 10),
+            TranscribedWord(text: "brought", start: 10, end: 10.4),
+            TranscribedWord(text: peace, start: 10.4, end: 11.2),
+            TranscribedWord(text: "freedom,", start: 12.56, end: 13.1),
+            TranscribedWord(text: "justice,", start: 13.9, end: 14.3),
+            TranscribedWord(text: "and", start: 14.3, end: 14.5),
+            TranscribedWord(text: "security", start: 14.5, end: 15),
+            TranscribedWord(text: "to", start: 15, end: 15.2),
+            TranscribedWord(text: "my", start: 15.2, end: 15.4),
+            TranscribedWord(text: "new", start: 15.4, end: 15.8),
+            TranscribedWord(text: "empire.", start: 15.8, end: 16.36),
+            TranscribedWord(text: "Your empire?", start: 17.5, end: 18.3),
+        ]
+        let cast = SceneCast(characters: self.cast.characters, segments: [
+            SceneCast.Segment(start: 9.66, end: 11.2, character: 0),
+            SceneCast.Segment(start: 12.56, end: 16.36, character: 0),
+            SceneCast.Segment(start: 17.5, end: 18.3, character: 1),
+        ])
+        let lines = ScriptBuilder.castLines(words: words, cast: cast, sectionStart: 0, pauseThreshold: 0.7, sentencePause: 0, turnPause: 0.15)
+        #expect(lines.map(\.line) == [
+            LineDraft(text: "I have brought \(peace) freedom, justice, and security to my new empire.", start: 9.66, end: 16.36),
+            LineDraft(text: "Your empire?", start: 17.5, end: 18.3),
+        ])
+        #expect(lines.map(\.character) == [0, 1])
+    }
+
+    @Test(arguments: ["word4.", "word4,"])
+    func longTurnsSplitAtNaturalBoundaries(boundary: String) {
+        let words = (0..<12).map { index in
+            let start = Double(index < 5 ? index : index + 1)
+            return TranscribedWord(text: index == 4 ? boundary : "word\(index)", start: start, end: start + 0.8)
+        }
+        let cast = SceneCast(characters: self.cast.characters, segments: [SceneCast.Segment(start: 0, end: 13, character: 0)])
+        let lines = ScriptBuilder.castLines(words: words, cast: cast, sectionStart: 0, pauseThreshold: 0.7, sentencePause: 0, turnPause: 0.15)
+        #expect(lines.map(\.line.text) == [words.prefix(5).map(\.text).joined(separator: " "), words.suffix(7).map(\.text).joined(separator: " ")])
+        #expect(lines.map(\.line.start) == [0, 6])
+        #expect(lines.map(\.line.end) == [4.8, 12.8])
+        #expect(lines.map(\.character) == [0, 0])
+    }
+
+    @Test func shortRepliesAtASentenceBoundaryStayWithTheirOwnCharacter() {
+        let words = [
+            TranscribedWord(text: "Yes.", start: 0, end: 0.4),
+            TranscribedWord(text: "No.", start: 0.4, end: 0.8),
+        ]
+        let cast = SceneCast(characters: self.cast.characters, segments: [
+            SceneCast.Segment(start: 0, end: 0.4, character: 0),
+            SceneCast.Segment(start: 0.4, end: 0.8, character: 1),
+        ])
+        let lines = ScriptBuilder.castLines(words: words, cast: cast, sectionStart: 0, pauseThreshold: 0.7, sentencePause: 0, turnPause: 0.15)
+        #expect(lines.map(\.line.text) == ["Yes.", "No."])
+        #expect(lines.map(\.character) == [0, 1])
+    }
+
+    @Test func durationSplitsKeepTheFinalWordWithEnoughContext() {
+        let words = (0..<9).map { index in
+            TranscribedWord(text: "word\(index)", start: Double(index), end: Double(index) + (index == 8 ? 0.4 : 0.8))
+        }
+        let cast = SceneCast(characters: self.cast.characters, segments: [SceneCast.Segment(start: 0, end: 9, character: 0)])
+        let lines = ScriptBuilder.castLines(words: words, cast: cast, sectionStart: 0, pauseThreshold: 0.7, sentencePause: 0, turnPause: 0.15)
+        #expect(lines.map(\.line.start) == [0, 7])
+        #expect(lines.map(\.line.end) == [6.8, 8.4])
+        #expect(lines.allSatisfy { (1...8).contains($0.line.end - $0.line.start) })
+        #expect(lines.map(\.line.text).joined(separator: " ") == words.map(\.text).joined(separator: " "))
+    }
+
     @Test func aTranslatedScriptKeepsEachLinesTimingAndSpeaker() {
         let lines = [
             CastLine(line: LineDraft(text: "Where were you", start: 0.1, end: 1.9), character: 0),
