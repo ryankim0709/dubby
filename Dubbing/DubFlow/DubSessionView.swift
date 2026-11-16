@@ -318,6 +318,7 @@ struct DubSessionView: View {
     }
 
     private var lineFraction: Double {
+        if activity == .recording, recordingPhase != .capturing { return 0 }
         guard activity != .idle, line.duration > 0 else { return shownTake == nil ? 0 : 1 }
         return min(max((player.currentSeconds - lineStart) / line.duration, 0), 1)
     }
@@ -425,9 +426,7 @@ struct DubSessionView: View {
                     .dubFont(13, weight: .medium)
                     .foregroundStyle(Palette.textSecondary)
                     .frame(width: 64, alignment: .leading)
-                // While recording, only the learner's row moves.
-                WaveformView(levels: line.envelope, playedFraction: activity == .recording ? 0 : lineFraction)
-                    .opacity(0.6)
+                WaveformView(levels: line.envelope, playedFraction: lineFraction)
                     .frame(height: 40)
             }
             HStack(spacing: 10) {
