@@ -74,8 +74,8 @@ async function canReadPost(ctx: QueryCtx, post: Doc<"socialPosts">, viewer: Id<"
 }
 
 function validateScript(script: Infer<typeof socialScriptV>): void {
-  if (!Number.isFinite(script.duration) || script.duration < 2 || script.duration > 30 || script.title.trim().length === 0 || script.title.length > 200 || script.lines.length > 100 || script.speakers.length < 2 || script.speakers.length > 12) {
-    throw appError("INVALID_ARGUMENT", "A co-dub needs a titled 2–30 second scene with at least two characters");
+  if (!Number.isFinite(script.duration) || script.duration < 2 || script.duration > 120 || script.title.trim().length === 0 || script.title.length > 200 || script.lines.length > 100 || script.speakers.length < 2 || script.speakers.length > 12) {
+    throw appError("INVALID_ARGUMENT", "A co-dub needs a titled 2–120 second scene with at least two characters");
   }
   const ids = new Set(script.speakers.map((speaker) => speaker.id));
   if (ids.size !== script.speakers.length || script.speakers.some((speaker) => !Number.isSafeInteger(speaker.id) || speaker.id < 0 || speaker.name.trim().length === 0 || speaker.name.length > 80) ||

@@ -38,7 +38,7 @@ nonisolated struct SocialScript: Codable, Hashable, Sendable {
     }
 
     func setup(video: URL, characterId: Int, protectedSpans: [TimeSpan]) throws -> DubSetup {
-        guard duration.isFinite, (2...30).contains(duration), speakers.contains(where: { $0.id == characterId }),
+        guard duration.isFinite, (2...120).contains(duration), speakers.contains(where: { $0.id == characterId }),
               SpokenLanguage.all.contains(where: { $0.identifier == locale }),
               Set(speakers.map(\.id)).count == speakers.count, speakers.allSatisfy({ $0.id >= 0 && !$0.name.isEmpty }),
               Set(lines.map(\.id)).count == lines.count, !lines.isEmpty,
