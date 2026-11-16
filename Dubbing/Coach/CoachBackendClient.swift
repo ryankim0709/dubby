@@ -160,11 +160,17 @@ nonisolated struct CoachBackendClient: CoachTutorService {
         return grant
     }
 
-    /// Opens the studio's take coach for one scene; the character's name sets the coach's persona.
-    func takeCoachSession(sceneTitle: String, characterName: String, locale: String) async throws -> LiveTutorGrant {
-        struct Body: Encodable { let sceneTitle: String; let characterName: String; let locale: String }
+    /// Dialogue grounds the persona; reference pitch picks an approximate built-in voice, never a voice clone.
+    func takeCoachSession(sceneTitle: String, characterName: String, locale: String, characterLines: [String], referencePitchHz: Double?) async throws -> LiveTutorGrant {
+        struct Body: Encodable {
+            let sceneTitle: String
+            let characterName: String
+            let locale: String
+            let characterLines: [String]
+            let referencePitchHz: Double?
+        }
         let operation = "Starting your take coach"
-        let body = Body(sceneTitle: sceneTitle, characterName: characterName, locale: locale)
+        let body = Body(sceneTitle: sceneTitle, characterName: characterName, locale: locale, characterLines: characterLines, referencePitchHz: referencePitchHz)
         let request = try ServiceRequest.json(method: "POST", url: baseURL.appending(path: "tutor/take-coach"), body: body, headers: [:])
         let grant = try await send(request, as: LiveTutorGrant.self, operation: operation)
         guard !grant.clientSecret.isEmpty, !grant.model.isEmpty else {

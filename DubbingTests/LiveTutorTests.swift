@@ -5,6 +5,25 @@ import Testing
 // Every frame here is a synthetic fixture shaped like OpenAI's Realtime GA events; no service is called.
 
 struct LiveTutorTests {
+    @Test @MainActor func speechFailurePreservesAnAISuggestion() {
+        let takeID = UUID()
+        let suggestion = TakeCoach.Suggestion(suggestion: .retry, tip: "Give the final word a little more space.")
+        let answered = TakeCoach.Review(takeID: takeID, state: .suggested(suggestion))
+        #expect(answered.failing(reason: "speaker unavailable") == answered)
+        let listening = TakeCoach.Review(takeID: takeID, state: .listening)
+        #expect(listening.failing(reason: "socket closed") == TakeCoach.Review(takeID: takeID, state: .unavailable("socket closed")))
+    }
+
+    @Test func referencePitchMeasuresVoiceRegisterAndRejectsSilence() {
+        for frequency in [120.0, 220.0, 300.0] {
+            let samples = (0..<16_000).map { Float(sin(2 * Double.pi * frequency * Double($0) / 16_000)) * 0.5 }
+            let pitch = VoicePrint.pitchHz(samples: samples, sampleRate: 16_000)
+            #expect(abs((pitch ?? 0) - frequency) < 10)
+        }
+        #expect(VoicePrint.pitchHz(samples: Array(repeating: 0, count: 16_000), sampleRate: 16_000) == nil)
+        #expect(VoicePrint.pitchHz(samples: [], sampleRate: 16_000) == nil)
+    }
+
     @Test func decodesTheRealtimeEventsTheTutorFollowsAndSkipsTheRest() throws {
         func decode(_ json: String) throws -> LiveTutorServerEvent? {
             try LiveTutorServerEvent.decode(json)

@@ -102,6 +102,9 @@ describe("POST /tutor/take-coach", () => {
     const a = t.withIdentity(alice);
     expect((await a.fetch("/tutor/take-coach", post({ ...scene, locale: "English" }))).status).toBe(400);
     expect((await a.fetch("/tutor/take-coach", post({ ...scene, characterName: "  " }))).status).toBe(400);
+    expect((await a.fetch("/tutor/take-coach", post({ ...scene, referencePitchHz: -1 }))).status).toBe(400);
+    expect((await a.fetch("/tutor/take-coach", post({ ...scene, characterLines: [" "] }))).status).toBe(400);
+    expect((await a.fetch("/tutor/take-coach", post({ ...scene, characterLines: Array(13).fill("Fixture line.") }))).status).toBe(400);
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 });
