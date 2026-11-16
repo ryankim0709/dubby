@@ -44,7 +44,7 @@ struct ContentView: View {
             }
             Tab("Shelf", systemImage: "books.vertical.fill", value: AppTab.myDubs) {
                 NavigationStack {
-                    MyDubsView(dubs: dubs, folder: libraryFolder, account: account, onAccount: { isAccountPresented = true }, onDelete: { dub in
+                    MyDubsView(dubs: dubs, social: social, folder: libraryFolder, account: account, onAccount: { isAccountPresented = true }, onOpenRoom: { selectedRoom = SocialRoomSelection(id: $0) }, onRetrySocial: { socialRefresh = UUID() }, onDelete: { dub in
                         _ = try await history.delete(dub)
                         reloadDubs()
                     }, onRetry: reloadDubs)
@@ -72,10 +72,11 @@ struct ContentView: View {
         .alert("Couldn't open the invitation", isPresented: socialIssuePresented) { Button("OK") { socialIssue = nil } } message: { Text(socialIssue ?? "") }
         .task(id: socialRefresh) { await watchSocial() }
         .task(id: pendingCoDubCode) { await openIncomingInvite() }
-        .task {
+        .task(id: account.username) {
+            dubs = .loading
             await loadDubs()
-            await loadClips()
         }
+        .task { await loadClips() }
         .preferredColorScheme(.dark)
     }
 
@@ -152,9 +153,29 @@ struct ContentView: View {
     }
 
     private func loadDubs() async {
+        let username = account.username
         do {
-            dubs = .loaded(try await history.list())
+            // Old device-wide entries need server-confirmed ownership before appearing in an account.
+            if let username, let client = account.convexClient {
+                let legacy = try await history.list().filter { $0.ownerUsername == nil }
+                var ownedIDs: Set<UUID> = []
+                for dub in legacy {
+                    for try await sheet in client.subscribe(to: "dubs:scoreSheet", with: ["clientDubId": dub.id.uuidString.lowercased()], yielding: DubScoreSheet?.self).values {
+                        if sheet != nil { ownedIDs.insert(dub.id) }
+                        break
+                    }
+                }
+                try Task.checkCancellation()
+                guard account.username == username else { return }
+                if !ownedIDs.isEmpty { try await history.attributeLegacyDubs(ids: ownedIDs, to: username) }
+            }
+            let saved = try await history.list(ownedBy: username)
+            guard account.username == username else { return }
+            dubs = .loaded(saved)
+        } catch is CancellationError {
+            return
         } catch {
+            guard account.username == username else { return }
             dubs = .failed("Saved dubs couldn't be read: \(error.localizedDescription)")
         }
     }

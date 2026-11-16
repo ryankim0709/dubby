@@ -54,9 +54,9 @@ nonisolated struct SocialBackendClient: Sendable {
         let _: SocialOK = try await mutate("social:removeFriend", Arguments(personId: personId))
     }
 
-    func inviteToJoin(sceneSlug: String, sectionStart: Double, script: SocialScript, recipientId: String?, clientId: String) async throws -> SocialInviteReceipt {
-        struct Arguments: Encodable { let sceneSlug: String; let sectionStart: Double; let script: SocialScript; let recipientId: String?; let clientId: String }
-        return try await mutate("social:inviteToJoin", Arguments(sceneSlug: sceneSlug, sectionStart: sectionStart, script: script, recipientId: recipientId, clientId: clientId))
+    func invite(assetId: String, script: SocialScript, recipientId: String?, clientId: String) async throws -> SocialInviteReceipt {
+        struct Arguments: Encodable { let assetId: String; let script: SocialScript; let recipientId: String?; let clientId: String }
+        return try await mutate("social:invite", Arguments(assetId: assetId, script: script, recipientId: recipientId, clientId: clientId))
     }
 
     func redeem(code: String) async throws -> String {

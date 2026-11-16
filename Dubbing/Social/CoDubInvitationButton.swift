@@ -35,6 +35,7 @@ struct CoDubInvitationButton: View {
     @State private var invitation: CoDubMessageDraft?
     @State private var presentedMessage: CoDubMessageDraft?
     @State private var issue: String?
+    @State private var assetId: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -49,6 +50,8 @@ struct CoDubInvitationButton: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityIdentifier("coDubMessageError")
             }
+            Text("Inviting uploads your saved performance privately so your friend can add their character's voice.")
+                .dubFont(14, weight: .regular).foregroundStyle(Palette.textSecondary)
         }
         .sheet(item: $presentedMessage) { draft in
             CoDubMessageComposer(messageBody: draft.body) { result in
@@ -73,9 +76,12 @@ struct CoDubInvitationButton: View {
         Task {
             defer { isWorking = false }
             do {
-                let script = try source.joinScript(guestCharacterId: guestCharacterId)
+                let script = try source.invitationScript(guestCharacterId: guestCharacterId)
                 let client = try SocialBackendClient.configured(account: account)
-                let receipt = try await client.inviteToJoin(sceneSlug: source.setup.clip.url.deletingPathExtension().lastPathComponent, sectionStart: source.setup.section.start, script: script, recipientId: recipientId, clientId: clientId)
+                let uploaded: String
+                if let assetId { uploaded = assetId }
+                else { uploaded = try await client.upload(video: source.video); assetId = uploaded }
+                let receipt = try await client.invite(assetId: uploaded, script: script, recipientId: recipientId, clientId: clientId)
                 let draft = try CoDubMessageDraft(code: receipt.code, roleName: script.roleName(guestCharacterId), title: script.title)
                 invitation = draft
                 presentedMessage = draft

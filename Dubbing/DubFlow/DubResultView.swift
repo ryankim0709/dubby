@@ -368,7 +368,9 @@ struct DubResultView: View {
                 sceneSeconds: section.duration,
                 createdAt: .now,
                 videoFileName: "\(id.uuidString).mp4",
-                takeMeasurements: measurements
+                takeMeasurements: measurements,
+                ownerUsername: account.username,
+                coDub: try completionRoom.map { try SavedCoDub(room: $0) }
             )
             do {
                 _ = try await history.save(video: output, as: dub)

@@ -156,7 +156,7 @@ private struct ClubSavedDubPicker: View {
     }
 
     private func load() async {
-        do { dubs = .loaded(try await LocalDubHistory(folder: DubLibrary.defaultFolder).list().filter { $0.sceneTitle == challenge.sceneTitle }) }
+        do { dubs = .loaded(try await LocalDubHistory(folder: DubLibrary.defaultFolder).list(ownedBy: account.username).filter { $0.sceneTitle == challenge.sceneTitle }) }
         catch { dubs = .failed(error.localizedDescription) }
     }
 }

@@ -34,18 +34,20 @@ Inbox retains the existing Whop **Clubs** section alongside **Co-dubs**. Invitat
 
 1. Open **Friends** from Feed or **Inbox → Co-dubs** and send a request to a Dubby username. The recipient accepts
    in their own Friends screen. A request alone grants no access to friend-only posts.
-2. Choose **Invite a friend** or **Share** to open Messages with a link to join the published
-   scene as the other character. This creates an invitation using the existing library scene;
-   it does not upload or attach the sender's video. The recipient claims the role after signing
-   in and can record it against the original scene. These join invitations save the recipient's
-   performance to their Shelf; they do not combine it with the sender's local recording.
+2. Choose **Invite a friend** or **Share** after saving a performance. Dubby uploads the saved
+   dub privately, then opens Messages with an invitation link for the other character. The recipient
+   records against that video, preserving the first performer's voice in the combined result.
+   Older join-only links still open the original scene; send a new invitation from the saved result
+   to combine both performances.
 3. A named friend's invitation appears in **Inbox → Co-dubs**. A link recipient opens `dubby://invite/<code>` or
    pastes its code in **Inbox → Co-dubs** after signing in. Links require the installed app; they do not provide an
    App Store fallback or anonymous web player. An open link can be claimed by one learner. A link
    addressed to a specific friend cannot be claimed by another account.
 4. The recipient accepts and records the other role using the supplied script and timing. The studio
    requires every line of that role before finishing. The export is saved locally; **Finish co-dub**
-   uploads its combined video and delivers it to both performers' Inboxes.
+   uploads its combined video and delivers it to both performers' Inboxes and Shelves. Shelf's
+   **Co-dubs** filter shows these combined results with both usernames and their character roles.
+   The recipient's local copy and the completed room appear as one shelf entry.
 5. Each performer chooses **Post to friends feed**. Only after both approve is the combined result
    visible to accepted friends of either performer. Either performer can withdraw approval or stop
    sharing. Solo posts can be withdrawn by their author. Removing a friendship revokes feed-based
@@ -61,7 +63,7 @@ message sending, general direct-message service or public feed in this implement
 ## Media and access boundaries
 
 Social video uploads are MP4 files of at most 80 MB. The native client checks playable duration
-(2–30 seconds for video posts; join invitations do not upload video); the backend checks storage ownership, claimed-file uniqueness, MIME type and bytes.
+(2–30 seconds); the backend checks storage ownership, claimed-file uniqueness, MIME type and bytes.
 The script has validated roles, unique line identities, finite scene-relative timing and protected
 first-performer intervals. The backend does not treat uploaded line counts as pronunciation grades.
 The UI shows recorded line counts and existing local measurements; it does not invent the scores or
@@ -79,6 +81,11 @@ are returned for playback. The app downloads authorized video to its temporary d
 playback and dubbing; downloaded or externally shared copies cannot be recalled by withdrawing a post.
 Upload URLs are scoped, single-use storage capabilities; transient transfer failures get a fresh
 ticket, bounded backoff and a warning. Finalization and invitation retries are idempotent.
+
+Saved dubs on the iPhone carry their owner's signed-in username. Shelf, local progress, and the club
+picker read only that account's recordings. Legacy entries without an owner are attributed only when
+the authenticated `dubs:scoreSheet` query confirms ownership; unverified entries remain on disk and
+are excluded from signed-in shelves.
 
 Unpublished videos remain private to their performers on the backend. Upload records and hidden
 posts are retained; account-wide erasure and orphan-upload cleanup are not implemented. Source,

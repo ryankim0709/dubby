@@ -3,9 +3,12 @@ import SwiftUI
 
 struct MyDubsView: View {
     let dubs: LoadState<[SavedDub]>
+    let social: LoadState<SocialSnapshot>
     let folder: URL
     let account: AccountModel
     let onAccount: () -> Void
+    let onOpenRoom: (String) -> Void
+    let onRetrySocial: () -> Void
     let onDelete: (SavedDub) async throws -> Void
     let onRetry: () -> Void
     @State private var filter: ShelfFilter = .all
@@ -45,20 +48,28 @@ struct MyDubsView: View {
                     }
                     .accessibilityIdentifier("tab-progress")
                 }
-                LoadStateContent(state: dubs, failureIdentifier: "myDubsLoadFailed", retry: onRetry) { dubs in
-                    if dubs.isEmpty || filter != .all {
+                coDubStatus
+                LoadStateContent(state: shelfDubs, failureIdentifier: "myDubsLoadFailed", retry: onRetry) { dubs in
+                    let visible = dubs.filter { dub in
+                        switch filter {
+                        case .all: true
+                        case .coDubs: dub.isCoDub
+                        case .drafts: false
+                        }
+                    }
+                    if visible.isEmpty && (filter == .drafts || !coDubsPending) {
                         EmptyStateView(
                             systemImage: "film",
                             title: "Nothing on this shelf yet",
                             message: filter == .all ? "Your finished scenes land here. Find your first role in Discover." : "You haven't saved any \(filter.rawValue.lowercased()) yet."
                         )
                         .accessibilityIdentifier("myDubsEmpty")
-                    } else {
-                        Text("\(dubs.count) \(dubs.count == 1 ? "dub" : "dubs") saved on this iPhone")
+                    } else if !visible.isEmpty {
+                        Text("\(visible.count) \(visible.count == 1 ? "dub" : "dubs") on your shelf")
                             .dubFont(14, weight: .regular)
                             .foregroundStyle(Palette.textSecondary)
-                            .overlay { StateCarriers(items: [StateCarrier(identifier: "myDubsCount", value: "\(dubs.count)")]) }
-                        shelves(dubs)
+                            .overlay { StateCarriers(items: [StateCarrier(identifier: "myDubsCount", value: "\(visible.count)")]) }
+                        shelves(visible)
                     }
                 }
                 if let deleteFailure {
@@ -112,15 +123,50 @@ struct MyDubsView: View {
                         .foregroundStyle(Palette.textSecondary)
                 }
             }
-            if case .loaded(let saved) = dubs {
+            if case .loaded(let saved) = shelfDubs, case .loaded(let local) = dubs {
                 AdaptiveStack(rowAlignment: .firstTextBaseline, spacing: 24) {
                     stat(value: "\(saved.count)", label: "dubs")
-                    stat(value: "\(PracticeStats.currentStreak(dates: saved.map(\.createdAt), today: .now, calendar: .current))", label: "day streak")
+                    stat(value: "\(PracticeStats.currentStreak(dates: local.map(\.createdAt), today: .now, calendar: .current))", label: "day streak")
                 }
             }
         }
         .padding(.top, 8)
         .padding(.bottom, 8)
+    }
+
+    private var shelfDubs: LoadState<[ShelfDub]> {
+        switch dubs {
+        case .loading: return .loading
+        case .failed(let message): return .failed(message)
+        case .loaded(let saved):
+            let rooms: [CoDubRoom]
+            if case .loaded(let snapshot) = social { rooms = snapshot.rooms }
+            else { rooms = [] }
+            do { return .loaded(try ShelfDub.merge(saved: saved, rooms: rooms, username: account.username)) }
+            catch { return .failed(error.localizedDescription) }
+        }
+    }
+
+    private var coDubsPending: Bool {
+        guard account.phase.isSignedIn else { return false }
+        if case .loaded = social { return false }
+        return true
+    }
+
+    @ViewBuilder
+    private var coDubStatus: some View {
+        if account.phase.isSignedIn && filter != .drafts {
+            switch social {
+            case .loading:
+                ProgressView("Loading your co-dubs…")
+            case .failed(let message):
+                Text("Co-dubs couldn't be loaded: \(message)")
+                    .dubFont(14, weight: .regular).foregroundStyle(Palette.textSecondary)
+                Button("Try co-dubs again", action: onRetrySocial)
+                    .buttonStyle(SecondaryButtonStyle())
+            case .loaded: EmptyView()
+            }
+        }
     }
 
     private func stat(value: String, label: String) -> some View {
@@ -136,24 +182,15 @@ struct MyDubsView: View {
         .accessibilityElement(children: .combine)
     }
 
-    private func shelves(_ dubs: [SavedDub]) -> some View {
+    private func shelves(_ dubs: [ShelfDub]) -> some View {
         let perShelf = dynamicTypeSize.isAccessibilitySize ? 1 : 3
         let rows = stride(from: 0, to: dubs.count, by: perShelf).map { Array(dubs[$0..<min($0 + perShelf, dubs.count)]) }
-        return VStack(spacing: 28) {
+        return LazyVStack(spacing: 28) {
             ForEach(rows, id: \.first?.id) { row in
                 VStack(spacing: 0) {
                     HStack(alignment: .bottom, spacing: 14) {
                         ForEach(row) { dub in
-                            Button { playing = dub } label: {
-                                SavedDubCard(dub: dub, video: DubLibrary.videoURL(for: dub, in: folder))
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityIdentifier("savedDub-\(dub.id.uuidString)")
-                            .accessibilityValue("\(dub.linesDubbed) of \(dub.totalLines)")
-                            .contextMenu {
-                                Button("Delete", systemImage: "trash", role: .destructive) { pendingDelete = dub }
-                            }
-                            .accessibilityAction(named: "Delete") { pendingDelete = dub }
+                            shelfButton(dub)
                         }
                         ForEach(row.count..<perShelf, id: \.self) { _ in
                             Color.clear.frame(maxWidth: .infinity)
@@ -170,6 +207,30 @@ struct MyDubsView: View {
                     .accessibilityHidden(true)
                 }
             }
+        }
+    }
+
+    @ViewBuilder
+    private func shelfButton(_ dub: ShelfDub) -> some View {
+        switch dub {
+        case .saved(let saved):
+            Button { playing = saved } label: {
+                ShelfDubCard(dub: dub, folder: folder, account: account)
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("savedDub-\(dub.id)")
+            .accessibilityValue("\(dub.linesDubbed) of \(dub.totalLines)")
+            .contextMenu {
+                Button("Delete", systemImage: "trash", role: .destructive) { pendingDelete = saved }
+            }
+            .accessibilityAction(named: "Delete") { pendingDelete = saved }
+        case .combined(let room, _):
+            Button { onOpenRoom(room.id) } label: {
+                ShelfDubCard(dub: dub, folder: folder, account: account)
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("savedCoDub-\(room.id)")
+            .accessibilityValue("\(dub.linesDubbed) of \(dub.totalLines)")
         }
     }
 
@@ -191,24 +252,27 @@ struct MyDubsView: View {
     }
 }
 
-private struct SavedDubCard: View {
-    let dub: SavedDub
-    let video: URL
+private struct ShelfDubCard: View {
+    let dub: ShelfDub
+    let folder: URL
+    let account: AccountModel
 
     var body: some View {
-        VideoThumbnail(url: video)
+        thumbnail
             .aspectRatio(2 / 3, contentMode: .fit)
             .overlay {
                 LinearGradient(colors: [.clear, .black.opacity(0.75)], startPoint: .center, endPoint: .bottom)
             }
             .overlay(alignment: .bottomLeading) {
                 VStack(alignment: .leading, spacing: 0) {
-                    Text(dub.sceneTitle.uppercased())
+                    Text(dub.title.uppercased())
                         .displayFont(20)
                         .lineLimit(3)
                         .minimumScaleFactor(0.8)
-                    Text("as \(dub.characterName)")
+                    Text(dub.cast)
                         .dubFont(11, weight: .semibold)
+                        .lineLimit(dub.isCoDub ? 4 : 2)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 .foregroundStyle(Palette.textPrimary)
                 .shadow(color: .black.opacity(0.5), radius: 3, y: 1)
@@ -222,7 +286,7 @@ private struct SavedDubCard: View {
                 }
             }
             .overlay(alignment: .topTrailing) {
-                Image(systemName: "lock.fill")
+                Image(systemName: dub.isPublished ? "person.2.fill" : "lock.fill")
                     .dubFont(11, weight: .bold)
                     .foregroundStyle(Palette.textPrimary)
                     .frame(width: 22, height: 22)
@@ -233,7 +297,44 @@ private struct SavedDubCard: View {
             .shadow(color: .black.opacity(0.6), radius: 6, x: 0, y: 5)
             .contentShape(Rectangle())
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("\(dub.sceneTitle), as \(dub.characterName), \(dub.linesDubbed) of \(dub.totalLines) lines, private")
+            .accessibilityLabel("\(dub.title), \(dub.cast), \(dub.linesDubbed) of \(dub.totalLines) lines, \(dub.isPublished ? "shared with friends" : "private")")
+    }
+
+    @ViewBuilder
+    private var thumbnail: some View {
+        switch dub {
+        case .saved(let saved): VideoThumbnail(url: DubLibrary.videoURL(for: saved, in: folder))
+        case .combined(let room, _): CoDubThumbnail(room: room, account: account)
+        }
+    }
+}
+
+private struct CoDubThumbnail: View {
+    let room: CoDubRoom
+    let account: AccountModel
+    @State private var video: LoadState<URL> = .loading
+
+    var body: some View {
+        ZStack {
+            Palette.surface
+            switch video {
+            case .loading: ProgressView()
+            case .failed(let message):
+                Image(systemName: "video.slash")
+                    .foregroundStyle(Palette.textSecondary)
+                    .accessibilityLabel("Preview unavailable: \(message)")
+            case .loaded(let url): VideoThumbnail(url: url)
+            }
+        }
+        .task(id: room.resultAssetId) {
+            do {
+                guard let assetId = room.resultAssetId else { throw SocialError.invalidResponse("The co-dub has no combined video.") }
+                let url = try await SocialBackendClient.configured(account: account).download(assetId: assetId)
+                try Task.checkCancellation()
+                video = .loaded(url)
+            } catch is CancellationError { return }
+            catch { video = .failed(error.localizedDescription) }
+        }
     }
 }
 
@@ -257,7 +358,7 @@ private struct SavedDubPlayer: View {
                         Text(dub.sceneTitle)
                             .dubFont(18, weight: .semibold)
                             .foregroundStyle(Palette.textPrimary)
-                        Text("as \(dub.characterName)")
+                        Text(dub.coDub?.cast ?? "as \(dub.characterName)")
                             .dubFont(14, weight: .regular)
                             .foregroundStyle(Palette.textSecondary)
                     }

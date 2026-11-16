@@ -12,6 +12,12 @@ nonisolated struct SavedDub: Codable, Hashable, Sendable, Identifiable {
     let videoFileName: String
     /// Measured take data. Nil for dubs saved before takes were measured, which the UI reports as not measured.
     var takeMeasurements: [TakeMeasurement]? = nil
+    var ownerUsername: String? = nil
+    var coDub: SavedCoDub? = nil
+
+    func owned(by username: String) -> SavedDub {
+        SavedDub(id: id, sceneTitle: sceneTitle, characterName: characterName, linesDubbed: linesDubbed, totalLines: totalLines, sceneSeconds: sceneSeconds, createdAt: createdAt, videoFileName: videoFileName, takeMeasurements: takeMeasurements, ownerUsername: username, coDub: coDub)
+    }
 }
 
 /// Where finished dubs are kept and read back. The shape mirrors the backend's history client functions
@@ -28,6 +34,17 @@ nonisolated struct LocalDubHistory: DubHistoryStoring {
 
     func list() async throws -> [SavedDub] {
         try DubLibrary.load(from: folder)
+    }
+
+    func list(ownedBy username: String?) async throws -> [SavedDub] {
+        try DubLibrary.load(from: folder).filter { $0.ownerUsername == username }
+    }
+
+    func attributeLegacyDubs(ids: Set<UUID>, to username: String) async throws {
+        let dubs = try DubLibrary.load(from: folder).map { dub in
+            dub.ownerUsername == nil && ids.contains(dub.id) ? dub.owned(by: username) : dub
+        }
+        try DubLibrary.encoder.encode(dubs).write(to: DubLibrary.indexURL(in: folder), options: .atomic)
     }
 
     func save(video: URL, as dub: SavedDub) async throws -> [SavedDub] {
@@ -80,11 +97,11 @@ nonisolated enum DubLibrary {
         folder.appending(path: dub.videoFileName)
     }
 
-    private static func indexURL(in folder: URL) -> URL {
+    fileprivate static func indexURL(in folder: URL) -> URL {
         folder.appending(path: "dubs.json")
     }
 
-    private static var encoder: JSONEncoder {
+    fileprivate static var encoder: JSONEncoder {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         return encoder

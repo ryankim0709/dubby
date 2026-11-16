@@ -127,6 +127,24 @@ struct SavedDubHistoryTests {
         #expect(!FileManager.default.fileExists(atPath: DubLibrary.videoURL(for: drop, in: folder).path(percentEncoded: false)))
         #expect(FileManager.default.fileExists(atPath: DubLibrary.videoURL(for: keep, in: folder).path(percentEncoded: false)))
     }
+
+    @Test func accountHistoryAttributesOnlyVerifiedLegacyDubsAndPreservesOtherOwners() async throws {
+        let folder = makeFolder()
+        let legacy = dub("Legacy", measurements: nil)
+        let other = dub("Other account", measurements: nil).owned(by: "demo1")
+        _ = try DubLibrary.save(video: try makeVideo(), as: legacy, in: folder)
+        _ = try DubLibrary.save(video: try makeVideo(), as: other, in: folder)
+        let history = LocalDubHistory(folder: folder)
+
+        #expect(try await history.list(ownedBy: "demo").isEmpty)
+        try await history.attributeLegacyDubs(ids: [legacy.id, other.id], to: "demo")
+        #expect(try await history.list(ownedBy: "demo") == [legacy.owned(by: "demo")])
+        #expect(try await history.list(ownedBy: "demo1") == [other])
+
+        _ = try await history.delete(legacy)
+        #expect(try await history.list(ownedBy: "demo").isEmpty)
+        #expect(try await history.list(ownedBy: "demo1") == [other])
+    }
 }
 
 struct MeasuredPracticeTests {

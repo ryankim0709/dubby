@@ -74,6 +74,11 @@ final class AccountModel {
     /// False when the build has no Convex configuration, so signing in isn't possible.
     var isAvailable: Bool { service != nil }
 
+    var username: String? {
+        guard case .signedIn(let profile) = phase else { return nil }
+        return profile.displayName
+    }
+
     /// The one Convex client the app shares; nil when the build has no configuration. Cloud wrappers
     /// call through it so every request carries the signed-in learner's token.
     let convexClient: ConvexClientWithAuth<String>?
