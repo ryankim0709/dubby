@@ -712,7 +712,7 @@ extension MediaPipeline {
     }
 }
 
-/// The microphone's loudness as it records, scrolling in from the right.
+/// Left-to-right motion matches the studio's playback progress.
 private struct LiveTakeWaveform: View {
     let recorder: TakeRecorder
     @State private var levels = [Float](repeating: 0, count: 48)
@@ -721,7 +721,7 @@ private struct LiveTakeWaveform: View {
         WaveformView(levels: levels, playedFraction: 1)
             .task {
                 while !Task.isCancelled {
-                    levels = Array(levels.dropFirst()) + [recorder.currentLevel()]
+                    levels = [recorder.currentLevel()] + Array(levels.dropLast())
                     do {
                         try await Task.sleep(for: .milliseconds(50))
                     } catch {
