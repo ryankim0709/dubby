@@ -24,7 +24,7 @@ The proposed assessment response, scoring rubric, and progress-tracking rules ar
 The app dubs real scenes end to end on the iPhone, with no sample data. Clips placed in the `Media/` folder are bundled at build time and listed on the Discover tab. From a clip, the dub flow lets you:
 
 1. Frame a scene of up to 30 seconds on a filmstrip timeline.
-2. Transcribe it with word timings, split it into lines at sentence ends and pauses, and assign lines to characters. A published library scene uses its shared cast, worked out on the backend from the whole clip, so role cards show character names and a frame of each character's face from anywhere in the clip. Bundled clips group lines by voice on the device. You can rename characters and reassign any line.
+2. While framing, prepare the script in the background. “Transcribe scene” stays disabled until the selected section is ready, then opens role selection directly. Published scenes reuse shared word timings and cast data from Convex on both iPhone and Simulator. Bundled clips transcribe and group voices on the iPhone. You can rename characters and reassign any line.
 3. Dub one character in the studio. Each line's original audio plays as a reference, a 1.5-second cue plays before recording, and the video keeps rolling silently while you record so your take lines up with the actor's mouth.
 4. Export the scene with your takes mixed in, save it to My Dubs, and share it.
 
@@ -41,7 +41,7 @@ Known limits:
 - **On-device speaker grouping is approximate.** For bundled clips it clusters speech-band MFCC voice fingerprints; on the Anakin and Obi-Wan library scene this was close to chance, which is why published scenes use the backend cast instead. Users fix wrong lines by tapping a line's speaker.
 - **Backend speaker labels use `gpt-4o-transcribe-diarize`.** It is OpenAI's only model that labels speakers, it shuts down on February 26, 2027, and OpenAI names no successor. `gpt-6-luna` then maps each voice to a character from the frames and dialogue, names characters only as the title or dialogue gives them, picks each character's frame, and never identifies actors from their faces. On the Anakin and Obi-Wan scene this assigned every line correctly across three 20-second sections.
 - **Dialogue replacement is filtered, not separated.** Clips don't come with separate dialogue and music tracks, so under the user's lines the original audio crossfades to a copy with the speech band (about 420–3,400 Hz) filtered out. Bass and treble of the music and effects carry on, but music in the speech band is lost there. Curated scenes with prepared dialogue and background tracks would remove this limit.
-- **Transcription depends on the device.** On an iPhone, iOS 26 `SpeechTranscriber` is used where Apple reports it supported, then `DictationTranscriber`, then `SFSpeechRecognizer`. Simulator dubbing uses the Convex/OpenAI transcript of the published library video instead, because Apple's speech service can report support but fail to load its model files. Local-only clips still need an iPhone.
+- **Bundled transcription depends on the device.** For local clips, iOS 26 `SpeechTranscriber` is used where Apple reports it supported, then `DictationTranscriber`, then `SFSpeechRecognizer`. Published library videos use their shared Convex/OpenAI transcript on every device. Local-only clips still need an iPhone.
 - **Backend script timing uses `whisper-1`.** It provides measured word timestamps, which the studio needs. OpenAI schedules this model to shut down on February 26, 2027; a replacement with word timings is needed before then. See [OpenAI's file transcription guide](https://developers.openai.com/api/docs/guides/speech-to-text).
 - **The coach hears words, not sounds.** It receives an on-device transcript of what you said, so it can coach wording and grammar but not pronunciation.
 - **Not yet built:** pronunciation scoring, character-voice conversion, and drafts.
@@ -111,7 +111,8 @@ Capy helps us build the product, Convex operates its cloud services, Revyl verif
 │   ├── DubFlow/
 │   │   ├── DubFlowView.swift         Flow navigation and the scene picker
 │   │   ├── SectionPickerView.swift   Filmstrip scene framing and language choice
-│   │   ├── ScriptReviewView.swift    Transcription progress and the editable script
+│   │   ├── ScriptPreparation.swift   Shared dialogue loading and section script preparation
+│   │   ├── ScriptReviewView.swift    Prepared roles and the editable script
 │   │   ├── DubSessionView.swift      Studio: reference audio, cue, synced recording, interruptions
 │   │   ├── DubResultView.swift       Export, trim notices, saving, and sharing
 │   │   ├── DubFlowModels.swift       Flow types, timing constants, and errors
@@ -148,7 +149,7 @@ The server-side Supermemory client and Revyl configuration will be added when th
 
 `DubbingApp` creates `ContentView`, which owns the selected `AppTab`, loads the bundled clips (`MediaLibrary`) and saved dubs (`DubLibrary`), and presents `DubFlowView` full screen from Discover or the Create button. Saved dubs reload when the flow closes.
 
-The dub flow is a `NavigationStack` driven by typed `DubFlowStep` values: section, script, studio, and result. Each screen receives the values it needs and owns its transient state. Workflow states are explicit enums, such as the script screen's analysis phase and the studio's current activity.
+The dub flow is a `NavigationStack` driven by typed `DubFlowStep` values: section, script, studio, and result. Each screen receives the values it needs and owns its transient state. The section screen prepares dialogue while the learner frames the scene, retains full-video dialogue across section edits, and passes a `PreparedScript` into role selection. Workflow states are explicit enums, such as script preparation and the studio's current activity.
 
 Side effects live in small clients: `MediaPipeline` and `SpeechTranscription` run off the main actor, and `SegmentPlayer`, `TakeRecorder`, and `TakePlayer` wrap AVFoundation playback and capture. `ScriptBuilder`, `VoicePrint`, `SpeechBandFilter`, and `PracticeStats` are pure and covered by tests. `DubTiming` holds the cue, grace, and padding values shared by recording and export, so the studio's trim warnings match the export.
 
@@ -206,9 +207,17 @@ Compilation performs Swift typechecking. `DubbingTests` uses Swift Testing and c
 
 Recording, playback, interruptions, audio routes, and on-device transcription need an actual iPhone for manual verification; the Simulator cannot verify microphone quality or transcribe speech on the device.
 
-Simulator dubbing requires `COACH_BACKEND_URL` and `OPENAI_API_KEY` on that Convex deployment. `POST /scenes/transcribe` accepts only a published scene's slug, stored-video SHA-256, and matching locale; it never accepts learner recordings or arbitrary URLs. The backend transcribes the stored video once and caches its word timings by video ID and locale. Concurrent requests share a lease, and replacing the stored video creates a new cache entry. The app clips those full-video timings to the selected section and converts them to section-relative seconds. Published videos must be at most 24 MB and 120 seconds for this path.
+Published-scene dubbing requires `COACH_BACKEND_URL` and `OPENAI_API_KEY` on that Convex deployment. `POST /scenes/transcribe` accepts only a published scene's slug, stored-video SHA-256, and matching locale; it never accepts learner recordings or arbitrary URLs. The backend transcribes the stored video once and caches its word timings by video ID and locale. Concurrent requests share a lease, and replacing the stored video creates a new cache entry. Both iPhone and Simulator reuse these timings. The app clips those full-video timings to the selected section and converts them to section-relative seconds. Published videos must be at most 24 MB and 120 seconds for this path.
 
-On the Simulator and on an iPhone, a published scene's speakers come from `POST /scenes/speakers`, which takes the same slug, SHA-256, and locale plus a list of frames. The app asks without frames first; when the backend has no cast stored, it answers `framesNeeded`, and the app sends small JPEG stills sampled about every 1.5 seconds across the whole clip. The backend diarizes the stored video with `gpt-4o-transcribe-diarize`, then gives `gpt-6-luna` the scene title, the speaker-labelled segments, and the frames. It stores the cast (who speaks each segment, plus each character's name, best frame time, and face position) once per video and locale, under the same lease rules as transcripts. Frames come from the requesting app and aren't checked against the video, so the first request decides the stored cast. The app splits its own section lines where the cast's speaker changes and crops each role card from the chosen frame with Vision face detection. If the cast can't be fetched, the script screen shows the error with a retry.
+On the Simulator and on an iPhone, a published scene's speakers come from `POST /scenes/speakers`, which takes the same slug, SHA-256, and locale plus a list of frames. The app asks without frames first; when the backend has no cast stored, it answers `framesNeeded`, and the app sends small JPEG stills sampled about every 1.5 seconds across the whole clip. The backend diarizes the stored video with `gpt-4o-transcribe-diarize`, then gives `gpt-6-luna` the scene title, the speaker-labelled segments, and the frames. It stores the cast (who speaks each segment, plus each character's name, best frame time, and face position) once per video and locale, under the same lease rules as transcripts. Frames come from the requesting app and aren't checked against the video, so the first request decides the stored cast. The app splits its own section lines where the cast's speaker changes and crops each role card from the chosen frame with Vision face detection. If preparation fails, “Find your moment” shows the error with a retry.
+
+To prepare transcripts, speaker assignments, character names, and portrait positions for every published video before learners open them, run the following with Node 22.18+ and FFmpeg installed:
+
+```sh
+npm run prepare:scenes -- https://your-deployment.convex.site
+```
+
+The URL can also come from `CONVEX_SITE_URL` in the environment or `.env.local`. The command uses the existing public catalog and preparation routes, skips ready cache entries, and samples checksum-verified videos only when a cast needs frames. It can be rerun after publishing or replacing videos. Missing entries invoke the deployment's OpenAI integration and incur its normal provider costs; existing cached entries make no provider calls.
 
 Revyl remains available for cloud builds and app previews. Its build configuration is in `.revyl/config.yaml`; no automated Revyl test plans are configured.
 
