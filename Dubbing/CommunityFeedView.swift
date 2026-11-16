@@ -1,3 +1,4 @@
+import AVFoundation
 import SwiftUI
 
 struct CommunityFeedView: View {
@@ -10,6 +11,7 @@ struct CommunityFeedView: View {
     @State private var playing: SocialPost?
     @State private var removing: SocialPost?
     @State private var issue: String?
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         NavigationStack {
@@ -29,16 +31,13 @@ struct CommunityFeedView: View {
             .background(.black).foregroundStyle(Palette.textPrimary)
             .navigationTitle("Feed").navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Friends", systemImage: "person.2", action: onFriends).labelStyle(.iconOnly) } }
-            .sheet(item: $playing) { post in
-                NavigationStack {
-                    ScrollView { SocialPlayback(assetId: post.assetId, title: post.title, account: account).padding(20) }
-                        .screenBackground().navigationTitle(post.title).navigationBarTitleDisplayMode(.inline)
-                        .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Done") { playing = nil } } }
-                }.preferredColorScheme(.dark)
-            }
             .confirmationDialog("Stop sharing this dub with friends?", isPresented: removalPresented, titleVisibility: .visible) {
                 if let removing { Button("Stop sharing", role: .destructive) { unpublish(removing) } }
             }
+        }
+        .onDisappear { playing = nil }
+        .onChange(of: scenePhase) { _, phase in
+            if phase != .active { playing = nil }
         }
     }
 
@@ -56,15 +55,24 @@ struct CommunityFeedView: View {
                         .accessibilityLabel("Options for \(post.title)")
                 }
             }
-            Button { playing = post } label: {
-                ZStack {
-                    RoundedRectangle(cornerRadius: Radius.poster).fill(Palette.surface)
-                    VStack(spacing: 16) {
-                        Image(systemName: "play.circle.fill").font(.system(size: 48)).accessibilityHidden(true)
-                        Text(post.title).displayFont(36).multilineTextAlignment(.center)
-                    }.padding(20)
-                }.aspectRatio(16 / 9, contentMode: .fit)
-            }.buttonStyle(.plain).accessibilityLabel("Play \(post.title), shared by \(post.owner.username)")
+            Group {
+                if playing?.id == post.id {
+                    SocialPlayback(assetId: post.assetId, title: post.title, account: account) { $0.play() }
+                } else {
+                    Button { playing = post } label: {
+                        ZStack {
+                            RoundedRectangle(cornerRadius: Radius.poster).fill(Palette.surface)
+                            VStack(spacing: 16) {
+                                Image(systemName: "play.circle.fill").font(.system(size: 48)).accessibilityHidden(true)
+                                Text(post.title).displayFont(36).multilineTextAlignment(.center)
+                            }.padding(20)
+                        }.aspectRatio(16 / 9, contentMode: .fit)
+                    }.buttonStyle(.plain).accessibilityLabel("Play \(post.title), shared by \(post.owner.username)")
+                }
+            }
+            .onScrollVisibilityChange(threshold: 0.01) { isVisible in
+                if !isVisible, playing?.id == post.id { playing = nil }
+            }
             Text("\(post.owner.username) as \(post.characterName) · \(post.linesRecorded) \(post.linesRecorded == 1 ? "line" : "lines")").dubFont(14, weight: .regular).foregroundStyle(Palette.textSecondary)
             if let guest = post.guest, let character = post.guestCharacterName, let lines = post.guestLinesRecorded {
                 Text("\(guest.username) as \(character) · \(lines) \(lines == 1 ? "line" : "lines")").dubFont(14, weight: .regular).foregroundStyle(Palette.textSecondary)

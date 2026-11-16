@@ -144,6 +144,7 @@ struct SocialPlayback: View {
     let assetId: String
     let title: String
     let account: AccountModel
+    let onReady: (AVPlayer) -> Void
     @State private var player: AVPlayer?
     @State private var error: String?
     @State private var reload = UUID()
@@ -170,7 +171,10 @@ struct SocialPlayback: View {
             do {
                 let url = try await SocialBackendClient.configured(account: account).download(assetId: assetId)
                 guard try await AVURLAsset(url: url).load(.isPlayable) else { throw SocialError.invalidResponse("The shared video isn't playable.") }
-                player = AVPlayer(url: url)
+                try Task.checkCancellation()
+                let player = AVPlayer(url: url)
+                self.player = player
+                onReady(player)
             } catch is CancellationError { return }
             catch { self.error = error.localizedDescription }
         }
@@ -220,9 +224,9 @@ struct SocialRoomView: View {
             .dubFont(32, weight: .bold)
         Text(room.script.title).dubFont(22, weight: .semibold)
         if room.status == .completed, let result = room.resultAssetId {
-            SocialPlayback(assetId: result, title: "Your combined co-dub", account: account)
+            SocialPlayback(assetId: result, title: "Your combined co-dub", account: account) { $0.pause() }
         } else if room.status == .invited || room.status == .accepted {
-            SocialPlayback(assetId: room.sourceAssetId, title: room.joinOnly ? "Scene to join" : "\(room.owner.username)'s saved performance", account: account)
+            SocialPlayback(assetId: room.sourceAssetId, title: room.joinOnly ? "Scene to join" : "\(room.owner.username)'s saved performance", account: account) { $0.pause() }
         }
         performer(room.owner.username, role: room.script.roleName(room.script.ownerCharacterId), detail: "\(room.script.ownerLinesRecorded) \(room.script.ownerLinesRecorded == 1 ? "line" : "lines") recorded")
         performer(room.guest?.username ?? "Open role", role: room.script.roleName(room.script.guestCharacterId), detail: room.guestLinesRecorded.map { "\($0) \($0 == 1 ? "line" : "lines") recorded" } ?? room.status.title)
