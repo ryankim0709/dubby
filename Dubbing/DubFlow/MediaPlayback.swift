@@ -100,8 +100,10 @@ final class TakeRecorder {
     func currentLevel() -> Float {
         guard let recorder else { return 0 }
         recorder.updateMeters()
-        // Map -50 dB (silence) through 0 dB (full scale) onto 0...1.
-        return max(0, min(1, (recorder.averagePower(forChannel: 0) + 50) / 50))
+        // Decibels are logarithmic; convert to amplitude so bar height follows the recorded signal.
+        let amplitude = pow(Float(10), recorder.averagePower(forChannel: 0) / 20)
+        let noiseFloor: Float = 0.0031622777
+        return max(0, min(1, (amplitude - noiseFloor) / (1 - noiseFloor)))
     }
 
     /// Stops recording and returns the recorded length in seconds. A fixture that failed to write is logged and

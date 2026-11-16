@@ -3,6 +3,12 @@ import Combine
 import os
 import SwiftUI
 
+private enum RecordingPhase: Equatable {
+    case preparing
+    case countdown(Int)
+    case capturing
+}
+
 private enum SessionActivity: Equatable {
     case idle
     case playingOriginal
@@ -37,6 +43,7 @@ struct DubSessionView: View {
     @State private var measurements: [Int: TakeMeasurement] = [:]
     @State private var envelopes: [Int: [Float]] = [:]
     @State private var pending: PendingTake?
+    @State private var recordingPhase: RecordingPhase = .preparing
     @State private var activity: SessionActivity = .idle
     @State private var activityTask: Task<Void, Never>?
     @State private var issue: FlowIssue?
@@ -267,16 +274,19 @@ struct DubSessionView: View {
                 if activity == .idle {
                     VideoThumbnail(url: setup.clip.url, time: lineStart + line.duration / 2)
                 }
-                if activity == .recording, player.currentSeconds < lineStart {
-                    Text("\(Int((lineStart - player.currentSeconds).rounded(.up)))")
+                if activity == .recording, case .countdown(let seconds) = recordingPhase {
+                    Text("\(seconds)")
                         .dubFont(84, weight: .heavy)
+                        .monospacedDigit()
+                        .accessibilityLabel("Recording starts in \(seconds)")
+                        .accessibilityIdentifier("recordingCountdown")
                         .foregroundStyle(Palette.textPrimary)
                         .shadow(color: .black.opacity(0.6), radius: 12, y: 4)
                 }
             }
             .overlay(alignment: .topLeading) {
                 if activity != .idle {
-                    Label(activity == .recording ? "REC" : activity == .playingOriginal ? "ORIGINAL" : "YOUR TAKE", systemImage: activity == .recording ? "circle.fill" : "waveform")
+                    Label(activity == .recording ? (recordingPhase == .capturing ? "REC" : "GET READY") : activity == .playingOriginal ? "ORIGINAL" : "YOUR TAKE", systemImage: activity == .recording ? "circle.fill" : "waveform")
                         .dubFont(12, weight: .bold)
                         .foregroundStyle(activity == .recording ? Palette.record : Palette.textPrimary)
                         .padding(.horizontal, 10)
@@ -425,8 +435,11 @@ struct DubSessionView: View {
                     .dubFont(13, weight: .medium)
                     .foregroundStyle(Palette.textPrimary)
                     .frame(width: 64, alignment: .leading)
-                if activity == .recording {
+                if activity == .recording, recordingPhase == .capturing {
                     LiveTakeWaveform(recorder: recorder)
+                        .frame(height: 40)
+                } else if activity == .recording {
+                    WaveformView(levels: [Float](repeating: 0, count: 48), playedFraction: 0)
                         .frame(height: 40)
                 } else if let shownEnvelope {
                     WaveformView(levels: shownEnvelope, playedFraction: activity == .playingTake ? lineFraction : 1)
@@ -502,8 +515,10 @@ struct DubSessionView: View {
                 coach?.dismiss()
                 record()
             },
-            onKeep: keepPending
+            onKeep: keepPending,
+            onDismiss: { coach?.dismiss() }
         )
+        .id(pending.id)
     }
 
     private var recordingControls: some View {
@@ -561,7 +576,7 @@ struct DubSessionView: View {
 
     private var recordHint: String {
         switch activity {
-        case .recording: "Recording… speak with the video"
+        case .recording: recordingPhase == .capturing ? "Recording… speak with the video" : "Get ready. Speak when the countdown ends."
         case .playingOriginal: "Listening to the original"
         case .playingTake: "Playing your take over the scene"
         case .idle where microphone == .denied: "Turn the microphone on in Settings to record"
@@ -603,13 +618,24 @@ struct DubSessionView: View {
         // A fresh file per attempt, so a stopped or failed retry never overwrites a take already kept.
         let url = setup.clip.workingDirectory.appending(path: "take-\(target.id)-\(UUID().uuidString).m4a")
         isRecordingCancelled = false
+        recordingPhase = .preparing
         run(.recording) {
             guard await AVAudioApplication.requestRecordPermission() else { throw DubFlowError.microphoneDenied }
             try StudioAudioSession.activate()
             await player.seek(to: max(0, start - DubTiming.cueLength))
             guard await player.play(until: start, volume: 1) else { return }
+            player.stop()
+            await player.seek(to: start)
+            // Hold at the line start so even the first line gets a full, predictable count-in.
+            for seconds in (1...3).reversed() {
+                try Task.checkCancellation()
+                recordingPhase = .countdown(seconds)
+                try await Task.sleep(for: .seconds(1))
+            }
+            try Task.checkCancellation()
             // The video keeps rolling silently while the mic records, so the take lines up with the line start.
             try recorder.start(writingTo: url)
+            recordingPhase = .capturing
             _ = await player.play(until: end + DubTiming.lineGrace, volume: 0)
             let duration = recorder.stop()
             if isRecordingCancelled {
@@ -712,16 +738,21 @@ extension MediaPipeline {
     }
 }
 
-/// Left-to-right motion matches the studio's playback progress.
+/// Smooth meter changes keep individual loud samples from making the recording display jump.
 private struct LiveTakeWaveform: View {
     let recorder: TakeRecorder
     @State private var levels = [Float](repeating: 0, count: 48)
+    @State private var smoothedLevel: Float = 0
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         WaveformView(levels: levels, playedFraction: 1)
+            .animation(reduceMotion ? nil : .linear(duration: 0.08), value: levels)
             .task {
                 while !Task.isCancelled {
-                    levels = [recorder.currentLevel()] + Array(levels.dropLast())
+                    let level = recorder.currentLevel()
+                    smoothedLevel = level == 0 ? 0 : smoothedLevel + (level - smoothedLevel) * 0.35
+                    levels = [smoothedLevel] + Array(levels.dropLast())
                     do {
                         try await Task.sleep(for: .milliseconds(50))
                     } catch {

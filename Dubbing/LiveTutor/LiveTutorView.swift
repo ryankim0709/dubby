@@ -5,6 +5,7 @@ import SwiftUI
 struct LiveTutorView: View {
     @State private var session: LiveTutorSession
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
 
     init(session: LiveTutorSession) {
@@ -14,7 +15,13 @@ struct LiveTutorView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                BackHeader(title: "Practise with your tutor") { EmptyView() }
+                BackHeader(title: "Practise with your tutor") {
+                    Button { dismiss() } label: {
+                        Image(systemName: "xmark").frame(width: 44, height: 44)
+                    }
+                    .accessibilityLabel("Close tutor")
+                    .accessibilityIdentifier("closeLiveTutor")
+                }
                     .padding(.top, 8)
                 status
                 ForEach(session.transcript.lines) { line in

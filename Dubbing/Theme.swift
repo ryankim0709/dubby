@@ -206,11 +206,13 @@ struct WaveformView: View {
                     let isPlayed = Double(index) / Double(count) < playedFraction
                     Capsule()
                         .fill(isPlayed ? Palette.accent : Palette.track)
-                        // A minimum height keeps quiet bars visible as dots.
-                        .frame(width: barWidth, height: max(3, proxy.size.height * Double(levels[index])))
+                        .frame(width: barWidth, height: max(1, proxy.size.height * Double(levels[index])))
                 }
             }
             .frame(maxHeight: .infinity)
+            .background(alignment: .center) {
+                Rectangle().fill(Palette.track).frame(height: 1)
+            }
         }
         .accessibilityHidden(true)
     }

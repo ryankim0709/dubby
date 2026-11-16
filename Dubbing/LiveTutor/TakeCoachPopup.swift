@@ -25,6 +25,8 @@ struct TakeCoachPopup: View {
     let onPlayTake: () -> Void
     let onRetry: () -> Void
     let onKeep: () -> Void
+    let onDismiss: () -> Void
+    @State private var isDismissed = false
     @State private var revealStart = Date.now
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -42,7 +44,7 @@ struct TakeCoachPopup: View {
     }
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1 / 30, paused: reduceMotion)) { context in
+        TimelineView(.animation(minimumInterval: 1 / 30, paused: reduceMotion || isDismissed)) { context in
             let revealed = revealedCount(at: context.date)
             panel(revealed: revealed, isTalking: isCoachSpeaking || revealed < message.count)
         }
@@ -58,28 +60,45 @@ struct TakeCoachPopup: View {
 
     private func panel(revealed: Int, isTalking: Bool) -> some View {
         VStack(alignment: .leading, spacing: 16) {
-            HStack(alignment: .top, spacing: 14) {
-                Group {
-                    if let avatarVideo {
-                        AvatarFigure(characterName: characterName, track: avatarVideo)
-                    } else {
-                        HologramFigure(characterName: characterName, isSpeaking: isTalking)
+            HStack {
+                Text(isDismissed ? "Your take" : "Take coach").dubFont(17, weight: .semibold)
+                Spacer()
+                if !isDismissed {
+                    Button {
+                        onDismiss()
+                        isDismissed = true
+                    } label: {
+                        Image(systemName: "xmark").frame(width: 44, height: 44)
                     }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Dismiss tutor")
+                    .accessibilityIdentifier("dismissTakeCoach")
                 }
-                .frame(width: 96, height: 156)
-                VStack(alignment: .leading, spacing: 10) {
-                    VStack(alignment: .leading, spacing: 0) {
-                        Text("Timing")
-                            .dubFont(13, weight: .semibold)
-                            .foregroundStyle(Palette.textSecondary)
-                        Text(timing.label)
-                            .dubFont(17, weight: .semibold)
-                            .foregroundStyle(Palette.textPrimary)
+            }
+            if !isDismissed {
+                HStack(alignment: .top, spacing: 14) {
+                    Group {
+                        if let avatarVideo {
+                            AvatarFigure(characterName: characterName, track: avatarVideo)
+                        } else {
+                            HologramFigure(characterName: characterName, isSpeaking: isTalking)
+                        }
                     }
-                    .accessibilityElement(children: .combine)
-                    caption(revealed: revealed)
-                        .fixedSize(horizontal: false, vertical: true)
-                    status
+                    .frame(width: 96, height: 156)
+                    VStack(alignment: .leading, spacing: 10) {
+                        VStack(alignment: .leading, spacing: 0) {
+                            Text("Timing")
+                                .dubFont(13, weight: .semibold)
+                                .foregroundStyle(Palette.textSecondary)
+                            Text(timing.label)
+                                .dubFont(17, weight: .semibold)
+                                .foregroundStyle(Palette.textPrimary)
+                        }
+                        .accessibilityElement(children: .combine)
+                        caption(revealed: revealed)
+                            .fixedSize(horizontal: false, vertical: true)
+                        status
+                    }
                 }
             }
             actions
