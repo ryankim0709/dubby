@@ -86,7 +86,8 @@ struct DiscoverView: View {
             .searchable(text: $query, prompt: "Scenes, films, characters")
             .navigationBarTitleDisplayMode(.inline)
             .navigationDestination(for: LibrarySceneOpening.self) { opening in
-                LibrarySceneDetail(clip: opening.clip, onDub: { onDub(opening.clip) }, onClose: { openings = [] })
+                // The dub flow covers Discover, so the preview closes beneath it and finishing lands on home.
+                LibrarySceneDetail(clip: opening.clip, onDub: { onDub(opening.clip); openings = [] }, onClose: { openings = [] })
                     .navigationTransition(.zoom(sourceID: opening.sourceID, in: zoomNamespace))
             }
             .toolbar {

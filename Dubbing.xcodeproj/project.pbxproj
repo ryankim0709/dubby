@@ -438,6 +438,7 @@
 				INFOPLIST_FILE = "Config/Dubbing-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = Dubby;
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Dubby records your voice so you can dub lines from your clip and talk with your coach.";
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Dubby saves your finished dubs to your photo library when you ask it to.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Dubby transcribes the dialogue in your scene so you can dub it, and what you say to your coach.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -477,6 +478,7 @@
 				INFOPLIST_FILE = "Config/Dubbing-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = Dubby;
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Dubby records your voice so you can dub lines from your clip and talk with your coach.";
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Dubby saves your finished dubs to your photo library when you ask it to.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Dubby transcribes the dialogue in your scene so you can dub it, and what you say to your coach.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;

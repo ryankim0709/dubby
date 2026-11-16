@@ -53,7 +53,11 @@ struct ContentView: View {
         }
         .tint(Palette.textPrimary)
         .fullScreenCover(item: $launch, onDismiss: reloadDubs) { launch in
-            DubFlowView(launch: launch, clips: clips, account: account, scoring: scoring, onRetry: reloadClips, onClose: { self.launch = nil })
+            // Finishing a dub always lands on the home page, wherever the dub was started from.
+            DubFlowView(launch: launch, clips: clips, account: account, scoring: scoring, onRetry: reloadClips, onClose: { self.launch = nil }, onFinish: {
+                tab = .discover
+                self.launch = nil
+            })
         }
         .fullScreenCover(isPresented: $isCoachPresented) {
             // The dub result screen has no coach entry yet. When it gains one it should pass a
