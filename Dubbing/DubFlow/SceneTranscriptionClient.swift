@@ -5,6 +5,7 @@ nonisolated enum SceneTranscriptionError: LocalizedError, Equatable {
     case backendNotConfigured
     case invalidResponse(String)
     case stillProcessing
+    case localClipNeedsDevice
 
     var errorDescription: String? {
         switch self {
@@ -14,18 +15,20 @@ nonisolated enum SceneTranscriptionError: LocalizedError, Equatable {
             "The scene transcript couldn't be used: \(reason)."
         case .stillProcessing:
             "The library scene is still being transcribed. Try again shortly."
+        case .localClipNeedsDevice:
+            "Use an iPhone to transcribe bundled clips. The Simulator supports published library scenes."
         }
     }
 }
 
 /// Word timings belong to the full published video; the studio uses seconds relative to its selected section.
-nonisolated struct SceneTranscript: Decodable, Sendable {
+nonisolated struct SceneTranscript: Decodable, Hashable, Sendable {
     let locale: String
     let durationSeconds: Double
     let words: [TranscribedWord]
 
     func words(for request: TranscriptionRequest) throws -> [TranscribedWord] {
-        guard locale == request.language.identifier else {
+        guard locale == request.sceneLanguage.identifier else {
             throw SceneTranscriptionError.invalidResponse("the transcript's language doesn't match the selected language")
         }
         guard durationSeconds.isFinite, durationSeconds > 0, abs(durationSeconds - request.clip.durationSeconds) < 1 else {
@@ -102,13 +105,13 @@ nonisolated struct SceneTranscriptionClient: Sendable {
     }
 
     @concurrent
-    func transcribe(_ request: TranscriptionRequest) async throws -> [TranscribedWord] {
+    func transcript(for clip: ImportedClip, language: SpokenLanguage) async throws -> SceneTranscript {
         struct Body: Encodable { let slug: String; let sha256: String; let locale: String }
-        let video = try Data(contentsOf: request.clip.url, options: .mappedIfSafe)
+        let video = try Data(contentsOf: clip.url, options: .mappedIfSafe)
         let body = Body(
-            slug: request.clip.url.deletingPathExtension().lastPathComponent,
+            slug: clip.url.deletingPathExtension().lastPathComponent,
             sha256: Data(SHA256.hash(data: video)).base64EncodedString(),
-            locale: request.language.identifier
+            locale: language.identifier
         )
         var urlRequest = try ServiceRequest.json(method: "POST", url: baseURL.appending(path: "scenes/transcribe"), body: body, headers: [:])
         urlRequest.timeoutInterval = 110
@@ -119,7 +122,7 @@ nonisolated struct SceneTranscriptionClient: Sendable {
             let operation = "Transcribing the library scene"
             let data = try await ServiceRequest.data(for: urlRequest, operation: operation)
             switch try ServiceRequest.decode(Reply.self, from: data, operation: operation) {
-            case .ready(let transcript): return try transcript.words(for: request)
+            case .ready(let transcript): return transcript
             case .processing: try await Task.sleep(for: .seconds(2))
             }
         }

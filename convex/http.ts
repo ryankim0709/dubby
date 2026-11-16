@@ -8,7 +8,9 @@ import { SCHEMA_VERSION } from "./lib/config";
 import { ConfigurationError, requiredEnv } from "./lib/env";
 import { PASSWORD_JWKS_PATH, publicJwks } from "./lib/passwordAuth";
 import { logEvent } from "./lib/log";
+import { createOpenAIClient } from "./lib/openai";
 import { CastResponseError } from "./lib/sceneCast";
+import { translateScript, TranslationResponseError } from "./lib/scriptTranslation";
 import { TranscriptionResponseError } from "./lib/transcription";
 import { registerTutoringRoutes } from "./tutoringHttp";
 import { castPublishedScene } from "./sceneCasts";
@@ -142,6 +144,44 @@ http.route({
       if (error instanceof ConfigurationError) return json(503, { error: error.message, code: "not_configured" });
       if (error instanceof OpenAI.APIError) return json(502, { error: "OpenAI couldn't find the library scene's speakers. Try again shortly.", code: "provider_failed" });
       if (error instanceof CastResponseError) return json(502, { error: error.message, code: "provider_failed" });
+      throw error;
+    }
+  }),
+});
+
+const translationRequest = z.object({
+  sourceLocale: transcriptionRequest.shape.locale,
+  targetLocale: transcriptionRequest.shape.locale,
+  sceneTitle: z.string().trim().min(1).max(200),
+  lines: z.array(z.object({
+    speaker: z.string().trim().min(1).max(60).optional(),
+    seconds: z.number().finite().nonnegative().max(120),
+    text: z.string().trim().min(1).max(1_000),
+  })).min(1).max(100),
+}).refine((body) => body.sourceLocale !== body.targetLocale);
+
+// Signed-in only: unlike the scene routes it takes free text, so an open route would let anyone spend OpenAI credit.
+http.route({
+  path: "/scripts/translate",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    const operation = "scripts.translate";
+    if (!(await isSignedIn(ctx))) return unauthenticated(operation);
+    let body: z.infer<typeof translationRequest>;
+    try {
+      body = translationRequest.parse(await request.json());
+    } catch (error) {
+      if (error instanceof SyntaxError || error instanceof z.ZodError) return json(400, { error: "Two different supported locales, a scene title and up to 100 timed lines are required." });
+      throw error;
+    }
+    try {
+      const lines = await translateScript(createOpenAIClient(), body);
+      logEvent({ operation, status: "ok", count: lines.length, httpStatus: 200 });
+      return json(200, { locale: body.targetLocale, lines });
+    } catch (error) {
+      if (error instanceof ConfigurationError) return json(503, { error: error.message, code: "not_configured" });
+      if (error instanceof OpenAI.APIError) return json(502, { error: "OpenAI couldn't translate the script. Try again shortly.", code: "provider_failed" });
+      if (error instanceof TranslationResponseError) return json(502, { error: error.message, code: "provider_failed" });
       throw error;
     }
   }),

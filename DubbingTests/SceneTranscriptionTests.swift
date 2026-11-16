@@ -6,7 +6,8 @@ struct SceneTranscriptionTests {
     private let request = TranscriptionRequest(
         clip: ImportedClip(url: URL(filePath: "/synthetic-scene.mp4"), title: "Synthetic scene", durationSeconds: 10, origin: .published, workingDirectory: URL(filePath: "/work")),
         section: ClipSection(start: 4, end: 7),
-        language: SpokenLanguage(identifier: "en-US", name: "English")
+        sceneLanguage: SpokenLanguage(identifier: "en-US", name: "English"),
+        dubLanguage: SpokenLanguage(identifier: "en-US", name: "English")
     )
 
     @Test func selectedWordsUseSectionRelativeTimingsAndStayInsideItsBounds() throws {
