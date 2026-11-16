@@ -8,6 +8,46 @@ nonisolated enum VoicePrint {
     /// MFCCs 1–12; coefficient 0 is overall loudness, which says more about delivery than about who is speaking.
     private static let coefficients = 1...12
 
+    /// Median periodicity of voiced frames, used only to choose a broad voice register.
+    static func pitchHz(samples: [Float], sampleRate: Double) -> Double? {
+        let step = max(1, Int(sampleRate / 4_000))
+        let rate = sampleRate / Double(step)
+        let reduced = stride(from: 0, to: samples.count, by: step).map { Double(samples[$0]) }
+        let frameLength = Int(rate * 0.04)
+        guard reduced.count >= frameLength else { return nil }
+        let lags = Int(rate / 400)...Int(rate / 70)
+        var pitches: [Double] = []
+        for start in stride(from: 0, through: reduced.count - frameLength, by: frameLength) {
+            let frame = Array(reduced[start..<(start + frameLength)])
+            let mean = frame.reduce(0, +) / Double(frame.count)
+            let centered = frame.map { $0 - mean }
+            guard centered.reduce(0, { $0 + $1 * $1 }) / Double(frameLength) > 1e-6 else { continue }
+            let correlations = lags.map { lag -> Double in
+                var product = 0.0
+                var leftEnergy = 0.0
+                var rightEnergy = 0.0
+                for index in 0..<(frameLength - lag) {
+                    let left = centered[index]
+                    let right = centered[index + lag]
+                    product += left * right
+                    leftEnergy += left * left
+                    rightEnergy += right * right
+                }
+                return product / max((leftEnergy * rightEnergy).squareRoot(), 1e-12)
+            }
+            guard let peak = correlations.max(), peak >= 0.8 else { continue }
+            // Prefer the first strong peak so a repeated period doesn't halve the pitch.
+            let candidates = 1..<(correlations.count - 1)
+            if let index = candidates.first(where: {
+                correlations[$0] >= peak * 0.95 && correlations[$0] > correlations[$0 - 1] && correlations[$0] >= correlations[$0 + 1]
+            }) {
+                pitches.append(rate / Double(lags.lowerBound + index))
+            }
+        }
+        let ordered = pitches.sorted()
+        return ordered.isEmpty ? nil : ordered[ordered.count / 2]
+    }
+
     /// Mean MFCCs over a line's louder frames, or nil when the line has no clear audio.
     static func features(samples: [Float], sampleRate: Double) throws -> [Double]? {
         guard samples.count >= frameLength else { return nil }

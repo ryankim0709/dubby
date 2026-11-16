@@ -1,6 +1,8 @@
+import LiveKit
 import SwiftUI
 
-/// The coach that pops up after a take: the character as a hologram, the measured timing, and what to try next.
+/// The coach that pops up after a take: the character as a hologram, or as its talking avatar when the character is
+/// one of the coaches, the measured timing, and what to try next.
 /// The phone's tip shows at once; when the live coach has listened, its own tip and suggestion replace it.
 /// The suggested action is ringed, and the buttons never move, so the learner accepts or declines it with one tap.
 /// It shows once per take, after the take has played back over the scene.
@@ -14,6 +16,8 @@ struct TakeCoachPopup: View {
     /// Nil when this build or account has no live coach.
     let coach: TakeCoach.State?
     let isCoachSpeaking: Bool
+    /// The coach character's live video; nil shows the hologram.
+    let avatarVideo: RemoteVideoTrack?
     let isPlayingTake: Bool
     let canPlayTake: Bool
     let canRetry: Bool
@@ -55,8 +59,14 @@ struct TakeCoachPopup: View {
     private func panel(revealed: Int, isTalking: Bool) -> some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(alignment: .top, spacing: 14) {
-                HologramFigure(characterName: characterName, isSpeaking: isTalking)
-                    .frame(width: 96, height: 156)
+                Group {
+                    if let avatarVideo {
+                        AvatarFigure(characterName: characterName, track: avatarVideo)
+                    } else {
+                        HologramFigure(characterName: characterName, isSpeaking: isTalking)
+                    }
+                }
+                .frame(width: 96, height: 156)
                 VStack(alignment: .leading, spacing: 10) {
                     VStack(alignment: .leading, spacing: 0) {
                         Text("Timing")
@@ -148,6 +158,22 @@ struct TakeCoachPopup: View {
             .disabled(!canKeep)
             .accessibilityIdentifier("keepTake")
         }
+    }
+}
+
+/// The coach character's LiveAvatar video in the hologram's place, framed in the coach's cyan.
+private struct AvatarFigure: View {
+    let characterName: String
+    let track: RemoteVideoTrack
+
+    var body: some View {
+        SwiftUIVideoView(track, layoutMode: .fill)
+            .background(Color.black)
+            .clipShape(RoundedRectangle(cornerRadius: Radius.control))
+            .overlay(RoundedRectangle(cornerRadius: Radius.control).strokeBorder(Palette.holo.opacity(0.45), lineWidth: 1))
+            .accessibilityElement()
+            .accessibilityLabel("\(characterName)'s video")
+            .accessibilityIdentifier("takeCoachAvatar")
     }
 }
 

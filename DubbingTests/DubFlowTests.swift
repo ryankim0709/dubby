@@ -37,6 +37,13 @@ struct ScriptBuilderTests {
         let spans = ScriptBuilder.suppressionSpans(placements: placements, padding: 0.1, sectionDuration: 7.5)
         #expect(spans == [TimeSpan(start: 0.9, end: 2.5), TimeSpan(start: 5.9, end: 7.5)])
     }
+
+    @Test func dragsKeepTheSectionWithinLimits() {
+        let origin = TimeSpan(start: 10, end: 20)
+        #expect(SectionEditing.adjusted(origin: origin, handle: .end, delta: 30, clipDuration: 60) == TimeSpan(start: 10, end: 40))
+        #expect(SectionEditing.adjusted(origin: origin, handle: .start, delta: 15, clipDuration: 60) == TimeSpan(start: 18, end: 20))
+        #expect(SectionEditing.adjusted(origin: origin, handle: .move, delta: 45, clipDuration: 50) == TimeSpan(start: 40, end: 50))
+    }
 }
 
 struct VoicePrintTests {
@@ -84,6 +91,22 @@ struct SceneCastTests {
         let script = ScriptBuilder.castScript(lines: lines, envelopes: [[], [], []], cast: cast)
         #expect(script.speakers.map(\.name) == ["Hero", "Speaker 2"])
         #expect(script.lines.map(\.speakerID) == [0, 1, 0])
+    }
+
+    @Test func aTranslatedScriptKeepsEachLinesTimingAndSpeaker() {
+        let lines = [
+            CastLine(line: LineDraft(text: "Where were you", start: 0.1, end: 1.9), character: 0),
+            CastLine(line: LineDraft(text: "Away", start: 2.65, end: 3.2), character: 1),
+        ]
+        let script = ScriptBuilder.castScript(lines: lines, envelopes: [[0.5], [1]], cast: cast)
+        let translated = script.replacingLineTexts(["어디 있었어", "멀리"])
+        #expect(translated.lines.map(\.text) == ["어디 있었어", "멀리"])
+        #expect(translated.lines.map(\.id) == script.lines.map(\.id))
+        #expect(translated.lines.map(\.start) == script.lines.map(\.start))
+        #expect(translated.lines.map(\.end) == script.lines.map(\.end))
+        #expect(translated.lines.map(\.speakerID) == script.lines.map(\.speakerID))
+        #expect(translated.lines.map(\.envelope) == script.lines.map(\.envelope))
+        #expect(translated.speakers == script.speakers)
     }
 
     @Test func decodingRejectsACastWhoseSegmentsNameMissingCharacters() throws {

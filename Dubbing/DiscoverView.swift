@@ -317,7 +317,7 @@ private struct LibraryPosterDeck: View {
     let namespace: Namespace.ID
     let onOpen: (LibraryClip) -> Void
     @State private var focusedIndex: Int
-    @State private var dragOffset: CGFloat = 0
+    @GestureState private var dragOffset: CGFloat = 0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private let cardWidth: CGFloat = 220
@@ -362,7 +362,7 @@ private struct LibraryPosterDeck: View {
             .frame(maxWidth: .infinity)
             .frame(height: cardWidth * 1.5)
             .contentShape(Rectangle())
-            .simultaneousGesture(deal)
+            .highPriorityGesture(deal)
             .accessibilityAdjustableAction { direction in
                 switch direction {
                 case .increment: focus(min(focusedIndex + 1, clips.count - 1))
@@ -396,7 +396,6 @@ private struct LibraryPosterDeck: View {
         }
         .onChange(of: clips.map(\.id)) {
             focusedIndex = clips.count / 2
-            dragOffset = 0
         }
     }
 
@@ -409,20 +408,18 @@ private struct LibraryPosterDeck: View {
     private func focus(_ index: Int) {
         withAnimation(reduceMotion ? nil : .spring(duration: 0.4, bounce: 0.15)) {
             focusedIndex = index
-            dragOffset = 0
         }
     }
 
     private var deal: some Gesture {
         DragGesture(minimumDistance: 12)
-            .onChanged { value in
-                guard abs(value.translation.width) > abs(value.translation.height) else { return }
-                dragOffset = reduceMotion ? 0 : value.translation.width
+            .updating($dragOffset) { value, offset, _ in
+                offset = reduceMotion ? 0 : value.translation.width
             }
             .onEnded { value in
-                guard abs(value.translation.width) > abs(value.translation.height) else { return }
-                let predicted = -value.predictedEndTranslation.width / step
-                focus(min(max(Int((Double(focusedIndex) + predicted).rounded()), 0), clips.count - 1))
+                let projected = value.predictedEndTranslation.width
+                let destination = abs(projected) >= 24 ? focusedIndex + (projected < 0 ? 1 : -1) : focusedIndex
+                focus(min(max(destination, 0), clips.count - 1))
             }
     }
 }

@@ -6,7 +6,8 @@
     "typecheck": "tsc --noEmit -p convex",
     "test": "vitest run",
     "codegen": "convex codegen",
-    "smoke:local": "node scripts/smoke-local.mjs"
+    "smoke:local": "node scripts/smoke-local.mjs",
+    "prepare:scenes": "node --env-file-if-exists=.env.local scripts/prepare-scenes.ts"
   },
   "dependencies": {
     "@whop/sdk": "^2.8.1",

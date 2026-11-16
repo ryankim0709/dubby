@@ -160,17 +160,45 @@ nonisolated struct CoachBackendClient: CoachTutorService {
         return grant
     }
 
-    /// Opens the studio's take coach for one scene; the character's name sets the coach's persona.
-    func takeCoachSession(sceneTitle: String, characterName: String, locale: String) async throws -> LiveTutorGrant {
-        struct Body: Encodable { let sceneTitle: String; let characterName: String; let locale: String }
+    /// Dialogue grounds the persona; reference pitch picks an approximate built-in voice, never a voice clone.
+    func takeCoachSession(sceneTitle: String, characterName: String, locale: String, characterLines: [String], referencePitchHz: Double?) async throws -> LiveTutorGrant {
+        struct Body: Encodable {
+            let sceneTitle: String
+            let characterName: String
+            let locale: String
+            let characterLines: [String]
+            let referencePitchHz: Double?
+        }
         let operation = "Starting your take coach"
-        let body = Body(sceneTitle: sceneTitle, characterName: characterName, locale: locale)
+        let body = Body(sceneTitle: sceneTitle, characterName: characterName, locale: locale, characterLines: characterLines, referencePitchHz: referencePitchHz)
         let request = try ServiceRequest.json(method: "POST", url: baseURL.appending(path: "tutor/take-coach"), body: body, headers: [:])
         let grant = try await send(request, as: LiveTutorGrant.self, operation: operation)
         guard !grant.clientSecret.isEmpty, !grant.model.isEmpty else {
             throw CoachError.invalidResponse(operation: operation, reason: "the session had no key or model")
         }
         return grant
+    }
+
+    /// Translates a section's lines, in spoken order, into the language the learner dubs in. One request carries the
+    /// whole section so each line is translated with the rest of the conversation.
+    func translateScript(sceneTitle: String, from source: SpokenLanguage, to target: SpokenLanguage, lines: [ScriptTranslationLine]) async throws -> [String] {
+        struct Body: Encodable { let sourceLocale: String; let targetLocale: String; let sceneTitle: String; let lines: [ScriptTranslationLine] }
+        struct Response: Decodable { let locale: String; let lines: [String] }
+        let operation = "Translating the script"
+        let body = Body(sourceLocale: source.identifier, targetLocale: target.identifier, sceneTitle: sceneTitle, lines: lines)
+        var request = try ServiceRequest.json(method: "POST", url: baseURL.appending(path: "scripts/translate"), body: body, headers: [:])
+        // The backend retries OpenAI up to three times at 30 seconds each before it answers.
+        request.timeoutInterval = 100
+        let response = try await send(request, as: Response.self, operation: operation)
+        guard response.locale == target.identifier else {
+            throw CoachError.invalidResponse(operation: operation, reason: "the translation's language doesn't match \(target.name)")
+        }
+        // Translations are paired with line timings by position, so a missing or empty line can't be used.
+        guard response.lines.count == lines.count,
+              response.lines.allSatisfy({ !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) else {
+            throw CoachError.invalidResponse(operation: operation, reason: "it didn't have one non-empty translation for each of the \(lines.count) lines")
+        }
+        return response.lines
     }
 
     func progress(locale: String?) async throws -> CoachProgress {

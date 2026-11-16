@@ -153,6 +153,39 @@ nonisolated enum ScriptBuilder {
     }
 }
 
+nonisolated enum SectionHandle {
+    case start
+    case end
+    case move
+}
+
+/// Pure math for dragging the section selection on the timeline.
+nonisolated enum SectionEditing {
+    static let minimumLength = 2.0
+    static let maximumLength = 30.0
+    static let defaultLength = 20.0
+
+    static func adjusted(origin: TimeSpan, handle: SectionHandle, delta: Double, clipDuration: Double) -> TimeSpan {
+        let maximum = min(maximumLength, clipDuration)
+        switch handle {
+        case .start:
+            let start = clamp(origin.start + delta, lower: max(0, origin.end - maximum), upper: origin.end - minimumLength)
+            return TimeSpan(start: start, end: origin.end)
+        case .end:
+            let end = clamp(origin.end + delta, lower: origin.start + minimumLength, upper: min(clipDuration, origin.start + maximum))
+            return TimeSpan(start: origin.start, end: end)
+        case .move:
+            let length = origin.end - origin.start
+            let start = clamp(origin.start + delta, lower: 0, upper: clipDuration - length)
+            return TimeSpan(start: start, end: start + length)
+        }
+    }
+
+    private static func clamp(_ value: Double, lower: Double, upper: Double) -> Double {
+        min(max(value, lower), upper)
+    }
+}
+
 extension Double {
     /// Formats seconds as `m:ss.s`.
     nonisolated var preciseClockString: String {
