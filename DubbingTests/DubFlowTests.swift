@@ -93,6 +93,22 @@ struct SceneCastTests {
         #expect(script.lines.map(\.speakerID) == [0, 1, 0])
     }
 
+    @Test func aTranslatedScriptKeepsEachLinesTimingAndSpeaker() {
+        let lines = [
+            CastLine(line: LineDraft(text: "Where were you", start: 0.1, end: 1.9), character: 0),
+            CastLine(line: LineDraft(text: "Away", start: 2.65, end: 3.2), character: 1),
+        ]
+        let script = ScriptBuilder.castScript(lines: lines, envelopes: [[0.5], [1]], cast: cast)
+        let translated = script.replacingLineTexts(["어디 있었어", "멀리"])
+        #expect(translated.lines.map(\.text) == ["어디 있었어", "멀리"])
+        #expect(translated.lines.map(\.id) == script.lines.map(\.id))
+        #expect(translated.lines.map(\.start) == script.lines.map(\.start))
+        #expect(translated.lines.map(\.end) == script.lines.map(\.end))
+        #expect(translated.lines.map(\.speakerID) == script.lines.map(\.speakerID))
+        #expect(translated.lines.map(\.envelope) == script.lines.map(\.envelope))
+        #expect(translated.speakers == script.speakers)
+    }
+
     @Test func decodingRejectsACastWhoseSegmentsNameMissingCharacters() throws {
         let valid = #"{"characters":[{"name":"Hero","portraitSeconds":1.5,"faceCenterX":0.4}],"segments":[{"start":1,"end":2,"character":0}]}"#
         #expect(try JSONDecoder().decode(SceneCast.self, from: Data(valid.utf8)).characters.first?.name == "Hero")

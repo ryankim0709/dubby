@@ -25,7 +25,7 @@ nonisolated struct SceneTranscript: Decodable, Sendable {
     let words: [TranscribedWord]
 
     func words(for request: TranscriptionRequest) throws -> [TranscribedWord] {
-        guard locale == request.language.identifier else {
+        guard locale == request.sceneLanguage.identifier else {
             throw SceneTranscriptionError.invalidResponse("the transcript's language doesn't match the selected language")
         }
         guard durationSeconds.isFinite, durationSeconds > 0, abs(durationSeconds - request.clip.durationSeconds) < 1 else {
@@ -108,7 +108,7 @@ nonisolated struct SceneTranscriptionClient: Sendable {
         let body = Body(
             slug: request.clip.url.deletingPathExtension().lastPathComponent,
             sha256: Data(SHA256.hash(data: video)).base64EncodedString(),
-            locale: request.language.identifier
+            locale: request.sceneLanguage.identifier
         )
         var urlRequest = try ServiceRequest.json(method: "POST", url: baseURL.appending(path: "scenes/transcribe"), body: body, headers: [:])
         urlRequest.timeoutInterval = 110

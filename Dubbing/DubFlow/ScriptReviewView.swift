@@ -14,6 +14,7 @@ private enum AnalysisPhase: Equatable {
     case preparingModel
     case transcribing
     case groupingVoices
+    case translating
     case ready(ScriptSource)
     case failed(FlowIssue)
 
@@ -23,6 +24,7 @@ private enum AnalysisPhase: Equatable {
         case .preparingModel: "preparingModel"
         case .transcribing: "transcribing"
         case .groupingVoices: "groupingVoices"
+        case .translating: "translating"
         case .ready: "ready"
         case .failed: "failed"
         }
@@ -34,7 +36,8 @@ private enum AnalysisPhase: Equatable {
         case .preparingModel: 1
         case .transcribing: 2
         case .groupingVoices: 3
-        case .ready, .failed: 4
+        case .translating: 4
+        case .ready, .failed: 5
         }
     }
 }
@@ -42,6 +45,8 @@ private enum AnalysisPhase: Equatable {
 /// Transcribes the scene and splits it into lines, then hands off to the script editor.
 struct ScriptReviewView: View {
     let request: TranscriptionRequest
+    /// Signs the translation request; the backend translates only for signed-in learners.
+    let account: AccountModel
     let onStart: (DubSetup) -> Void
     @State private var phase: AnalysisPhase = .extractingAudio
     @State private var attempt = 0
@@ -53,7 +58,7 @@ struct ScriptReviewView: View {
                 ScriptEditor(request: request, source: source, onStart: onStart)
             case .failed(let issue):
                 failure(issue)
-            case .extractingAudio, .preparingModel, .transcribing, .groupingVoices:
+            case .extractingAudio, .preparingModel, .transcribing, .groupingVoices, .translating:
                 progress
             }
         }
@@ -74,10 +79,13 @@ struct ScriptReviewView: View {
                 #if targetEnvironment(simulator)
                 stepRow(index: 1, title: "Preparing library transcription")
                 #else
-                stepRow(index: 1, title: "Getting the \(request.language.name) speech model")
+                stepRow(index: 1, title: "Getting the \(request.sceneLanguage.name) speech model")
                 #endif
                 stepRow(index: 2, title: "Transcribing the dialogue")
                 stepRow(index: 3, title: "Splitting lines by voice")
+                if request.needsTranslation {
+                    stepRow(index: 4, title: "Translating into \(request.dubLanguage.name)")
+                }
             }
             .padding(16)
             .background(Palette.surface, in: RoundedRectangle(cornerRadius: 16))
@@ -144,7 +152,7 @@ struct ScriptReviewView: View {
             phase = .transcribing
             let words = try await transcriber.transcribe(request)
             #else
-            let transcriber = try await SpeechTranscription.prepare(for: request.language)
+            let transcriber = try await SpeechTranscription.prepare(for: request.sceneLanguage)
             phase = .transcribing
             let words = try await SpeechTranscription.transcribe(audioURL: audioURL, using: transcriber)
             #endif
@@ -161,10 +169,12 @@ struct ScriptReviewView: View {
                     turnPause: 0.15
                 )
                 let analysis = try await MediaPipeline.analyzeVoices(audioURL: audioURL, lines: lines.map(\.line), barCount: 48)
-                phase = .ready(.cast(ScriptBuilder.castScript(lines: lines, envelopes: analysis.envelopes, cast: cast), cast))
+                let script = ScriptBuilder.castScript(lines: lines, envelopes: analysis.envelopes, cast: cast)
+                phase = .ready(.cast(try await spoken(script), cast))
             } else {
                 let lines = ScriptBuilder.segmentLines(words: words, pauseThreshold: 0.7, sentencePause: 0)
-                phase = .ready(.voices(try await MediaPipeline.analyzeVoices(audioURL: audioURL, lines: lines, barCount: 48)))
+                let analysis = try await MediaPipeline.analyzeVoices(audioURL: audioURL, lines: lines, barCount: 48)
+                phase = .ready(.voices(try await spoken(analysis)))
             }
         } catch is CancellationError {
             return
@@ -177,8 +187,28 @@ struct ScriptReviewView: View {
     private static func cast(for request: TranscriptionRequest) async throws -> SceneCast? {
         switch request.clip.origin {
         case .bundled: nil
-        case .published: try await SceneCastClient.configured(in: .main).cast(for: request.clip, language: request.language)
+        case .published: try await SceneCastClient.configured(in: .main).cast(for: request.clip, language: request.sceneLanguage)
         }
+    }
+
+    /// The cast's script in the language the learner dubs in. The cast's speakers are reliable, so their names go along.
+    private func spoken(_ script: Script) async throws -> Script {
+        guard request.needsTranslation else { return script }
+        let lines = script.lines.map { ScriptTranslationLine(speaker: script.speaker(withID: $0.speakerID)?.name, seconds: $0.duration, text: $0.text) }
+        return script.replacingLineTexts(try await translated(lines))
+    }
+
+    /// Voice-grouped lines in the language the learner dubs in. Translation keeps the timing, so regrouping voices later still works.
+    private func spoken(_ analysis: LineAnalysis) async throws -> LineAnalysis {
+        guard request.needsTranslation else { return analysis }
+        let lines = analysis.lines.map { ScriptTranslationLine(speaker: nil, seconds: $0.end - $0.start, text: $0.text) }
+        return analysis.replacingLineTexts(try await translated(lines))
+    }
+
+    private func translated(_ lines: [ScriptTranslationLine]) async throws -> [String] {
+        phase = .translating
+        let backend = try CoachBackendClient.configured(in: .main, tokens: AccountTokenProvider(account: account))
+        return try await backend.translateScript(sceneTitle: request.clip.title, from: request.sceneLanguage, to: request.dubLanguage, lines: lines)
     }
 }
 
@@ -253,7 +283,7 @@ private struct ScriptEditor: View {
         // Pinned so the primary action stays on screen beside a long script.
         .safeAreaInset(edge: .bottom, spacing: 0) {
             Button("Dub as \(script.speaker(withID: characterID)?.name ?? "this character")") {
-                onStart(DubSetup(clip: request.clip, section: request.section, script: script, characterID: characterID, locale: request.language.identifier))
+                onStart(DubSetup(clip: request.clip, section: request.section, script: script, characterID: characterID, locale: request.dubLanguage.identifier))
             }
             .buttonStyle(PrimaryButtonStyle(cornerRadius: 16))
             .disabled(characterLines.isEmpty)

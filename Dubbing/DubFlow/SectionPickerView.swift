@@ -11,6 +11,8 @@ struct SectionPickerView: View {
     let onTranscribe: (TranscriptionRequest) -> Void
     @State private var player: SegmentPlayer
     @State private var selection: TimeSpan
+    /// The clip's own language. Clips without one are English, the only language the library's scenes are in.
+    private let sceneLanguage: SpokenLanguage
     @State private var language: SpokenLanguage
     @State private var thumbnails: ThumbnailState = .loading
     @State private var previewTask: Task<Void, Never>?
@@ -19,7 +21,8 @@ struct SectionPickerView: View {
         self.clip = clip
         self.onTranscribe = onTranscribe
         let code = clip.locale.flatMap { Locale(identifier: $0).language.languageCode?.identifier }
-        _language = State(initialValue: SpokenLanguage.all.first { Locale(identifier: $0.identifier).language.languageCode?.identifier == code } ?? SpokenLanguage.all[0])
+        sceneLanguage = SpokenLanguage.all.first { Locale(identifier: $0.identifier).language.languageCode?.identifier == code } ?? SpokenLanguage.all[0]
+        _language = State(initialValue: sceneLanguage)
         _player = State(initialValue: SegmentPlayer(url: clip.url))
         _selection = State(initialValue: TimeSpan(start: 0, end: min(clip.durationSeconds, SectionEditing.defaultLength)))
     }
@@ -75,6 +78,12 @@ struct SectionPickerView: View {
                     .dubFont(14, weight: .regular)
                     .foregroundStyle(Palette.textSecondary)
                 #endif
+                if language != sceneLanguage {
+                    Text("OpenAI translates the scene's \(sceneLanguage.name) lines into \(language.name) for you to dub.")
+                        .dubFont(14, weight: .regular)
+                        .foregroundStyle(Palette.textSecondary)
+                        .accessibilityIdentifier("translationNote")
+                }
                 AdaptiveStack(rowAlignment: .center, spacing: 12) {
                     Button {
                         if player.isPlaying {
@@ -102,7 +111,8 @@ struct SectionPickerView: View {
                 onTranscribe(TranscriptionRequest(
                     clip: clip,
                     section: ClipSection(start: selection.start, end: selection.end),
-                    language: language
+                    sceneLanguage: sceneLanguage,
+                    dubLanguage: language
                 ))
             }
             .buttonStyle(PrimaryButtonStyle(cornerRadius: 16))

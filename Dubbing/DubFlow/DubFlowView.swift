@@ -52,7 +52,7 @@ struct DubFlowView: View {
                     case .section(let clip):
                         SectionPickerView(clip: clip) { path.append(.script($0)) }
                     case .script(let request):
-                        ScriptReviewView(request: request) { path.append(.studio($0)) }
+                        ScriptReviewView(request: request, account: account) { path.append(.studio($0)) }
                     case .studio(let setup):
                         DubSessionView(setup: setup, account: account, initialTakes: [:], requiredKeptLines: completionRoom == nil ? 1 : setup.script.lines(spokenBy: setup.characterID).count) { path.append(.result(setup, $0)) }
                     case .result(let setup, let takes):
