@@ -71,8 +71,7 @@ struct DubSessionView: View {
             logger.info("The studio has no take coach. reason=\(error.localizedDescription, privacy: .public)")
             return nil
         }
-        let characterName = setup.script.speaker(withID: setup.characterID)?.name ?? "Your coach"
-        return TakeCoach(backend: backend, sceneTitle: setup.clip.title, characterName: characterName, locale: setup.locale)
+        return TakeCoach(backend: backend, setup: setup)
     }
 
     private var lines: [ScriptLine] { setup.script.lines(spokenBy: setup.characterID) }

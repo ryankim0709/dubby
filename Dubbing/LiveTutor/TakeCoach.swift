@@ -25,6 +25,12 @@ final class TakeCoach {
     struct Review: Equatable {
         let takeID: UUID
         let state: State
+
+        func failing(reason: String) -> Review {
+            // Speech is optional once the learner has a valid AI suggestion.
+            if case .suggested = state { return self }
+            return Review(takeID: takeID, state: .unavailable(reason))
+        }
     }
 
     private(set) var review: Review?
@@ -40,9 +46,7 @@ final class TakeCoach {
     }
 
     private let backend: CoachBackendClient
-    private let sceneTitle: String
-    private let characterName: String
-    private let locale: String
+    private let setup: DubSetup
     private let requests: AsyncStream<Request>
     private let requestContinuation: AsyncStream<Request>.Continuation
     private let clock = ContinuousClock()
@@ -61,11 +65,9 @@ final class TakeCoach {
     private static let logger = Logger(subsystem: "com.ryankim.Dubbing", category: "take-coach")
     private static let operation = "Listening to your take"
 
-    init(backend: CoachBackendClient, sceneTitle: String, characterName: String, locale: String) {
+    init(backend: CoachBackendClient, setup: DubSetup) {
         self.backend = backend
-        self.sceneTitle = sceneTitle
-        self.characterName = characterName
-        self.locale = locale
+        self.setup = setup
         (requests, requestContinuation) = AsyncStream.makeStream(bufferingPolicy: .bufferingNewest(1))
         startedAt = clock.now
     }
@@ -89,8 +91,11 @@ final class TakeCoach {
                 guard !hasEnded else { return }
                 Self.logger.warning("A take review failed. error=\(error.localizedDescription, privacy: .public)")
                 if activeTakeID == request.takeID {
-                    review = Review(takeID: request.takeID, state: .unavailable(error.localizedDescription))
+                    review = review?.failing(reason: error.localizedDescription)
                 }
+                stopSpeaking()
+                voice?.shutDown()
+                voice = nil
                 // A broken session is replaced on the next take.
                 await transport?.close()
                 transport = nil
@@ -145,7 +150,15 @@ final class TakeCoach {
 
     private func connectedTransport() async throws -> URLSessionSocketTransport {
         if let transport { return transport }
-        let grant = try await backend.takeCoachSession(sceneTitle: sceneTitle, characterName: characterName, locale: locale)
+        let lines = setup.script.lines(spokenBy: setup.characterID)
+        let pitchHz = try await Self.referencePitch(setup: setup, lines: lines)
+        let grant = try await backend.takeCoachSession(
+            sceneTitle: setup.clip.title,
+            characterName: setup.script.speaker(withID: setup.characterID)?.name ?? "Your coach",
+            locale: setup.locale,
+            characterLines: lines.prefix(12).map { String($0.text.prefix(1_000)) },
+            referencePitchHz: pitchHz
+        )
         startAvatar(for: grant)
         let transport = URLSessionSocketTransport(
             url: try LiveTutorRealtime.socketURL(model: grant.model),
@@ -173,7 +186,7 @@ final class TakeCoach {
     private func startAvatar(for grant: LiveTutorGrant) {
         guard avatar == nil, !hasEnded, let characterID = grant.avatarCharacterId else { return }
         // LITE sessions ignore the language; the token route only takes one for the coach screen's sake.
-        let language = SpokenLanguage.all.first { $0.identifier == locale } ?? SpokenLanguage.all[0]
+        let language = SpokenLanguage.all.first { $0.identifier == setup.locale } ?? SpokenLanguage.all[0]
         let avatar = TakeCoachAvatar(backend: backend, characterID: characterID, language: language)
         self.avatar = avatar
         avatarTask = Task { await avatar.run() }
@@ -291,6 +304,19 @@ final class TakeCoach {
     private static func throwUnlessHarmless(code: String?, message: String) throws {
         guard code != "response_cancel_not_active" else { return }
         throw CoachError.providerFailed(operation: operation, message: message)
+    }
+
+    @concurrent
+    private static func referencePitch(setup: DubSetup, lines: [ScriptLine]) async throws -> Double? {
+        let url = setup.clip.workingDirectory.appending(path: "coach-reference.m4a")
+        try await MediaPipeline.exportAudio(from: setup.clip.url, section: setup.section, to: url)
+        let audio = try MediaPipeline.readMonoAudio(from: url)
+        let pitches = lines.prefix(3).compactMap { line -> Double? in
+            let lower = min(audio.samples.count, max(0, Int(line.start * audio.sampleRate)))
+            let upper = min(audio.samples.count, max(lower, Int(min(line.end, line.start + 1) * audio.sampleRate)))
+            return VoicePrint.pitchHz(samples: Array(audio.samples[lower..<upper]), sampleRate: audio.sampleRate)
+        }.sorted()
+        return pitches.isEmpty ? nil : pitches[pitches.count / 2]
     }
 
     @concurrent
