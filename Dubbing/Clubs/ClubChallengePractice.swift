@@ -40,7 +40,7 @@ struct ClubChallengePractice: View {
                 case .studio(let setup, let takes):
                     DubSessionView(setup: setup, account: account, initialTakes: takes, requiredKeptLines: 1) { stage = .result(setup, $0) }
                 case .result(let setup, let takes):
-                    DubResultView(setup: setup, takes: takes, account: account, scoring: scoring, completionRoom: nil, onDone: { dismiss() }, onKeepRecording: { stage = .studio(setup, takes) })
+                    DubResultView(setup: setup, takes: takes, account: account, scoring: scoring, completionRoom: nil, onDone: { dismiss() })
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)

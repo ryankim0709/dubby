@@ -148,15 +148,11 @@ struct SocialDubSource: Identifiable {
     let takes: [Int: RecordedTake]
     var id: URL { video }
 
-    var isRoleComplete: Bool {
-        let lines = setup.script.lines(spokenBy: setup.characterID)
-        return !lines.isEmpty && lines.allSatisfy { takes[$0.id] != nil }
-    }
-
     func invitationScript(guestCharacterId: Int) throws -> SocialScript {
         let ownerLines = setup.script.lines(spokenBy: setup.characterID)
-        guard isRoleComplete else {
-            throw SocialError.rejected("Keep every line of your character before inviting a friend.")
+        let recordedLines = ownerLines.filter { takes[$0.id] != nil }
+        guard !recordedLines.isEmpty else {
+            throw SocialError.rejected("Keep a line of your character before inviting a friend.")
         }
         let placements = ScriptBuilder.takePlacements(lines: setup.script.lines, takes: takes, sectionDuration: setup.section.duration, grace: DubTiming.lineGrace)
         let protected = placements.map { TimeSpan(start: $0.start, end: $0.start + $0.duration) }
@@ -165,7 +161,7 @@ struct SocialDubSource: Identifiable {
               guestLines.allSatisfy({ line in !protected.contains { $0.start < line.end && $0.end > line.start } }) else {
             throw SocialError.rejected("This role overlaps your kept performance. Choose another role or scene.")
         }
-        return SocialScript(title: setup.clip.title, duration: setup.section.duration, locale: setup.locale, speakers: setup.script.speakers.map { .init(id: $0.id, name: $0.name) }, lines: setup.script.lines.map { .init(id: $0.id, speakerId: $0.speakerID, text: $0.text, start: $0.start, end: $0.end) }, protectedSpans: protected, ownerCharacterId: setup.characterID, guestCharacterId: guestCharacterId, ownerLinesRecorded: ownerLines.count)
+        return SocialScript(title: setup.clip.title, duration: setup.section.duration, locale: setup.locale, speakers: setup.script.speakers.map { .init(id: $0.id, name: $0.name) }, lines: setup.script.lines.map { .init(id: $0.id, speakerId: $0.speakerID, text: $0.text, start: $0.start, end: $0.end) }, protectedSpans: protected, ownerCharacterId: setup.characterID, guestCharacterId: guestCharacterId, ownerLinesRecorded: recordedLines.count)
     }
 }
 

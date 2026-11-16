@@ -44,7 +44,6 @@ struct DubResultView: View {
     let scoring: DubScoringModel?
     let completionRoom: CoDubRoom?
     let onDone: () -> Void
-    let onKeepRecording: () -> Void
     @State private var phase: ExportPhase = .filteringDialogue
     @State private var savedDubID: UUID?
     @State private var tutor: LiveTutorSession?
@@ -55,7 +54,7 @@ struct DubResultView: View {
     @State private var clubDraft: ClubMediaDraft?
     @State private var socialSource: SocialDubSource?
     @State private var isCoDubUploading = false
-    @State private var returnsToStudio = false
+    @State private var isInviting = false
 
     private static let logger = Logger(subsystem: "com.ryankim.Dubbing", category: "export")
     private let history = LocalDubHistory(folder: DubLibrary.defaultFolder)
@@ -130,11 +129,18 @@ struct DubResultView: View {
             if case .finished(let video, _, _) = phase {
                 VStack(spacing: 8) {
                     if completionRoom == nil {
-                        Button("Invite a friend or post to feed", systemImage: "person.2") {
+                        if let guest = setup.script.speakers.first(where: { $0.id != setup.characterID }) {
+                            Text("Invite a friend to record \(guest.name). Sharing uploads your saved scene and script to Dubby.")
+                                .dubFont(14, weight: .regular).foregroundStyle(Palette.textSecondary)
+                            CoDubInvitationButton(source: SocialDubSource(video: video, setup: setup, takes: takes), account: account, guestCharacterId: guest.id, recipientId: nil, title: "Invite a friend", isWorking: $isInviting)
+                                .accessibilityIdentifier("shareWithDubbyFriends")
+                        }
+                        Button("Share your scene", systemImage: "person.2") {
                             socialSource = SocialDubSource(video: video, setup: setup, takes: takes)
                         }
-                        .buttonStyle(PrimaryButtonStyle(cornerRadius: Radius.control))
-                        .accessibilityIdentifier("shareWithDubbyFriends")
+                        .buttonStyle(SecondaryButtonStyle())
+                        .disabled(isInviting)
+                        .accessibilityIdentifier("shareSceneOptions")
                     }
                     ShareLink(item: video) {
                         Label("Share dub", systemImage: "square.and.arrow.up")
@@ -151,7 +157,7 @@ struct DubResultView: View {
                     Button("Done", action: onDone)
                         .buttonStyle(SecondaryButtonStyle())
                         .accessibilityIdentifier("doneDub")
-                        .disabled(isCoDubUploading)
+                        .disabled(isCoDubUploading || isInviting)
                 }
                 .padding(16)
                 .background(Palette.background)
@@ -168,16 +174,9 @@ struct DubResultView: View {
             }
         }
         .onDisappear { exportTask?.cancel() }
-        .sheet(item: $socialSource, onDismiss: {
-            if returnsToStudio {
-                returnsToStudio = false
-                onKeepRecording()
-            }
-        }) { source in
-            SocialSharingView(source: source, account: account, onClose: { socialSource = nil }, onKeepRecording: {
-                returnsToStudio = true
-                socialSource = nil
-            })
+        .interactiveDismissDisabled(isInviting)
+        .sheet(item: $socialSource) { source in
+            SocialSharingView(source: source, account: account, onClose: { socialSource = nil })
         }
         .sheet(item: $clubDraft) { draft in ClubComposer(account: account, draft: draft, onShared: {}) }
         .fullScreenCover(isPresented: Binding(get: { tutor != nil }, set: { if !$0 { tutor = nil } })) {
@@ -201,7 +200,7 @@ struct DubResultView: View {
             }
             .accessibilityLabel("Back")
             .accessibilityIdentifier("exportBack")
-            .disabled(isCoDubUploading)
+            .disabled(isCoDubUploading || isInviting)
             Text("Your dub")
                 .dubFont(16, weight: .semibold)
                 .foregroundStyle(Palette.textPrimary)

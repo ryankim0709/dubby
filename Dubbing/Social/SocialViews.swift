@@ -238,7 +238,7 @@ struct SocialRoomView: View {
             } else if room.guest?.id == viewerId {
                 Text("Record \(guestLines) \(guestLines == 1 ? "line" : "lines") as \(room.script.roleName(room.script.guestCharacterId)). Your teammate's performance stays in the mix. Only you two can access it in Dubby until you both approve posting.")
                     .dubFont(17, weight: .regular).foregroundStyle(Palette.textSecondary)
-                Button(room.status == .invited ? "Accept and record your role" : "Record your role") { prepareRole(room) }
+                Button("Record \(room.script.roleName(room.script.guestCharacterId))") { prepareRole(room) }
                     .buttonStyle(PrimaryButtonStyle(cornerRadius: Radius.control)).disabled(isWorking)
                     .accessibilityIdentifier("recordCoDubRole")
                 Button("Decline invitation", role: .destructive) { perform { try await $0.closeInvite(id: room.id) } }.frame(minHeight: 44)

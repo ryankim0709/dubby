@@ -34,11 +34,12 @@ Inbox retains the existing Whop **Clubs** section alongside **Co-dubs**. Invitat
 
 1. Open **Friends** from Feed or **Inbox → Co-dubs** and send a request to a Dubby username. The recipient accepts
    in their own Friends screen. A request alone grants no access to friend-only posts.
-2. Finish a dub and choose **Invite a friend or post to feed**. For a co-dub, keep every line of the
-   first character, choose another character, and select an accepted friend or create a private link.
-   If you finished early, **Record remaining lines** returns to the studio with your kept takes intact.
-   The sheet discloses the video/script upload before sending. A solo performance can instead be
-   posted directly to accepted friends.
+2. Finish a dub and choose **Invite a friend**. Dubby uploads the saved performance and script, then
+   opens the native Messages composer with an invitation to record the other character. Choose a
+   recipient and send it. Keeping at least one line is enough to invite someone; unrecorded lines
+   retain the original audio. **Share your scene** offers another role or an accepted Dubby friend,
+   with **Share** opening Messages. It also offers posting the solo performance to accepted friends.
+   Retrying or cancelling Messages reuses the prepared invitation rather than creating another one.
 3. A named friend's invitation appears in **Inbox → Co-dubs**. A link recipient opens `dubby://invite/<code>` or
    pastes its code in **Inbox → Co-dubs** after signing in. Links require the installed app; they do not provide an
    App Store fallback or anonymous web player. An open link can be claimed by one learner. A link
@@ -53,9 +54,10 @@ Inbox retains the existing Whop **Clubs** section alongside **Co-dubs**. Invitat
 6. **Swap roles and go again** starts a fresh first-role recording against the completed scene. Its
    result can create a new invitation. Existing completed performances are not overwritten.
 
-The operating system's native share sheet sends invitation links or exported video when the learner
-chooses a recipient. There is no conversational iMessage agent, automatic message sending, general
-direct-message service or public feed in this implementation.
+The native Messages composer sends invitations only when the learner chooses a recipient and taps
+Send. Messages must be configured on the iPhone. The operating system's share sheet remains available
+for exported video and invitations in the Inbox. There is no conversational iMessage agent, automatic
+message sending, general direct-message service or public feed in this implementation.
 
 ## Media and access boundaries
 
