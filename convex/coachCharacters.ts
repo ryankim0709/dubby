@@ -33,7 +33,10 @@ export const coachCharacters: readonly CoachCharacter[] = [
     summary: "Intense and impatient. Pushes you to say it again, with feeling.",
     avatarIdEnv: "LIVEAVATAR_AVATAR_ID_ANAKIN",
     openaiVoice: "ash",
-    voiceStyle: "Intense and a little impatient, with the warmth of someone who wants you to win.",
+    voiceStyle:
+      "Youthful adult masculine voice in a mid-low register, lightly breathy, with a neutral American accent in English. " +
+      "Intense, earnest and slightly impatient, using short, deliberate phrases and restrained emotion. " +
+      "Stay warm and encouraging toward the learner; never shout. Slow down and articulate practice words clearly in the target language.",
     persona:
       "You are Anakin, a gifted young knight: intense, proud, a little impatient, and fiercely loyal. " +
       "You coach with urgency and high standards, and you are quick to praise real effort.",

@@ -80,6 +80,43 @@ describe("POST /tutor/live-session", () => {
     expect((await a.fetch("/tutor/live-session", post({ clientDubId: "not-a-uuid" }))).status).toBe(400);
     expect(fetchSpy).not.toHaveBeenCalled();
   });
+
+  it.each([
+    { characterName: "Anakin Skywalker", voice: "ash" },
+    { characterName: "Obi-Wan Kenobi", voice: "cedar" },
+    { characterName: "Fixture hero", voice: "marin" },
+  ])("opens the completed dub's practice session with $voice for $characterName", async ({ characterName, voice }) => {
+    const voices: string[] = [];
+    fetchSpy.mockImplementation(async (_input: string | URL | Request, init?: RequestInit) => {
+      const body: { session: { audio: { output: { voice: string } } } } = JSON.parse(String(init?.body));
+      voices.push(body.session.audio.output.voice);
+      return Response.json({ value: "ek_fixture", expires_at: 1_800_000_000, session: {} });
+    });
+    const t = newBackend();
+    const a = t.withIdentity(alice);
+    await a.mutation(api.users.ensure, {});
+    const { dubId } = await a.mutation(api.dubs.submit, {
+      clientDubId,
+      sceneTitle: "SYNTHETIC fixture scene",
+      characterName,
+      locale: "en-US",
+      timeZone: "America/Los_Angeles",
+      capturedAt: Date.now(),
+      takes: [{ lineIndex: 0, referenceText: "Fixture line one.", startMs: 1000, endMs: 3000, storageId: await upload(t) }],
+    });
+    await t.run(async (ctx) => {
+      const takes = await ctx.db.query("dubTakes").withIndex("by_dub", (q) => q.eq("dubId", dubId)).collect();
+      for (const take of takes) {
+        await ctx.db.patch(take._id, { status: "failed", failure: { code: "provider_unavailable", message: "Synthetic grading failure" } });
+      }
+      await ctx.db.patch(dubId, { status: "complete", completedAt: Date.now() });
+    });
+
+    const response = await a.fetch("/tutor/live-session", post({ clientDubId }));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ clientSecret: "ek_fixture" });
+    expect(voices).toEqual([voice]);
+  });
 });
 
 describe("POST /tutor/take-coach", () => {
