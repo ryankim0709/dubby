@@ -146,7 +146,7 @@ struct DiscoverView: View {
                     open(clip, from: "deck")
                 }
                 VStack(alignment: .leading, spacing: 16) {
-                    Text("Ready for your voice")
+                    Text("Popular dubs")
                         .dubFont(24, weight: .bold)
                     ForEach(Array(inLanguage.enumerated()), id: \.element.id) { index, clip in
                         Button { open(clip, from: "library") } label: {
@@ -165,8 +165,9 @@ struct DiscoverView: View {
                                         .dubFont(17, weight: .semibold)
                                         .foregroundStyle(Palette.textPrimary)
                                         .multilineTextAlignment(.leading)
-                                    Text([clip.sourceTitle, clip.languageName].compactMap { $0 }.joined(separator: " · "))
+                                    Text("\(Int(clip.durationSeconds.rounded()))s")
                                         .dubFont(14, weight: .regular)
+                                        .monospacedDigit()
                                         .foregroundStyle(Palette.textSecondary)
                                 }
                                 Spacer(minLength: 0)
@@ -371,13 +372,14 @@ private struct LibraryPosterDeck: View {
             }
             if clips.indices.contains(focusedIndex) {
                 VStack(spacing: 4) {
-                    Text(clips[focusedIndex].sourceTitle)
+                    Text(clips[focusedIndex].filmTitle)
                         .dubFont(22, weight: .bold)
                         .foregroundStyle(Palette.textPrimary)
                         .multilineTextAlignment(.center)
-                    Text([clips[focusedIndex].languageName, clips[focusedIndex].durationSeconds.preciseClockString].compactMap { $0 }.joined(separator: " · "))
+                    Text(clips[focusedIndex].blurb ?? clips[focusedIndex].durationSeconds.preciseClockString)
                         .dubFont(15, weight: .medium)
                         .foregroundStyle(Palette.textSecondary)
+                        .multilineTextAlignment(.center)
                 }
                 .padding(.horizontal, 32)
             }

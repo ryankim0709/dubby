@@ -37,7 +37,7 @@ struct DubFlowView: View {
             _path = State(initialValue: [])
         case .scene(let clip):
             completionRoom = nil
-            _path = State(initialValue: [.section(ImportedClip(clip: clip))])
+            _path = State(initialValue: [DubFlowStep.opening(ImportedClip(clip: clip))])
         case .social(let launch):
             completionRoom = launch.completionRoom
             _path = State(initialValue: [.studio(launch.setup)])
@@ -46,7 +46,7 @@ struct DubFlowView: View {
 
     var body: some View {
         NavigationStack(path: $path) {
-            ScenePickerView(clips: clips, onPick: { path.append(.section(ImportedClip(clip: $0))) }, onRetry: onRetry, onClose: onClose)
+            ScenePickerView(clips: clips, onPick: { path.append(.opening(ImportedClip(clip: $0))) }, onRetry: onRetry, onClose: onClose)
                 .navigationDestination(for: DubFlowStep.self) { step in
                     switch step {
                     case .section(let clip):
@@ -124,5 +124,17 @@ extension Palette {
     static func speakerColor(_ speakerID: Int) -> Color {
         let colors = [accent, Color(hex: 0xBBBBBB), Color(hex: 0x999999), Color(hex: 0x777777)]
         return colors[speakerID % colors.count]
+    }
+}
+
+extension DubFlowStep {
+    /// A scene with a hand-checked script opens on role choice for the whole scene; any other is framed and prepared first.
+    static func opening(_ clip: ImportedClip) -> DubFlowStep {
+        guard let script = PublishedSceneScript.bundled(for: clip.url.deletingPathExtension().lastPathComponent),
+              let language = SpokenLanguage.all.first(where: { $0.identifier == clip.locale }) else {
+            return .section(clip)
+        }
+        let request = TranscriptionRequest(clip: clip, section: ClipSection(start: 0, end: clip.durationSeconds), sceneLanguage: language, dubLanguage: language)
+        return .script(PreparedScript(request: request, source: .cast(script.script, script.cast)))
     }
 }

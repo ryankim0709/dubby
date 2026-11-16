@@ -5,6 +5,7 @@ struct LibrarySceneDetail: View {
     let onDub: () -> Void
     let onClose: () -> Void
     @State private var isVisible = false
+    @State private var bundledScript: PublishedSceneScript?
 
     var body: some View {
         ScrollView {
@@ -21,17 +22,17 @@ struct LibrarySceneDetail: View {
                             .dubFont(32, weight: .bold)
                             .foregroundStyle(Palette.textPrimary)
                             .fixedSize(horizontal: false, vertical: true)
-                        Text([clip.sourceTitle, clip.languageName].compactMap { $0 }.joined(separator: " · "))
+                        Text([clip.filmTitle, clip.languageName].compactMap { $0 }.joined(separator: " · "))
                             .dubFont(15, weight: .medium)
                             .foregroundStyle(Palette.textSecondary)
                     }
-                    Text(clip.details?.synopsis ?? "Choose up to 30 seconds of dialogue, pick who you'll play, and record their lines. Your finished dub is saved to Shelf.")
+                    Text(clip.details?.synopsis ?? clip.blurb ?? "Pick who you'll play and record their lines. Your finished dub is saved to Shelf.")
                         .dubFont(17, weight: .regular)
                         .foregroundStyle(Palette.textPrimary)
                         .fixedSize(horizontal: false, vertical: true)
                     facts
-                    if let details = clip.details, !details.characters.isEmpty {
-                        cast(details.characters)
+                    if !castRows.isEmpty {
+                        cast(castRows)
                     }
                 }
                 .padding(.horizontal, 20)
@@ -66,8 +67,22 @@ struct LibrarySceneDetail: View {
         }
         .toolbarBackground(.hidden, for: .navigationBar)
         .navigationBarTitleDisplayMode(.inline)
-        .onAppear { isVisible = true }
+        .onAppear {
+            isVisible = true
+            bundledScript = PublishedSceneScript.bundled(for: clip.sceneID)
+        }
         .onDisappear { isVisible = false }
+    }
+
+    /// A bundled script gives the real cast with faces; otherwise the backend's cast, then the known names.
+    private var castRows: [CastRow] {
+        if let script = bundledScript {
+            return script.characters.indices.map { CastRow(name: script.characters[$0].name, lineCount: script.lineCount(of: $0), portrait: script.portraitURL(of: $0)) }
+        }
+        if let details = clip.details, !details.characters.isEmpty {
+            return details.characters.map { CastRow(name: $0.name, lineCount: $0.lineCount, portrait: nil) }
+        }
+        return clip.castNames.map { CastRow(name: $0, lineCount: nil, portrait: nil) }
     }
 
     private var facts: some View {
@@ -76,7 +91,10 @@ struct LibrarySceneDetail: View {
                 fact(value: language, label: "Language")
             }
             fact(value: "\(Int(clip.durationSeconds.rounded()))s", label: "Length")
-            if let details = clip.details, !details.characters.isEmpty {
+            if let script = bundledScript {
+                fact(value: "\(script.lines.count)", label: "Lines")
+                fact(value: "\(script.characters.count)", label: "Roles")
+            } else if let details = clip.details, !details.characters.isEmpty {
                 fact(value: "\(details.characters.reduce(0) { $0 + $1.lineCount })", label: "Lines")
                 fact(value: "\(details.characters.count)", label: "Roles")
             }
@@ -99,25 +117,44 @@ struct LibrarySceneDetail: View {
         .accessibilityElement(children: .combine)
     }
 
-    private func cast(_ characters: [LibrarySceneDetails.Character]) -> some View {
+    private struct CastRow: Identifiable {
+        let name: String
+        let lineCount: Int?
+        let portrait: URL?
+        var id: String { name }
+    }
+
+    private func cast(_ characters: [CastRow]) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Cast")
                 .dubFont(17, weight: .semibold)
                 .foregroundStyle(Palette.textPrimary)
             ForEach(characters) { character in
                 HStack(spacing: 12) {
-                    Image(systemName: "person.crop.circle")
-                        .dubFont(32, weight: .light)
-                        .foregroundStyle(Palette.textSecondary)
-                        .frame(width: 44, height: 44)
-                        .accessibilityHidden(true)
+                    Group {
+                        if let portrait = character.portrait, let image = UIImage(contentsOfFile: portrait.path(percentEncoded: false)) {
+                            Image(uiImage: image)
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: 44, height: 44)
+                                .clipShape(Circle())
+                        } else {
+                            Image(systemName: "person.crop.circle")
+                                .dubFont(32, weight: .light)
+                                .foregroundStyle(Palette.textSecondary)
+                                .frame(width: 44, height: 44)
+                        }
+                    }
+                    .accessibilityHidden(true)
                     Text(character.name)
                         .dubFont(16, weight: .semibold)
                         .foregroundStyle(Palette.textPrimary)
                     Spacer()
-                    Text("\(character.lineCount) lines")
-                        .dubFont(14, weight: .regular)
-                        .foregroundStyle(Palette.textSecondary)
+                    if let lineCount = character.lineCount {
+                        Text("\(lineCount) lines")
+                            .dubFont(14, weight: .regular)
+                            .foregroundStyle(Palette.textSecondary)
+                    }
                 }
                 .accessibilityElement(children: .combine)
             }

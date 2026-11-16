@@ -106,7 +106,7 @@ extension ImportedClip {
             origin: clip.origin,
             workingDirectory: FileManager.default.temporaryDirectory
                 .appending(path: "DubProjects/\(UUID().uuidString)", directoryHint: .isDirectory),
-            locale: clip.details?.locale
+            locale: clip.details?.locale ?? SceneBlurbs.entries[clip.sceneID]?.locale
         )
     }
 }

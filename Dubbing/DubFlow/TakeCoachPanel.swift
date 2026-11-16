@@ -127,73 +127,7 @@ private struct ScanlineMask: View {
     }
 }
 
-/// The projector presents only measurements made on this take, keeping pronunciation claims separate.
-struct TakeCoachPanel: View {
-    let characterName: String
-    let measurement: TakeMeasurement
-    @State private var revealStart = Date.now
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    private var message: String {
-        switch measurement.level {
-        case .silent: "The microphone heard no voice. Check it isn't covered, then record again."
-        case .quiet: TakeMeasurement.quietAdvice
-        case .clear, nil:
-            if let overrun = measurement.overrunSeconds {
-                String(format: "Your take runs %.1f seconds past its window. Try a slightly quicker read so the ending stays in your dub.", overrun)
-            } else {
-                "Listen back to your take. Keep it when you're happy with the performance, or try another read."
-            }
-        }
-    }
-
-    var body: some View {
-        TimelineView(.animation(minimumInterval: 1 / 30, paused: reduceMotion)) { context in
-            let revealed = reduceMotion ? message.count : min(message.count, max(0, Int(context.date.timeIntervalSince(revealStart) * 40)))
-            AdaptiveStack(rowAlignment: .top, spacing: 14) {
-                HologramFigure(characterName: characterName, isSpeaking: revealed < message.count)
-                    .frame(width: 104, height: 168)
-                VStack(alignment: .leading, spacing: 10) {
-                    HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        Text(String(format: "%.1fs", measurement.takeSeconds))
-                            .dubFont(40, weight: .bold)
-                            .foregroundStyle(Palette.textPrimary)
-                            .monospacedDigit()
-                        Text("Take length")
-                            .dubFont(13, weight: .semibold)
-                            .foregroundStyle(Palette.textSecondary)
-                    }
-                    caption(revealed: revealed)
-                    Text("Pronunciation isn't measured here.")
-                        .dubFont(12, weight: .regular)
-                        .foregroundStyle(Palette.textSecondary)
-                }
-            }
-            .padding(16)
-            .background {
-                ZStack(alignment: .bottomLeading) {
-                    Palette.surface
-                    RadialGradient(colors: [Palette.holo.opacity(0.16), .clear], center: .bottomLeading, startRadius: 4, endRadius: 220)
-                }
-                .clipShape(RoundedRectangle(cornerRadius: Radius.poster))
-            }
-            .overlay(RoundedRectangle(cornerRadius: Radius.poster).strokeBorder(Palette.holo.opacity(0.18), lineWidth: 1))
-        }
-        .accessibilityIdentifier("takeFeedback")
-        .overlay { StateCarriers(items: [StateCarrier(identifier: "feedbackBasis", value: measurement.feedbackBasis.rawValue)]) }
-    }
-
-    private func caption(revealed: Int) -> some View {
-        let text = message
-        let split = text.index(text.startIndex, offsetBy: revealed)
-        return Text("\(Text(text[..<split]).foregroundStyle(Palette.holo))\(Text(text[split...]).foregroundStyle(.clear))")
-            .dubFont(16, weight: .medium)
-            .fixedSize(horizontal: false, vertical: true)
-            .accessibilityLabel(text)
-    }
-}
-
 extension TakeMeasurement {
-    /// Shared by the measurement card and the take coach pop-up.
+    /// Shown by the take coach pop-up.
     static let quietAdvice = "Your take is quiet. Move a little closer to the microphone and try again."
 }
