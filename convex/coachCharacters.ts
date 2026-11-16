@@ -13,7 +13,8 @@ export type CoachCharacter = {
   summary: string;
   /** Deployment env var holding this character's LiveAvatar `avatar_id`. */
   avatarIdEnv: string;
-  /** One of OpenAI's built-in speech voices; the avatar's mouth follows this audio. */
+  /** One of OpenAI's built-in speech voices; the avatar's mouth follows this audio. The studio's take coach speaks
+   * with it over the Realtime API too, so it must be a voice Realtime also offers. */
   openaiVoice: StockVoice;
   /** How OpenAI's speech model should deliver the voice. */
   voiceStyle: string;
@@ -56,4 +57,10 @@ export function publicCharacter(character: CoachCharacter): PublicCoachCharacter
 
 export function findCharacter(id: string): CoachCharacter | undefined {
   return coachCharacters.find((character) => character.id === id);
+}
+
+/** The coach a scene's speaker is, when one word of the speaker's name is the coach's name: Anakin for "Anakin Skywalker". */
+export function characterForSpeaker(speakerName: string): CoachCharacter | undefined {
+  const words = speakerName.toLowerCase().split(/\s+/);
+  return coachCharacters.find((character) => words.includes(character.name.toLowerCase()));
 }

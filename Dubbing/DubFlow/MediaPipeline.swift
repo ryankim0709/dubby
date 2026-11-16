@@ -46,6 +46,11 @@ nonisolated enum MediaPipeline {
     @concurrent
     static func previewPicture(for url: URL) async throws -> VideoPicture {
         let seconds = try await loadDuration(of: url) / 2
+        return try await previewPicture(for: url, at: seconds)
+    }
+
+    @concurrent
+    static func previewPicture(for url: URL, at seconds: Double) async throws -> VideoPicture {
         let frame = try await thumbnail(for: url, at: seconds, maximumSize: CGSize(width: 640, height: 640))
         return try VideoPicture(frame: frame, seconds: seconds)
     }

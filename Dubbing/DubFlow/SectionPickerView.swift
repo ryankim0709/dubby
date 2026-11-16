@@ -61,13 +61,8 @@ struct SectionPickerView: View {
                     .dubFont(32, weight: .bold)
                     .foregroundStyle(Palette.textPrimary)
                     .accessibilityAddTraits(.isHeader)
-                PlayerSurface(player: player.player)
+                SectionVideoPreview(url: clip.url, start: selection.start, player: player)
                     .aspectRatio(16 / 9, contentMode: .fit)
-                    .overlay {
-                        if !player.isPlaying {
-                            VideoThumbnail(url: clip.url, time: (selection.start + selection.end) / 2)
-                        }
-                    }
                     .clipShape(RoundedRectangle(cornerRadius: 16))
                     .accessibilityLabel("Clip preview")
                 Text("Drag the handles to frame up to \(Int(SectionEditing.maximumLength)) seconds of dialogue.")
@@ -100,20 +95,6 @@ struct SectionPickerView: View {
                 }
                 .padding(12)
                 .background(Palette.surface, in: RoundedRectangle(cornerRadius: 12))
-                AdaptiveStack(rowAlignment: .center, spacing: 12) {
-                    Button {
-                        if player.isPlaying {
-                            player.stop()
-                        } else {
-                            preview()
-                        }
-                    } label: {
-                        Image(systemName: player.isPlaying ? "stop.fill" : "play.fill")
-                        Text(player.isPlaying ? "Stop" : "Preview scene")
-                    }
-                    .buttonStyle(SecondaryButtonStyle())
-                    Spacer()
-                }
                 if let issue {
                     IssueCard(
                         title: issue.opensSettings ? "Speech recognition is off" : "The script couldn't be built",
@@ -146,8 +127,7 @@ struct SectionPickerView: View {
                 }
                 Button("Transcribe scene") {
                     guard let prepared else { return }
-                    previewTask?.cancel()
-                    player.stop()
+                    stopPreview()
                     onTranscribe(prepared)
                 }
                 .buttonStyle(PrimaryButtonStyle(cornerRadius: Radius.control))
@@ -166,22 +146,13 @@ struct SectionPickerView: View {
         .task(id: DialogueTask(language: language, attempt: attempt)) { await loadDialogue() }
         .task(id: PreparationTask(request: request, dialogue: dialogue, attempt: attempt)) { await prepareScript() }
         .task {
-            await player.seek(to: selection.start)
             do {
                 thumbnails = .loaded(try await MediaPipeline.thumbnails(for: clip.url, count: 10, maximumSize: CGSize(width: 240, height: 136)))
             } catch {
                 thumbnails = .failed(error.localizedDescription)
             }
         }
-        .onChange(of: selection.start) { _, start in
-            previewTask?.cancel()
-            player.stop()
-            Task { await player.seek(to: start) }
-        }
-        .onDisappear {
-            previewTask?.cancel()
-            player.stop()
-        }
+        .onDisappear { stopPreview() }
     }
 
     private func loadDialogue() async {
@@ -219,35 +190,99 @@ struct SectionPickerView: View {
     private var timeline: some View {
         switch thumbnails {
         case .loading:
-            SectionTimeline(duration: clip.durationSeconds, selection: $selection, thumbnails: [])
+            SectionTimeline(duration: clip.durationSeconds, selection: selection, thumbnails: [], onSelectionChange: select, onEditingEnd: preview)
         case .loaded(let images):
-            SectionTimeline(duration: clip.durationSeconds, selection: $selection, thumbnails: images)
+            SectionTimeline(duration: clip.durationSeconds, selection: selection, thumbnails: images, onSelectionChange: select, onEditingEnd: preview)
         case .failed(let message):
-            SectionTimeline(duration: clip.durationSeconds, selection: $selection, thumbnails: [])
+            SectionTimeline(duration: clip.durationSeconds, selection: selection, thumbnails: [], onSelectionChange: select, onEditingEnd: preview)
             Text("Couldn't load preview frames: \(message)")
                 .dubFont(12, weight: .regular)
                 .foregroundStyle(Palette.streak)
         }
     }
 
+    private func select(_ span: TimeSpan) {
+        stopPreview()
+        selection = span
+    }
+
     private func preview() {
-        previewTask?.cancel()
         let span = selection
         previewTask = Task {
             await player.seek(to: span.start)
+            guard !Task.isCancelled else { return }
             _ = await player.play(until: span.end, volume: 1)
+            guard !Task.isCancelled else { return }
             player.stop()
-            await player.seek(to: span.start)
+            previewTask = nil
         }
+    }
+
+    private func stopPreview() {
+        previewTask?.cancel()
+        previewTask = nil
+        player.stop()
+    }
+}
+
+private struct SectionVideoPreview: View {
+    let url: URL
+    let start: Double
+    let player: SegmentPlayer
+    @State private var picture: VideoPicture?
+    @State private var failure: String?
+
+    var body: some View {
+        Color.black
+            .overlay {
+                if let picture {
+                    Image(decorative: picture.image, scale: 1)
+                        .resizable()
+                        .scaledToFill()
+                        .overlay {
+                            if player.isPlaying {
+                                ScenePreviewSurface(player: player.player, picture: picture)
+                            }
+                        }
+                } else if failure == nil {
+                    ProgressView().tint(Palette.textPrimary)
+                }
+            }
+            .overlay {
+                if let failure {
+                    Label("Preview unavailable", systemImage: "exclamationmark.triangle")
+                        .dubFont(13, weight: .medium)
+                        .foregroundStyle(Palette.textPrimary)
+                        .padding(10)
+                        .background(.black.opacity(0.55))
+                        .accessibilityHint(failure)
+                }
+            }
+            .clipped()
+            .task(id: start) {
+                do {
+                    let nextPicture = try await MediaPipeline.previewPicture(for: url, at: start)
+                    try Task.checkCancellation()
+                    picture = nextPicture
+                    failure = nil
+                } catch is CancellationError {
+                    return
+                } catch {
+                    guard !Task.isCancelled else { return }
+                    failure = error.localizedDescription
+                }
+            }
     }
 }
 
 /// A filmstrip of the clip with a draggable selection window.
 private struct SectionTimeline: View {
     let duration: Double
-    @Binding var selection: TimeSpan
+    let selection: TimeSpan
     let thumbnails: [CGImage]
-    @State private var dragOrigin: TimeSpan?
+    let onSelectionChange: (TimeSpan) -> Void
+    let onEditingEnd: () -> Void
+    @GestureState private var dragOrigin: TimeSpan?
 
     private let height: CGFloat = 56
 
@@ -306,16 +341,18 @@ private struct SectionTimeline: View {
 
     private func drag(_ handle: SectionHandle, width: CGFloat) -> some Gesture {
         DragGesture(minimumDistance: 0)
+            .updating($dragOrigin) { _, origin, _ in
+                if origin == nil { origin = selection }
+            }
             .onChanged { value in
                 let origin = dragOrigin ?? selection
-                dragOrigin = origin
-                selection = SectionEditing.adjusted(
+                onSelectionChange(SectionEditing.adjusted(
                     origin: origin,
                     handle: handle,
                     delta: value.translation.width / width * duration,
                     clipDuration: duration
-                )
+                ))
             }
-            .onEnded { _ in dragOrigin = nil }
+            .onEnded { _ in onEditingEnd() }
     }
 }
