@@ -181,7 +181,7 @@ export const finishUpload = mutation({
     if (asset.storageId !== undefined) throw appError("CONFLICT", "This upload ticket already contains a video");
     const file = await ctx.db.system.get(storageId);
     const claimed = await ctx.db.query("socialAssets").withIndex("by_storage", (q) => q.eq("storageId", storageId)).unique();
-    if (file === null || file.contentType !== "video/mp4" || file.size < 1 || file.size > 80 * 1024 * 1024 || claimed !== null) throw appError("INVALID_UPLOAD", "Upload an unclaimed MP4 of at most 80 MB");
+    if (file === null || file.contentType !== "video/mp4" || file.size < 1 || claimed !== null) throw appError("INVALID_UPLOAD", "Upload a nonempty, unclaimed MP4");
     await ctx.db.patch(ticketId, { storageId });
     return { ok: true };
   },

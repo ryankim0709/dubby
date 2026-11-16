@@ -114,6 +114,30 @@ test("upload tickets cannot be finalized by another learner or claim an already-
   await expect(b.mutation(api.social.finishUpload, { ticketId: another.ticketId, storageId: wrongType })).rejects.toThrow("MP4");
 });
 
+test("videos larger than 80 MB can be finalized and posted", async () => {
+  const { t, a } = await world();
+  const ticket = await a.mutation(api.social.prepareUpload, {});
+  const storageId = await t.run(async (ctx) => ctx.storage.store(new Blob([new Uint8Array(80 * 1024 * 1024 + 1)], { type: "video/mp4" })));
+  await a.mutation(api.social.finishUpload, { ticketId: ticket.ticketId, storageId });
+  await a.mutation(api.social.postSolo, { assetId: ticket.ticketId, title: "Synthetic large video", characterName: "Fixture A", linesRecorded: 1 });
+  expect((await a.query(api.social.snapshot, {})).posts[0].assetId).toBe(ticket.ticketId);
+});
+
+test.each([1, 31, 121])("co-dub invitations accept a %s-second scene", async (duration: number) => {
+  const { t, a, b } = await world();
+  const source = await asset(t, a);
+  const scale = duration / script.duration;
+  const timedScript = {
+    ...script, duration,
+    lines: script.lines.map((line) => ({ ...line, start: line.start * scale, end: line.end * scale })),
+    protectedSpans: script.protectedSpans.map((span) => ({ start: span.start * scale, end: span.end * scale })),
+  };
+  const invite = await a.mutation(api.social.invite, { assetId: source, script: timedScript, clientId: "fixture-duration" });
+  await b.mutation(api.social.redeem, { code: invite.code });
+  await b.mutation(api.social.acceptInvite, { id: invite.id });
+  expect((await b.query(api.social.room, { id: invite.id })).script).toEqual(timedScript);
+});
+
 test("canceling an invitation revokes its source video and prevents a late acceptance", async () => {
   const { t, a, b } = await world();
   const source = await asset(t, a);

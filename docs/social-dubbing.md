@@ -62,8 +62,9 @@ message sending, general direct-message service or public feed in this implement
 
 ## Media and access boundaries
 
-Social video uploads are MP4 files of at most 80 MB. The native client checks playable duration
-(2–30 seconds); the backend checks storage ownership, claimed-file uniqueness, MIME type and bytes.
+Social video uploads have no application-imposed duration or file-size limits. The native client
+checks that the video is nonempty and has a finite, positive duration; the backend checks storage
+ownership, claimed-file uniqueness, MP4 MIME type and nonempty bytes.
 The script has validated roles, unique line identities, finite scene-relative timing and protected
 first-performer intervals. The backend does not treat uploaded line counts as pronunciation grades.
 The UI shows recorded line counts and existing local measurements; it does not invent the scores or

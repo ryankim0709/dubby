@@ -14,6 +14,54 @@ struct SocialLinkTests {
     }
 }
 
+struct SocialUploadTests {
+    private struct SignedOut: CoachAuthTokenProvider {
+        func convexAuthToken() async throws -> String? { nil }
+    }
+
+    private var client: SocialBackendClient {
+        let url = URL(string: "https://example.invalid")!
+        return SocialBackendClient(cloudURL: url, siteURL: url, tokens: SignedOut())
+    }
+
+    @Test(arguments: [1.0, 31.0, 121.0])
+    func playableVideosReachAuthenticationRegardlessOfDuration(seconds: Double) async throws {
+        let folder = try TemporaryDirectory(prefix: "SocialUploadDuration")
+        let video = folder.appending(path: "synthetic.mp4")
+        try await SyntheticScene.writeBlackVideo(to: video, seconds: seconds, framesPerSecond: 1)
+        #expect(abs(try await MediaPipeline.loadDuration(of: video) - seconds) < 0.1)
+        let error = try await #require(throws: SocialError.self) {
+            try await client.upload(video: video)
+        }
+        guard case .signInRequired = error else {
+            Issue.record("A playable video was rejected before authentication: \(error)")
+            return
+        }
+    }
+
+    @Test func playableVideosOver80MBReachAuthentication() async throws {
+        let folder = try TemporaryDirectory(prefix: "SocialUploadSize")
+        let video = folder.appending(path: "synthetic.mp4")
+        try FileManager.default.copyItem(at: TestFixtures.twoToneVideo(), to: video)
+        let file = try FileHandle(forWritingTo: video)
+        let originalSize = try file.seekToEnd()
+        // A free atom keeps the synthetic MP4 playable while exercising a large upload.
+        try file.write(contentsOf: Data([0x05, 0x00, 0x00, 0x00, 0x66, 0x72, 0x65, 0x65]))
+        try file.truncate(atOffset: originalSize + 80 * 1024 * 1024)
+        try file.close()
+        let size = try #require(try video.resourceValues(forKeys: [.fileSizeKey]).fileSize)
+        #expect(size > 80 * 1024 * 1024)
+        #expect(abs(try await MediaPipeline.loadDuration(of: video) - 3) < 0.1)
+        let error = try await #require(throws: SocialError.self) {
+            try await client.upload(video: video)
+        }
+        guard case .signInRequired = error else {
+            Issue.record("A playable video was rejected before authentication: \(error)")
+            return
+        }
+    }
+}
+
 /// Two sequential exports against a real synthetic scene: a guest's suppression padding must not erase the host.
 struct SocialExportTests {
     @Test @MainActor func aSecondPerformerKeepsTheFirstPerformersVoiceAndTheSceneTiming() async throws {

@@ -104,9 +104,9 @@ nonisolated struct SocialBackendClient: Sendable {
     func upload(video: URL) async throws -> String {
         let duration = try await MediaPipeline.loadDuration(of: video)
         let attributes = try video.resourceValues(forKeys: [.fileSizeKey])
-        guard let size = attributes.fileSize, size > 0, size <= 80 * 1024 * 1024,
-              duration.isFinite, duration >= 2, duration <= 30.1 else {
-            throw SocialError.rejected("Share a playable 2–30 second MP4 of at most 80 MB.")
+        guard let size = attributes.fileSize, size > 0,
+              duration.isFinite, duration > 0 else {
+            throw SocialError.rejected("The shared video must be a nonempty, playable MP4.")
         }
         for attempt in 1...3 {
             let ticket: UploadTicket = try await mutate("social:prepareUpload", EmptyArguments())
