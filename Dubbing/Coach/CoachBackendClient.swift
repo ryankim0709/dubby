@@ -134,6 +134,17 @@ nonisolated struct CoachBackendClient: CoachTutorService {
         return try await send(request, as: CoachSessionToken.self, operation: operation)
     }
 
+    func takeCoachAvatarSession(characterID: String) async throws -> SimliSessionToken {
+        struct Body: Encodable { let characterId: String }
+        let operation = "Starting the coach video"
+        let request = try ServiceRequest.json(method: "POST", url: baseURL.appending(path: "tutor/take-coach/avatar-session"), body: Body(characterId: characterID), headers: [:])
+        let session = try await send(request, as: SimliSessionToken.self, operation: operation)
+        guard !session.sessionToken.isEmpty else {
+            throw CoachError.invalidResponse(operation: operation, reason: "Simli returned an empty session token")
+        }
+        return session
+    }
+
     func reply(characterID: String, language: SpokenLanguage, turns: [CoachTurn]) async throws -> CoachReply {
         struct Body: Encodable { let characterId: String; let languageName: String; let locale: String; let audio: Bool; let turns: [CoachTurn] }
         let operation = "Getting the coach's reply"

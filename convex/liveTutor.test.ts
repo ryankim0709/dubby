@@ -155,8 +155,10 @@ describe("POST /tutor/take-coach", () => {
 
     const anakin = await a.fetch("/tutor/take-coach", post({ ...scene, characterName: "Anakin Skywalker" }));
     expect(await anakin.json()).toMatchObject({ clientSecret: "ek_fixture", avatarCharacterId: "anakin" });
+    const obiWan = await a.fetch("/tutor/take-coach", post({ ...scene, characterName: "Obi-Wan Kenobi" }));
+    expect(await obiWan.json()).toMatchObject({ clientSecret: "ek_fixture", avatarCharacterId: "obi-wan" });
     const someoneElse = await a.fetch("/tutor/take-coach", post(scene));
     expect(await someoneElse.json()).not.toHaveProperty("avatarCharacterId");
-    expect(voices).toEqual(["ash", "marin"]);
+    expect(voices).toEqual(["ash", "cedar", "marin"]);
   });
 });

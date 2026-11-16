@@ -34,7 +34,8 @@ final class TakeCoach {
     }
 
     private(set) var review: Review?
-    private(set) var isSpeaking = false
+    private var isPhoneSpeaking = false
+    var isSpeaking: Bool { isPhoneSpeaking || avatar?.isSpeaking == true }
     /// The character's talking face, when the dubbed character is one of the coaches. While it is live it says
     /// the tips; otherwise the phone plays them and the pop-up shows the hologram.
     private(set) var avatar: TakeCoachAvatar?
@@ -136,7 +137,7 @@ final class TakeCoach {
         voice?.stop()
         avatar?.interrupt()
         timeline = .idle
-        isSpeaking = false
+        isPhoneSpeaking = false
         guard speakingResponseID != nil, let transport else { return }
         speakingResponseID = nil
         Task {
@@ -185,9 +186,7 @@ final class TakeCoach {
     /// Starts the avatar once per visit, so a replaced Realtime session keeps the same face.
     private func startAvatar(for grant: LiveTutorGrant) {
         guard avatar == nil, !hasEnded, let characterID = grant.avatarCharacterId else { return }
-        // LITE sessions ignore the language; the token route only takes one for the coach screen's sake.
-        let language = SpokenLanguage.all.first { $0.identifier == setup.locale } ?? SpokenLanguage.all[0]
-        let avatar = TakeCoachAvatar(backend: backend, characterID: characterID, language: language)
+        let avatar = TakeCoachAvatar(backend: backend, characterID: characterID)
         self.avatar = avatar
         avatarTask = Task { await avatar.run() }
     }
@@ -254,7 +253,7 @@ final class TakeCoach {
                 try voice?.play(samples)
                 timeline = timeline.scheduling(itemID: itemID, contentIndex: contentIndex, frames: samples.count, at: clock.now - startedAt)
                 settleTask?.cancel()
-                isSpeaking = true
+                isPhoneSpeaking = true
             case .responseDone(let id) where id == responseID:
                 // Stopping the coach clears the speaking response, so a reply cut off while arriving isn't said later.
                 if let avatar, speakingResponseID == id, !avatarPCM.isEmpty {
@@ -281,7 +280,7 @@ final class TakeCoach {
             } catch {
                 return
             }
-            isSpeaking = false
+            isPhoneSpeaking = false
         }
     }
 

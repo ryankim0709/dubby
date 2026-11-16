@@ -8,6 +8,7 @@ import { ConfigurationError, requiredEnv } from "./lib/env";
 import { logEvent } from "./lib/log";
 import { createOpenAIClient } from "./lib/openai";
 import { createSessionToken, LiveAvatarError, sandboxAvatarId } from "./liveAvatar";
+import { createSimliSession, SimliError } from "./simli";
 import { createTakeCoachSecret, createTutorSecret, LiveTutorError, practicePlan, realtimeModelId, scoreSheetRef, takeCoachInstructions, takeCoachVoice, tutorInstructions, tutorVoice } from "./liveTutor";
 import { tutoringRefs } from "./tutoringRefs";
 import { composeReply } from "./tutoringReply";
@@ -52,6 +53,7 @@ const replyRequest = z.object({
 const preferencesRequest = z.object({ preferences: z.unknown(), expectedVersion: z.number().int().min(0) });
 
 const liveSessionRequest = z.object({ clientDubId: z.uuid() });
+const takeAvatarRequest = z.object({ characterId: z.string().min(1).max(100) });
 
 const takeCoachRequest = z.object({
   sceneTitle: z.string().trim().min(1).max(200),
@@ -140,7 +142,7 @@ function failure(operation: string, error: unknown): Response {
     console.error("coach provider timed out", { operation });
     return json(504, errorBody("provider_timeout", "The coach model didn't answer in time"));
   }
-  if (error instanceof LiveAvatarError || error instanceof CoachReplyError || error instanceof LiveTutorError) {
+  if (error instanceof LiveAvatarError || error instanceof SimliError || error instanceof CoachReplyError || error instanceof LiveTutorError) {
     console.error("coach provider call failed", { operation, error: error.message });
     return json(502, errorBody("provider_failed", error.message));
   }
@@ -262,6 +264,20 @@ export function registerTutoringRoutes(http: HttpRouter): void {
       const secret = await createTutorSecret(createOpenAIClient(), realtimeModelId(), instructions, character?.openaiVoice ?? tutorVoice);
       logEvent({ operation, status: "ok", httpStatus: 200 });
       return json(200, secret);
+    }),
+  });
+
+  http.route({
+    path: "/tutor/take-coach/avatar-session",
+    method: "POST",
+    handler: authenticated(async (ctx, request) => {
+      const body = await parseBody(request, takeAvatarRequest);
+      if (body instanceof Response) return body;
+      const character = findCharacter(body.characterId);
+      if (character === undefined) return json(404, errorBody("not_found", `No coach named ${body.characterId}`));
+      if (!(await hasPremium(ctx))) return json(403, errorBody("premium_required", "Upgrade to Dubby Premium to talk to a coach"));
+      const session = await createSimliSession(requiredEnv("SIMLI_API_KEY"), requiredEnv(character.simliFaceIdEnv));
+      return json(200, session);
     }),
   });
 

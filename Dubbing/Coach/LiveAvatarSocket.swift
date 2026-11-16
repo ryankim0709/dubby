@@ -102,7 +102,7 @@ nonisolated protocol AvatarSocketTransport: Sendable {
 }
 
 /// The real transport: a `URLSessionWebSocketTask`, which needs no extra package.
-actor URLSessionSocketTransport: AvatarSocketTransport {
+actor URLSessionSocketTransport: SimliSocketTransport {
     private let task: URLSessionWebSocketTask
 
     init(url: URL) {
@@ -117,6 +117,10 @@ actor URLSessionSocketTransport: AvatarSocketTransport {
 
     func send(_ text: String) async throws {
         try await task.send(.string(text))
+    }
+
+    func send(_ data: Data) async throws {
+        try await task.send(.data(data))
     }
 
     func receive() async throws -> String {

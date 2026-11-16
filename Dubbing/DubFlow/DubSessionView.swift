@@ -499,6 +499,7 @@ struct DubSessionView: View {
             coach: coach?.review.flatMap { $0.takeID == pending.id ? $0.state : nil },
             isCoachSpeaking: coach?.isSpeaking ?? false,
             avatarVideo: coach?.avatar?.videoTrack,
+            avatarNotice: coach?.avatar?.notice,
             isPlayingTake: activity == .playingTake,
             canPlayTake: activity == .idle || activity == .playingTake,
             canRetry: activity == .idle && microphone != .denied,

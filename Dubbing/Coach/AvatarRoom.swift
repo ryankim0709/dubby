@@ -35,7 +35,7 @@ nonisolated private final class AvatarRoomDelegate: NSObject, RoomDelegate {
 }
 
 /// The LiveKit room that carries the avatar's video and audio. The app only listens: it publishes
-/// no microphone and sends no data, because the coach's voice goes to LiveAvatar over its socket.
+/// no microphone and sends no data, because the coach's voice goes to its provider over a separate socket.
 @MainActor
 final class AvatarRoom {
     private let delegate = AvatarRoomDelegate()
@@ -47,12 +47,12 @@ final class AvatarRoom {
         room = Room(delegate: delegate)
     }
 
-    func connect(to connection: LiveAvatarConnection) async throws {
+    func connect(url: String, token: String) async throws {
         // The coach records the learner with AVAudioRecorder while the avatar plays, so the app owns
         // the audio session instead of letting LiveKit switch categories underneath the recorder.
         AudioManager.shared.audioSession.isAutomaticConfigurationEnabled = false
         try StudioAudioSession.activate()
-        try await room.connect(url: connection.livekitURL, token: connection.livekitClientToken)
+        try await room.connect(url: url, token: token)
     }
 
     func disconnect() async {

@@ -13,6 +13,8 @@ export type CoachCharacter = {
   summary: string;
   /** Deployment env var holding this character's LiveAvatar `avatar_id`. */
   avatarIdEnv: string;
+  /** Deployment env var holding the Simli face used by the studio's take coach. */
+  simliFaceIdEnv: string;
   /** One of OpenAI's built-in speech voices; the avatar's mouth follows this audio. The studio's take coach speaks
    * with it over the Realtime API too, so it must be a voice Realtime also offers. */
   openaiVoice: StockVoice;
@@ -32,6 +34,7 @@ export const coachCharacters: readonly CoachCharacter[] = [
     name: "Anakin",
     summary: "Intense and impatient. Pushes you to say it again, with feeling.",
     avatarIdEnv: "LIVEAVATAR_AVATAR_ID_ANAKIN",
+    simliFaceIdEnv: "SIMLI_FACE_ID_ANAKIN",
     openaiVoice: "ash",
     voiceStyle:
       "Youthful adult masculine voice in a mid-low register, lightly breathy, with a neutral American accent in English. " +
@@ -46,6 +49,7 @@ export const coachCharacters: readonly CoachCharacter[] = [
     name: "Obi-Wan",
     summary: "Calm and dry-witted. Breaks every line into small, clear steps.",
     avatarIdEnv: "LIVEAVATAR_AVATAR_ID_OBI_WAN",
+    simliFaceIdEnv: "SIMLI_FACE_ID_OBI_WAN",
     openaiVoice: "cedar",
     voiceStyle: "Calm, patient and dryly witty, unhurried.",
     persona:

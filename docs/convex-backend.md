@@ -46,6 +46,7 @@ spending route then rejects, because no auth provider exists to produce an ident
 | `WHOP_SANDBOX` | Set to `true` for sandbox keys and test cards. Otherwise the Whop client uses production. | no |
 | `ANTHROPIC_API_KEY` | Read only by the not-yet-migrated coach reply until Tutoring's change lands, then retired. | yes |
 | `LIVEAVATAR_API_KEY`, `LIVEAVATAR_AVATAR_ID_*`, `LIVEAVATAR_VOICE_ID_*`, `LIVEAVATAR_SANDBOX` | The talking coach (`POST /coach/session-token`). | key: yes |
+| `SIMLI_API_KEY`, `SIMLI_FACE_ID_ANAKIN`, `SIMLI_FACE_ID_OBI_WAN` | The studio take coach's Simli video (`POST /tutor/take-coach/avatar-session`). Face IDs must belong to or be public to the configured Simli account. Requires the learner's Premium entitlement. | key: yes |
 | `AZURE_SPEECH_KEY` | Azure pronunciation assessment, the assessment engine. Unset (or without a region or endpoint): jobs fail with `engine_not_configured`. | yes |
 | `AZURE_SPEECH_REGION` or `AZURE_SPEECH_ENDPOINT` | Where the Speech resource lives. The region (for example `eastus`) builds the regional host; the endpoint is the full recognition URL without a query string, for a resource with a custom domain, and wins when both are set. | no |
 | `WHOP_WEBHOOK_SECRET` | The landing page's founding-plan payments (`POST /whop/webhook`). Unset: the route answers 503. Set it exactly as Whop shows it (`ws_…`). | yes |

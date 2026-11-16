@@ -62,7 +62,7 @@ final class CoachSession {
             socket = LiveAvatarSocket(transport: URLSessionSocketTransport(url: started.webSocketURL))
             self.socket = socket
             await socket.start()
-            try await room.connect(to: started)
+            try await room.connect(url: started.livekitURL, token: started.livekitClientToken)
         } catch {
             connection = .ended(error.localizedDescription)
             return

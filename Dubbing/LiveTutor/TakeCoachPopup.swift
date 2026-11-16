@@ -18,6 +18,7 @@ struct TakeCoachPopup: View {
     let isCoachSpeaking: Bool
     /// The coach character's live video; nil shows the hologram.
     let avatarVideo: RemoteVideoTrack?
+    let avatarNotice: String?
     let isPlayingTake: Bool
     let canPlayTake: Bool
     let canRetry: Bool
@@ -98,6 +99,12 @@ struct TakeCoachPopup: View {
                         caption(revealed: revealed)
                             .fixedSize(horizontal: false, vertical: true)
                         status
+                        if let avatarNotice {
+                            Text("Your coach's video is unavailable. \(avatarNotice)")
+                                .dubFont(12, weight: .regular)
+                                .foregroundStyle(Palette.textSecondary)
+                                .accessibilityIdentifier("takeCoachAvatarUnavailable")
+                        }
                     }
                 }
             }
@@ -180,7 +187,7 @@ struct TakeCoachPopup: View {
     }
 }
 
-/// The coach character's LiveAvatar video in the hologram's place, framed in the coach's cyan.
+/// The coach character's Simli video in the hologram's place, framed in the coach's cyan.
 private struct AvatarFigure: View {
     let characterName: String
     let track: RemoteVideoTrack
