@@ -37,7 +37,6 @@ struct CoDubInvitationButton: View {
     @State private var invitation: CoDubMessageDraft?
     @State private var presentedMessage: CoDubMessageDraft?
     @State private var issue: String?
-    @State private var assetId: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -61,8 +60,6 @@ struct CoDubInvitationButton: View {
                         .accessibilityIdentifier("coDubMessageError")
                 }
             }
-            Text("Inviting uploads your saved performance privately so your friend can add their character's voice.")
-                .dubFont(14, weight: .regular).foregroundStyle(Palette.textSecondary)
         }
         .alert("Couldn't invite", isPresented: Binding(get: { isTile && issue != nil }, set: { if !$0 { issue = nil } })) {
             Button("OK", role: .cancel) {}
@@ -92,12 +89,9 @@ struct CoDubInvitationButton: View {
         Task {
             defer { isWorking = false }
             do {
-                let script = try source.invitationScript(guestCharacterId: guestCharacterId)
+                let script = try source.joinScript(guestCharacterId: guestCharacterId)
                 let client = try SocialBackendClient.configured(account: account)
-                let uploaded: String
-                if let assetId { uploaded = assetId }
-                else { uploaded = try await client.upload(video: source.video); assetId = uploaded }
-                let receipt = try await client.invite(assetId: uploaded, script: script, recipientId: recipientId, clientId: clientId)
+                let receipt = try await client.inviteToJoin(sceneSlug: source.setup.clip.url.deletingPathExtension().lastPathComponent, sectionStart: source.setup.section.start, script: script, recipientId: recipientId, clientId: clientId)
                 let draft = try CoDubMessageDraft(code: receipt.code, roleName: script.roleName(guestCharacterId), title: script.title)
                 invitation = draft
                 presentedMessage = draft

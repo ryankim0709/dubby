@@ -149,6 +149,13 @@ struct SocialDubSource: Identifiable {
     let takes: [Int: RecordedTake]
     var id: URL { video }
 
+    func joinScript(guestCharacterId: Int) throws -> SocialScript {
+        guard guestCharacterId != setup.characterID, !setup.script.lines(spokenBy: guestCharacterId).isEmpty else {
+            throw SocialError.rejected("Choose another character for your friend to record.")
+        }
+        return SocialScript(title: setup.clip.title, duration: setup.section.duration, locale: setup.locale, speakers: setup.script.speakers.map { .init(id: $0.id, name: $0.name) }, lines: setup.script.lines.map { .init(id: $0.id, speakerId: $0.speakerID, text: $0.text, start: $0.start, end: $0.end) }, protectedSpans: [], ownerCharacterId: setup.characterID, guestCharacterId: guestCharacterId, ownerLinesRecorded: 0)
+    }
+
     func invitationScript(guestCharacterId: Int) throws -> SocialScript {
         let ownerLines = setup.script.lines(spokenBy: setup.characterID)
         let recordedLines = ownerLines.filter { takes[$0.id] != nil }
