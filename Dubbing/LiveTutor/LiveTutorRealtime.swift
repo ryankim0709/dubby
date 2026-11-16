@@ -57,6 +57,10 @@ nonisolated enum LiveTutorClientEvent {
 
     private struct TargetedResponse: Encodable {
         struct Options: Encodable {
+            struct Reasoning: Encodable {
+                let effort: String
+            }
+
             struct Function: Encodable {
                 let type = "function"
                 let name: String
@@ -66,6 +70,7 @@ nonisolated enum LiveTutorClientEvent {
             let tool_choice: ToolChoice
             /// Echoed back in `response.created`, so late answers about an earlier take can be told apart.
             let metadata: [String: String]
+            let reasoning: Reasoning?
         }
 
         enum ToolChoice: Encodable {
@@ -141,12 +146,12 @@ nonisolated enum LiveTutorClientEvent {
 
     /// Asks for nothing but a call to the named tool, as text, tagged with the review it answers.
     static func requestToolCall(named name: String, reviewID: String) throws -> String {
-        try encode(TargetedResponse(response: .init(output_modalities: ["text"], tool_choice: .function(name), metadata: ["review": reviewID])))
+        try encode(TargetedResponse(response: .init(output_modalities: ["text"], tool_choice: .function(name), metadata: ["review": reviewID], reasoning: .init(effort: "minimal"))))
     }
 
     /// Asks the tutor to speak, with tools off, tagged with the review it answers.
     static func requestSpeech(reviewID: String) throws -> String {
-        try encode(TargetedResponse(response: .init(output_modalities: ["audio"], tool_choice: .none, metadata: ["review": reviewID])))
+        try encode(TargetedResponse(response: .init(output_modalities: ["audio"], tool_choice: .none, metadata: ["review": reviewID], reasoning: nil)))
     }
 
     static func toolResult(callID: String, output: String) throws -> String {
@@ -175,6 +180,7 @@ nonisolated enum LiveTutorServerEvent: Equatable, Sendable {
     case tutorAudio(responseID: String, itemID: String, contentIndex: Int, pcm: Data)
     case tutorTranscript(itemID: String, delta: String)
     case responseDone(responseID: String)
+    case responseFailed(responseID: String, message: String)
     case failed(code: String?, message: String)
 
     private struct Raw: Decodable {
@@ -184,8 +190,15 @@ nonisolated enum LiveTutorServerEvent: Equatable, Sendable {
         }
 
         struct Response: Decodable {
+            struct StatusDetails: Decodable {
+                let reason: String?
+                let error: Failure?
+            }
+
             let id: String
             let metadata: [String: String]?
+            let status: String?
+            let status_details: StatusDetails?
         }
 
         let type: String
@@ -273,7 +286,19 @@ nonisolated enum LiveTutorServerEvent: Equatable, Sendable {
                 arguments: try required(raw.arguments, "arguments")
             )
         case "response.done":
-            return .responseDone(responseID: try required(raw.response, "response").id)
+            let response = try required(raw.response, "response")
+            let status = try required(response.status, "response.status")
+            switch status {
+            case "completed", "cancelled":
+                return .responseDone(responseID: response.id)
+            case "failed", "incomplete":
+                let detail = response.status_details?.error
+                let reason = detail?.message ?? response.status_details?.reason ?? "no reason provided"
+                let code = detail?.code.map { " (\($0))" } ?? ""
+                return .responseFailed(responseID: response.id, message: "OpenAI response \(response.id) was \(status)\(code): \(reason)")
+            default:
+                throw CoachError.invalidResponse(operation: "Listening to your tutor", reason: "response.done had status \(status)")
+            }
         case "error":
             let failure = try required(raw.error, "error")
             return .failed(code: failure.code, message: failure.message)
@@ -319,7 +344,7 @@ nonisolated struct LiveTutorTranscript: Equatable, Sendable {
                 return LiveTutorTranscript(lines: lines + [Line(id: itemID, speaker: .tutor, text: delta)])
             }
             return LiveTutorTranscript(lines: lines.map { $0.id == itemID ? Line(id: itemID, speaker: .tutor, text: $0.text + delta) : $0 })
-        case .sessionCreated, .learnerStoppedSpeaking, .responseCreated, .toolCall, .tutorAudio, .responseDone, .failed:
+        case .sessionCreated, .learnerStoppedSpeaking, .responseCreated, .toolCall, .tutorAudio, .responseDone, .responseFailed, .failed:
             return self
         }
     }

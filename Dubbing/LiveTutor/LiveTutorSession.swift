@@ -141,6 +141,9 @@ final class LiveTutorSession {
             phase = .live(.tutorSpeaking)
         case .responseDone:
             settleAfterPlayback()
+        case .responseFailed(_, let message):
+            notice = message
+            settleAfterPlayback()
         case .failed(let code, let message):
             // Errors such as cancelling a reply that already finished don't end the session; a fatal one closes the socket.
             Self.logger.warning("The Realtime API reported an error. code=\(code ?? "none", privacy: .public)")

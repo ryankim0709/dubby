@@ -61,7 +61,7 @@ struct LiveTutorTests {
         #expect(try object(LiveTutorClientEvent.take(note: "The line: Hola.", pcm: Data([1, 2])))
             == object(#"{"type":"conversation.item.create","item":{"type":"message","role":"user","content":[{"type":"input_text","text":"The line: Hola."},{"type":"input_audio","audio":"\#(audio)"}]}}"#))
         #expect(try object(LiveTutorClientEvent.requestToolCall(named: "suggest_next_step", reviewID: "take-1"))
-            == object(#"{"type":"response.create","response":{"output_modalities":["text"],"tool_choice":{"type":"function","name":"suggest_next_step"},"metadata":{"review":"take-1"}}}"#))
+            == object(#"{"type":"response.create","response":{"output_modalities":["text"],"tool_choice":{"type":"function","name":"suggest_next_step"},"metadata":{"review":"take-1"},"reasoning":{"effort":"minimal"}}}"#))
         #expect(try object(LiveTutorClientEvent.requestSpeech(reviewID: "take-1"))
             == object(#"{"type":"response.create","response":{"output_modalities":["audio"],"tool_choice":"none","metadata":{"review":"take-1"}}}"#))
         #expect(try object(LiveTutorClientEvent.toolResult(callID: "c1", output: "Shown."))
