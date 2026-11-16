@@ -24,6 +24,7 @@ final class TakeCoachAvatar {
     private var speechTask: Task<Void, Never>?
     private var roomTask: Task<Void, Never>?
     private var connectionTask: Task<Void, Never>?
+    private var utterance = 0
 
     private static let logger = Logger(subsystem: "com.ryankim.Dubbing", category: "take-coach-avatar")
 
@@ -93,7 +94,23 @@ final class TakeCoachAvatar {
         }
     }
 
+    func say(tip: String) async {
+        guard phase != .ended else { return }
+        let currentUtterance = utterance
+        do {
+            let pcm = try await backend.takeCoachSpeech(characterID: characterID, text: tip)
+            try Task.checkCancellation()
+            guard currentUtterance == utterance, isLive else { return }
+            speak(pcm: pcm)
+        } catch is CancellationError {
+            return
+        } catch {
+            await finish(reason: error.localizedDescription)
+        }
+    }
+
     func interrupt() {
+        utterance += 1
         guard isLive, let socket else { return }
         speechTask?.cancel()
         speechTask = nil
@@ -114,6 +131,7 @@ final class TakeCoachAvatar {
     private func finish(reason: String?) async {
         guard phase != .ended else { return }
         phase = .ended
+        utterance += 1
         notice = reason
         isSpeaking = false
         videoTrack = nil

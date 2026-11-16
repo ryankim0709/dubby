@@ -1,11 +1,8 @@
 import LiveKit
 import SwiftUI
 
-/// The coach that pops up after a take: the character as a hologram, or as its talking avatar when the character is
-/// one of the coaches, the measured timing, and what to try next.
-/// The phone's tip shows at once; when the live coach has listened, its own tip and suggestion replace it.
+/// The coach that pops up after recording: measured timing and one short tip about the current line.
 /// The suggested action is ringed, and the buttons never move, so the learner accepts or declines it with one tap.
-/// It shows once per take, after the take has played back over the scene.
 struct TakeCoachPopup: View {
     static let charactersPerSecond = 40.0
 
@@ -16,7 +13,6 @@ struct TakeCoachPopup: View {
     /// Nil when this build or account has no live coach.
     let coach: TakeCoach.State?
     let isCoachSpeaking: Bool
-    /// The coach character's live video; nil shows the hologram.
     let avatarVideo: RemoteVideoTrack?
     let avatarNotice: String?
     let isPlayingTake: Bool
@@ -36,6 +32,8 @@ struct TakeCoachPopup: View {
 
     private var message: String {
         if case .suggested(let suggestion) = coach { return suggestion.tip }
+        if case .listening = coach { return "" }
+        if case .unavailable = coach { return "" }
         return isQuiet ? TakeMeasurement.quietAdvice : timing.tip(cue: TakeTiming.cueWord(in: lineText))
     }
 
@@ -54,6 +52,8 @@ struct TakeCoachPopup: View {
     }
 
     private func revealedCount(at date: Date) -> Int {
+        // The AI tip arrives complete; displaying it immediately avoids a second wait for typewriter animation.
+        if case .suggested = coach { return message.count }
         guard !reduceMotion else { return message.count }
         // A timeline frame can be dated just before a reset `revealStart`, which would make the count negative.
         return min(message.count, max(0, Int(date.timeIntervalSince(revealStart) * Self.charactersPerSecond)))
@@ -96,8 +96,10 @@ struct TakeCoachPopup: View {
                                 .foregroundStyle(Palette.textPrimary)
                         }
                         .accessibilityElement(children: .combine)
-                        caption(revealed: revealed)
-                            .fixedSize(horizontal: false, vertical: true)
+                        if !message.isEmpty {
+                            caption(revealed: revealed)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
                         status
                         if let avatarNotice {
                             Text("Your coach's video is unavailable. \(avatarNotice)")
@@ -141,7 +143,7 @@ struct TakeCoachPopup: View {
                 ProgressView()
                     .controlSize(.small)
                     .tint(Palette.holo)
-                Text("Listening to your take…")
+                Text("Checking this line…")
                     .dubFont(12, weight: .regular)
                     .foregroundStyle(Palette.textSecondary)
             }
@@ -187,7 +189,6 @@ struct TakeCoachPopup: View {
     }
 }
 
-/// The coach character's Simli video in the hologram's place, framed in the coach's cyan.
 private struct AvatarFigure: View {
     let characterName: String
     let track: RemoteVideoTrack

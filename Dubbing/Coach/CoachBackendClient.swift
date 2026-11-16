@@ -145,6 +145,17 @@ nonisolated struct CoachBackendClient: CoachTutorService {
         return session
     }
 
+    func takeCoachSpeech(characterID: String, text: String) async throws -> Data {
+        struct Body: Encodable { let characterId: String; let text: String }
+        let operation = "Getting the coach's voice"
+        let request = try ServiceRequest.json(method: "POST", url: baseURL.appending(path: "tutor/take-coach/speech"), body: Body(characterId: characterID, text: text), headers: [:])
+        let reply = try await send(request, as: CoachReply.self, operation: operation)
+        guard let audio = reply.audio else {
+            throw CoachError.providerFailed(operation: operation, message: CoachConversation.voiceUnavailableMessage(for: reply.audioError))
+        }
+        return try audio.pcmChunks().reduce(Data(), +)
+    }
+
     func reply(characterID: String, language: SpokenLanguage, turns: [CoachTurn]) async throws -> CoachReply {
         struct Body: Encodable { let characterId: String; let languageName: String; let locale: String; let audio: Bool; let turns: [CoachTurn] }
         let operation = "Getting the coach's reply"

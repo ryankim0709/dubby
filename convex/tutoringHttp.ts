@@ -54,6 +54,7 @@ const preferencesRequest = z.object({ preferences: z.unknown(), expectedVersion:
 
 const liveSessionRequest = z.object({ clientDubId: z.uuid() });
 const takeAvatarRequest = z.object({ characterId: z.string().min(1).max(100) });
+const takeSpeechRequest = takeAvatarRequest.extend({ text: z.string().trim().min(1).max(500) });
 
 const takeCoachRequest = z.object({
   sceneTitle: z.string().trim().min(1).max(200),
@@ -278,6 +279,20 @@ export function registerTutoringRoutes(http: HttpRouter): void {
       if (!(await hasPremium(ctx))) return json(403, errorBody("premium_required", "Upgrade to Dubby Premium to talk to a coach"));
       const session = await createSimliSession(requiredEnv("SIMLI_API_KEY"), requiredEnv(character.simliFaceIdEnv));
       return json(200, session);
+    }),
+  });
+
+  http.route({
+    path: "/tutor/take-coach/speech",
+    method: "POST",
+    handler: authenticated(async (ctx, request) => {
+      const body = await parseBody(request, takeSpeechRequest);
+      if (body instanceof Response) return body;
+      const character = findCharacter(body.characterId);
+      if (character === undefined) return json(404, errorBody("not_found", `No coach named ${body.characterId}`));
+      if (!(await hasPremium(ctx))) return json(403, errorBody("premium_required", "Upgrade to Dubby Premium to talk to a coach"));
+      const spoken = await voiceReply(createCoachClient(), character, body.text);
+      return json(200, { text: body.text, ...spoken });
     }),
   });
 
