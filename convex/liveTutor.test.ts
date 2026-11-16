@@ -104,4 +104,19 @@ describe("POST /tutor/take-coach", () => {
     expect((await a.fetch("/tutor/take-coach", post({ ...scene, characterName: "  " }))).status).toBe(400);
     expect(fetchSpy).not.toHaveBeenCalled();
   });
+
+  it("gives a speaker who is a coach that coach's voice and avatar, and anyone else the tutor's voice and no avatar", async () => {
+    const voices: string[] = [];
+    fetchSpy.mockImplementation(async (_input: string | URL | Request, init?: RequestInit) => {
+      voices.push((JSON.parse(String(init?.body)) as { session: { audio: { output: { voice: string } } } }).session.audio.output.voice);
+      return Response.json({ value: "ek_fixture", expires_at: 1_800_000_000, session: {} });
+    });
+    const a = newBackend().withIdentity(alice);
+
+    const anakin = await a.fetch("/tutor/take-coach", post({ ...scene, characterName: "Anakin Skywalker" }));
+    expect(await anakin.json()).toMatchObject({ clientSecret: "ek_fixture", avatarCharacterId: "anakin" });
+    const someoneElse = await a.fetch("/tutor/take-coach", post(scene));
+    expect(await someoneElse.json()).not.toHaveProperty("avatarCharacterId");
+    expect(voices).toEqual(["ash", "marin"]);
+  });
 });

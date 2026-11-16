@@ -6,6 +6,8 @@ nonisolated struct LiveTutorGrant: Decodable, Sendable {
     /// Seconds since the epoch; the key only needs to outlive opening the socket.
     let expiresAt: Double
     let model: String
+    /// Only the take coach sets this: the coach character whose avatar says the tips, when the dubbed character is one.
+    let avatarCharacterId: String?
 }
 
 /// Wire rules for OpenAI's Realtime WebSocket (GA interface), checked against developers.openai.com on 2026-11-15.

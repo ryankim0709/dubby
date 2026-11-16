@@ -70,7 +70,7 @@ struct LibraryVideoPreview: View {
     }
 }
 
-private struct ScenePreviewSurface: UIViewRepresentable {
+struct ScenePreviewSurface: UIViewRepresentable {
     let player: AVPlayer
     let picture: VideoPicture
 
@@ -89,7 +89,7 @@ private struct ScenePreviewSurface: UIViewRepresentable {
     }
 }
 
-private final class ScenePreviewLayerView: UIView {
+final class ScenePreviewLayerView: UIView {
     let playerLayer = AVPlayerLayer()
     var picture: VideoPicture
 

@@ -288,7 +288,7 @@ nonisolated enum DubTiming {
 
 enum DubFlowStep: Hashable {
     case section(ImportedClip)
-    case script(TranscriptionRequest)
+    case script(PreparedScript)
     case studio(DubSetup)
     case result(DubSetup, [Int: RecordedTake])
 }

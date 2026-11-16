@@ -46,6 +46,11 @@ nonisolated enum MediaPipeline {
     @concurrent
     static func previewPicture(for url: URL) async throws -> VideoPicture {
         let seconds = try await loadDuration(of: url) / 2
+        return try await previewPicture(for: url, at: seconds)
+    }
+
+    @concurrent
+    static func previewPicture(for url: URL, at seconds: Double) async throws -> VideoPicture {
         let frame = try await thumbnail(for: url, at: seconds, maximumSize: CGSize(width: 640, height: 640))
         return try VideoPicture(frame: frame, seconds: seconds)
     }
@@ -84,16 +89,27 @@ nonisolated enum MediaPipeline {
     @concurrent
     static func analyzeVoices(audioURL: URL, lines: [LineDraft], barCount: Int) async throws -> LineAnalysis {
         let audio = try readMonoAudio(from: audioURL)
-        let slices = lines.map { line -> ArraySlice<Float> in
-            let lower = min(audio.samples.count, max(0, Int(line.start * audio.sampleRate)))
-            let upper = min(audio.samples.count, max(lower, Int(line.end * audio.sampleRate)))
-            return audio.samples[lower..<upper]
-        }
+        let slices = slices(from: audio, lines: lines)
         return LineAnalysis(
             lines: lines,
-            voicePrints: try slices.map { try VoicePrint.features(samples: Array($0), sampleRate: audio.sampleRate) },
-            envelopes: slices.map { ScriptBuilder.envelope(samples: Array($0), barCount: barCount) }
+            voicePrints: try slices.map { try VoicePrint.features(samples: $0, sampleRate: audio.sampleRate) },
+            envelopes: slices.map { ScriptBuilder.envelope(samples: $0, barCount: barCount) }
         )
+    }
+
+    /// A known cast needs waveforms, without measuring voice fingerprints to rediscover its speakers.
+    @concurrent
+    static func analyzeEnvelopes(audioURL: URL, lines: [LineDraft], barCount: Int) async throws -> [[Float]] {
+        let audio = try readMonoAudio(from: audioURL)
+        return slices(from: audio, lines: lines).map { ScriptBuilder.envelope(samples: $0, barCount: barCount) }
+    }
+
+    private static func slices(from audio: MonoAudio, lines: [LineDraft]) -> [[Float]] {
+        lines.map { line in
+            let lower = min(audio.samples.count, max(0, Int(line.start * audio.sampleRate)))
+            let upper = min(audio.samples.count, max(lower, Int(line.end * audio.sampleRate)))
+            return Array(audio.samples[lower..<upper])
+        }
     }
 
     /// Writes a copy of `input` with the speech band (about 420–3400 Hz) filtered out.
