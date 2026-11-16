@@ -8,7 +8,7 @@ import { ConfigurationError, requiredEnv } from "./lib/env";
 import { logEvent } from "./lib/log";
 import { createOpenAIClient } from "./lib/openai";
 import { createSessionToken, LiveAvatarError, sandboxAvatarId } from "./liveAvatar";
-import { createTakeCoachSecret, createTutorSecret, LiveTutorError, practicePlan, realtimeModelId, scoreSheetRef, takeCoachInstructions, takeCoachVoice, tutorInstructions } from "./liveTutor";
+import { createTakeCoachSecret, createTutorSecret, LiveTutorError, practicePlan, realtimeModelId, scoreSheetRef, takeCoachInstructions, takeCoachVoice, tutorInstructions, tutorVoice } from "./liveTutor";
 import { tutoringRefs } from "./tutoringRefs";
 import { composeReply } from "./tutoringReply";
 import { api } from "./_generated/api";
@@ -257,7 +257,9 @@ export function registerTutoringRoutes(http: HttpRouter): void {
         logEvent({ operation, status: "rejected", errorCode: "still_scoring", httpStatus: 409 });
         return json(409, errorBody("still_scoring", "The dub is still being scored"));
       }
-      const secret = await createTutorSecret(createOpenAIClient(), realtimeModelId(), tutorInstructions(sheet, practicePlan(sheet.lines)));
+      const character = characterForSpeaker(sheet.characterName);
+      const instructions = tutorInstructions(sheet, practicePlan(sheet.lines), character);
+      const secret = await createTutorSecret(createOpenAIClient(), realtimeModelId(), instructions, character?.openaiVoice ?? tutorVoice);
       logEvent({ operation, status: "ok", httpStatus: 200 });
       return json(200, secret);
     }),
@@ -273,7 +275,7 @@ export function registerTutoringRoutes(http: HttpRouter): void {
       // A speaker who is one of the coaches coaches in that coach's persona and voice, and the app shows that
       // coach's avatar saying the tips: dubbing Anakin brings Anakin to the pop-up.
       const character = characterForSpeaker(body.characterName);
-      const instructions = takeCoachInstructions(body, character?.persona);
+      const instructions = takeCoachInstructions(body, character);
       const secret = await createTakeCoachSecret(createOpenAIClient(), realtimeModelId(), instructions, character?.openaiVoice ?? takeCoachVoice(body.referencePitchHz));
       logEvent({ operation: "tutor.takeCoach", status: "ok", httpStatus: 200 });
       return json(200, { ...secret, avatarCharacterId: character?.id });
