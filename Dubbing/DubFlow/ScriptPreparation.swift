@@ -60,7 +60,7 @@ nonisolated enum ScriptPreparation {
                 #if targetEnvironment(simulator)
                 throw SceneTranscriptionError.localClipNeedsDevice
                 #else
-                let transcriber = try await SpeechTranscription.prepare(for: request.language)
+                let transcriber = try await SpeechTranscription.prepare(for: request.sceneLanguage)
                 let words = try await SpeechTranscription.transcribe(audioURL: audioURL, using: transcriber)
                 try Task.checkCancellation()
                 guard !words.isEmpty else { throw DubFlowError.noSpeechFound }
@@ -76,6 +76,24 @@ nonisolated enum ScriptPreparation {
             throw error
         }
         try FileManager.default.removeItem(at: audioURL)
+        return PreparedScript(request: request, source: source)
+    }
+
+    /// The prepared script in the language the learner dubs in. Lines keep their timing, speakers and waveforms, and
+    /// a published scene's cast names go along because they're reliable; on-device voice groups are only guesses.
+    static func translate(_ prepared: PreparedScript, using backend: CoachBackendClient) async throws -> PreparedScript {
+        let request = prepared.request
+        let source: ScriptSource
+        switch prepared.source {
+        case .cast(let script, let cast):
+            let lines = script.lines.map { ScriptTranslationLine(speaker: script.speaker(withID: $0.speakerID)?.name, seconds: $0.duration, text: $0.text) }
+            let texts = try await backend.translateScript(sceneTitle: request.clip.title, from: request.sceneLanguage, to: request.dubLanguage, lines: lines)
+            source = .cast(script.replacingLineTexts(texts), cast)
+        case .voices(let analysis):
+            let lines = analysis.lines.map { ScriptTranslationLine(speaker: nil, seconds: $0.end - $0.start, text: $0.text) }
+            let texts = try await backend.translateScript(sceneTitle: request.clip.title, from: request.sceneLanguage, to: request.dubLanguage, lines: lines)
+            source = .voices(analysis.replacingLineTexts(texts))
+        }
         return PreparedScript(request: request, source: source)
     }
 }

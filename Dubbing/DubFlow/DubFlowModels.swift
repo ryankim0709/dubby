@@ -64,7 +64,20 @@ nonisolated struct SpokenLanguage: Hashable, Sendable, Identifiable {
 nonisolated struct TranscriptionRequest: Hashable, Sendable {
     let clip: ImportedClip
     let section: ClipSection
-    let language: SpokenLanguage
+    /// What the clip is spoken in, which transcription and the scene cast listen for.
+    let sceneLanguage: SpokenLanguage
+    /// What the learner speaks; the scene's lines are translated into it when it differs from `sceneLanguage`.
+    let dubLanguage: SpokenLanguage
+
+    var needsTranslation: Bool { sceneLanguage != dubLanguage }
+}
+
+/// A section line sent for translation, so the translation can keep the speakers' register and fit the line's length.
+nonisolated struct ScriptTranslationLine: Encodable, Hashable, Sendable {
+    /// Nil when voices were grouped on the device, whose speaker guesses would mislead more than help.
+    let speaker: String?
+    let seconds: Double
+    let text: String
 }
 
 /// A transcribed word, timed in seconds from the start of the section audio.
@@ -94,6 +107,15 @@ nonisolated struct LineAnalysis: Hashable, Sendable {
     let voicePrints: [[Double]?]
     /// Normalized loudness bars per line, for drawing its waveform.
     let envelopes: [[Float]]
+
+    /// The same timing and voices with each line's text replaced in order, as when the lines are translated.
+    func replacingLineTexts(_ texts: [String]) -> LineAnalysis {
+        LineAnalysis(
+            lines: zip(lines, texts).map { LineDraft(text: $1, start: $0.start, end: $0.end) },
+            voicePrints: voicePrints,
+            envelopes: envelopes
+        )
+    }
 }
 
 /// The reference identity of a curated line: what the backend, assessment and coaching know it by.
@@ -161,6 +183,16 @@ nonisolated struct Script: Hashable, Sendable {
 
     func renaming(speakerID: Int, to name: String) -> Script {
         Script(lines: lines, speakers: speakers.map { $0.id == speakerID ? Speaker(id: $0.id, name: name) : $0 })
+    }
+
+    /// The same timing and speakers with each line's text replaced in order, as when the script is translated.
+    func replacingLineTexts(_ texts: [String]) -> Script {
+        Script(
+            lines: zip(lines, texts).map { line, text in
+                ScriptLine(id: line.id, text: text, start: line.start, end: line.end, speakerID: line.speakerID, envelope: line.envelope, reference: line.reference)
+            },
+            speakers: speakers
+        )
     }
 }
 

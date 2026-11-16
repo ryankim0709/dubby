@@ -21,8 +21,8 @@ struct ScriptPreparationTests {
             SceneCast.Segment(start: 2.3, end: 2.8, character: 0),
         ])
         let dialogue = SceneDialogue.published(transcript, cast)
-        let firstRequest = TranscriptionRequest(clip: clip, section: ClipSection(start: 0, end: 2), language: language)
-        let movedRequest = TranscriptionRequest(clip: clip, section: ClipSection(start: 1, end: 3), language: language)
+        let firstRequest = TranscriptionRequest(clip: clip, section: ClipSection(start: 0, end: 2), sceneLanguage: language, dubLanguage: language)
+        let movedRequest = TranscriptionRequest(clip: clip, section: ClipSection(start: 1, end: 3), sceneLanguage: language, dubLanguage: language)
 
         let first = try await ScriptPreparation.prepare(firstRequest, dialogue: dialogue)
         let moved = try await ScriptPreparation.prepare(movedRequest, dialogue: dialogue)
@@ -45,7 +45,7 @@ struct ScriptPreparationTests {
     @Test func emptySectionsFailWithoutLeavingAnAudioExport() async throws {
         let folder = try TemporaryDirectory(prefix: "EmptyScriptPreparationTests")
         let clip = ImportedClip(url: try TestFixtures.twoToneVideo(), title: "Synthetic scene", durationSeconds: 3, origin: .published, workingDirectory: folder.url)
-        let request = TranscriptionRequest(clip: clip, section: ClipSection(start: 0, end: 1), language: SpokenLanguage(identifier: "en-US", name: "English"))
+        let request = TranscriptionRequest(clip: clip, section: ClipSection(start: 0, end: 1), sceneLanguage: SpokenLanguage(identifier: "en-US", name: "English"), dubLanguage: SpokenLanguage(identifier: "en-US", name: "English"))
         let transcript = SceneTranscript(locale: "en-US", durationSeconds: 3, words: [TranscribedWord(text: "Later.", start: 2, end: 2.5)])
         let cast = SceneCast(characters: [SceneCast.Character(name: "Voice", portraitSeconds: nil, faceCenterX: nil)], segments: [SceneCast.Segment(start: 2, end: 2.5, character: 0)])
         await #expect(throws: DubFlowError.noSpeechFound) {

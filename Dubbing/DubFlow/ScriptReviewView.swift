@@ -85,7 +85,7 @@ private struct ScriptEditor: View {
         // Pinned so the primary action stays on screen beside a long script.
         .safeAreaInset(edge: .bottom, spacing: 0) {
             Button("Dub as \(script.speaker(withID: characterID)?.name ?? "this character")") {
-                onStart(DubSetup(clip: request.clip, section: request.section, script: script, characterID: characterID, locale: request.language.identifier))
+                onStart(DubSetup(clip: request.clip, section: request.section, script: script, characterID: characterID, locale: request.dubLanguage.identifier))
             }
             .buttonStyle(PrimaryButtonStyle(cornerRadius: 16))
             .disabled(characterLines.isEmpty)

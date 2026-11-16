@@ -20,7 +20,11 @@ private struct PreparationTask: Equatable {
 
 struct SectionPickerView: View {
     let clip: ImportedClip
+    /// Signs the translation request; the backend translates only for signed-in learners.
+    let account: AccountModel
     let onTranscribe: (PreparedScript) -> Void
+    /// The clip's own language. Clips without one are English, the only language the library's scenes are in.
+    private let sceneLanguage: SpokenLanguage
     @State private var player: SegmentPlayer
     @State private var selection: TimeSpan
     @State private var language: SpokenLanguage
@@ -30,17 +34,19 @@ struct SectionPickerView: View {
     @State private var preparation: ScriptPreparationPhase = .preparing
     @State private var attempt = 0
 
-    init(clip: ImportedClip, onTranscribe: @escaping (PreparedScript) -> Void) {
+    init(clip: ImportedClip, account: AccountModel, onTranscribe: @escaping (PreparedScript) -> Void) {
         self.clip = clip
+        self.account = account
         self.onTranscribe = onTranscribe
         let code = clip.locale.flatMap { Locale(identifier: $0).language.languageCode?.identifier }
-        _language = State(initialValue: SpokenLanguage.all.first { Locale(identifier: $0.identifier).language.languageCode?.identifier == code } ?? SpokenLanguage.all[0])
+        sceneLanguage = SpokenLanguage.all.first { Locale(identifier: $0.identifier).language.languageCode?.identifier == code } ?? SpokenLanguage.all[0]
+        _language = State(initialValue: sceneLanguage)
         _player = State(initialValue: SegmentPlayer(url: clip.url))
         _selection = State(initialValue: TimeSpan(start: 0, end: min(clip.durationSeconds, SectionEditing.defaultLength)))
     }
 
     private var request: TranscriptionRequest {
-        TranscriptionRequest(clip: clip, section: ClipSection(start: selection.start, end: selection.end), language: language)
+        TranscriptionRequest(clip: clip, section: ClipSection(start: selection.start, end: selection.end), sceneLanguage: sceneLanguage, dubLanguage: language)
     }
 
     private var prepared: PreparedScript? {
@@ -95,6 +101,12 @@ struct SectionPickerView: View {
                 }
                 .padding(12)
                 .background(Palette.surface, in: RoundedRectangle(cornerRadius: 12))
+                if language != sceneLanguage {
+                    Text("OpenAI translates the scene's \(sceneLanguage.name) lines into \(language.name) for you to dub.")
+                        .dubFont(14, weight: .regular)
+                        .foregroundStyle(Palette.textSecondary)
+                        .accessibilityIdentifier("translationNote")
+                }
                 if let issue {
                     IssueCard(
                         title: issue.opensSettings ? "Speech recognition is off" : "The script couldn't be built",
@@ -119,7 +131,7 @@ struct SectionPickerView: View {
                     HStack(spacing: 8) {
                         ProgressView()
                             .tint(Palette.textSecondary)
-                        Text("Preparing your script…")
+                        Text(request.needsTranslation ? "Preparing your \(language.name) script…" : "Preparing your script…")
                             .dubFont(14, weight: .regular)
                             .foregroundStyle(Palette.textSecondary)
                     }
@@ -143,7 +155,7 @@ struct SectionPickerView: View {
         .overlay {
             StateCarriers(items: [StateCarrier(identifier: "transcribeProgress", value: prepared != nil ? "ready" : issue != nil ? "failed" : "preparing")])
         }
-        .task(id: DialogueTask(language: language, attempt: attempt)) { await loadDialogue() }
+        .task(id: DialogueTask(language: sceneLanguage, attempt: attempt)) { await loadDialogue() }
         .task(id: PreparationTask(request: request, dialogue: dialogue, attempt: attempt)) { await prepareScript() }
         .task {
             do {
@@ -156,9 +168,9 @@ struct SectionPickerView: View {
     }
 
     private func loadDialogue() async {
-        if case .ready(let loadedLanguage, _) = dialogue, loadedLanguage == language { return }
+        if case .ready(let loadedLanguage, _) = dialogue, loadedLanguage == sceneLanguage { return }
         dialogue = .loading
-        let selectedLanguage = language
+        let selectedLanguage = sceneLanguage
         do {
             let loaded = try await ScriptPreparation.dialogue(for: clip, language: selectedLanguage)
             try Task.checkCancellation()
@@ -172,18 +184,27 @@ struct SectionPickerView: View {
     private func prepareScript() async {
         if prepared != nil { return }
         preparation = .preparing
-        guard case .ready(let loadedLanguage, let loaded) = dialogue, loadedLanguage == language else { return }
+        guard case .ready(let loadedLanguage, let loaded) = dialogue, loadedLanguage == sceneLanguage else { return }
         let selectedRequest = request
         do {
             // Wait for the framing gesture to settle before exporting another audio section.
             try await Task.sleep(for: .milliseconds(300))
             let script = try await ScriptPreparation.prepare(selectedRequest, dialogue: loaded)
             try Task.checkCancellation()
-            preparation = .ready(script)
+            preparation = .ready(try await spoken(script))
         } catch {
             guard !Task.isCancelled else { return }
             preparation = .failed(FlowIssue(error: error))
         }
+    }
+
+    /// Translates only once the section has settled and its script is built, so dragging the handles spends nothing.
+    private func spoken(_ script: PreparedScript) async throws -> PreparedScript {
+        guard script.request.needsTranslation else { return script }
+        let backend = try CoachBackendClient.configured(in: .main, tokens: AccountTokenProvider(account: account))
+        let translated = try await ScriptPreparation.translate(script, using: backend)
+        try Task.checkCancellation()
+        return translated
     }
 
     @ViewBuilder

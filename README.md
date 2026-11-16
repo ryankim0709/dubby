@@ -219,6 +219,8 @@ npm run prepare:scenes -- https://your-deployment.convex.site
 
 The URL can also come from `CONVEX_SITE_URL` in the environment or `.env.local`. The command uses the existing public catalog and preparation routes, skips ready cache entries, and samples checksum-verified videos only when a cast needs frames. It can be rerun after publishing or replacing videos. Missing entries invoke the deployment's OpenAI integration and incur its normal provider costs; existing cached entries make no provider calls.
 
+Transcription and the cast always use the scene's own language, which is English for clips without one. When the learner picks another spoken language on the framing screen, preparing a settled section ends with translating it: the app sends the section's lines in spoken order, with each line's length and, for published scenes, its character, to `POST /scripts/translate`. That route needs a signed-in learner. It asks `gpt-6-luna` to translate the whole section in one request, so register and forms of address stay consistent between characters, and it rejects a reply that doesn't keep exactly one translation per line. The studio shows the translated lines on the original timing, and scoring grades takes against them in the chosen language.
+
 Revyl remains available for cloud builds and app previews. Its build configuration is in `.revyl/config.yaml`; no automated Revyl test plans are configured.
 
 ## Talking coach

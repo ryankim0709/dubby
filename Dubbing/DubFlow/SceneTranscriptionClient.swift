@@ -28,7 +28,7 @@ nonisolated struct SceneTranscript: Decodable, Hashable, Sendable {
     let words: [TranscribedWord]
 
     func words(for request: TranscriptionRequest) throws -> [TranscribedWord] {
-        guard locale == request.language.identifier else {
+        guard locale == request.sceneLanguage.identifier else {
             throw SceneTranscriptionError.invalidResponse("the transcript's language doesn't match the selected language")
         }
         guard durationSeconds.isFinite, durationSeconds > 0, abs(durationSeconds - request.clip.durationSeconds) < 1 else {
