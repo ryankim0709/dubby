@@ -40,10 +40,22 @@ final class TakeCoach {
     /// the tips; otherwise the phone plays them and the pop-up shows the hologram.
     private(set) var avatar: TakeCoachAvatar?
 
-    private struct Request {
+    private struct ReviewRequest {
         let takeID: UUID
         let take: RecordedTake
         let note: String
+    }
+
+    private enum Request {
+        case review(ReviewRequest)
+        case demoTip(takeID: UUID, text: String)
+
+        var takeID: UUID {
+            switch self {
+            case .review(let request): request.takeID
+            case .demoTip(let takeID, _): takeID
+            }
+        }
     }
 
     private let backend: CoachBackendClient
@@ -84,7 +96,16 @@ final class TakeCoach {
         for await request in requests {
             guard !hasEnded else { return }
             do {
-                try await review(request)
+                switch request {
+                case .review(let review):
+                    try await self.review(review)
+                case .demoTip(let takeID, let text):
+                    let transport = try await connectedTransport()
+                    guard activeTakeID == takeID else { continue }
+                    let reviewID = takeID.uuidString
+                    try await transport.send(LiveTutorClientEvent.requestDemoTipSpeech(tip: text, reviewID: reviewID))
+                    try await speak(on: transport, takeID: takeID, reviewID: reviewID)
+                }
             } catch is CancellationError {
                 return
             } catch {
@@ -110,7 +131,15 @@ final class TakeCoach {
         stopSpeaking()
         activeTakeID = takeID
         review = Review(takeID: takeID, state: .listening)
-        requestContinuation.yield(Request(takeID: takeID, take: take, note: note))
+        requestContinuation.yield(.review(ReviewRequest(takeID: takeID, take: take, note: note)))
+    }
+
+    /// The demo tip is already visible; voicing it never blocks the learner's next action or uploads their take.
+    func sayDemoTip(_ text: String, takeID: UUID) {
+        guard !hasEnded else { return }
+        stopSpeaking()
+        activeTakeID = takeID
+        requestContinuation.yield(.demoTip(takeID: takeID, text: text))
     }
 
     /// The learner acted on the take, so anything still coming about it is no longer wanted.
@@ -191,7 +220,7 @@ final class TakeCoach {
         avatarTask = Task { await avatar.run() }
     }
 
-    private func review(_ request: Request) async throws {
+    private func review(_ request: ReviewRequest) async throws {
         let pcm = try await Self.realtimePCM(of: request.take.url)
         let transport = try await connectedTransport()
         let reviewID = request.takeID.uuidString

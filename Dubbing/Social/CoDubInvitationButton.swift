@@ -34,10 +34,10 @@ struct CoDubInvitationButton: View {
     /// Shown as a tile in a row of actions, with any problem in an alert instead of below the button.
     var isTile = false
     @State private var clientId = UUID().uuidString
+    @State private var assetId: String?
     @State private var invitation: CoDubMessageDraft?
     @State private var presentedMessage: CoDubMessageDraft?
     @State private var issue: String?
-    @State private var assetId: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -61,8 +61,6 @@ struct CoDubInvitationButton: View {
                         .accessibilityIdentifier("coDubMessageError")
                 }
             }
-            Text("Inviting uploads your saved performance privately so your friend can add their character's voice.")
-                .dubFont(14, weight: .regular).foregroundStyle(Palette.textSecondary)
         }
         .alert("Couldn't invite", isPresented: Binding(get: { isTile && issue != nil }, set: { if !$0 { issue = nil } })) {
             Button("OK", role: .cancel) {}

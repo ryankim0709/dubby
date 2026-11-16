@@ -66,6 +66,7 @@ nonisolated enum LiveTutorClientEvent {
             let tool_choice: ToolChoice
             /// Echoed back in `response.created`, so late answers about an earlier take can be told apart.
             let metadata: [String: String]
+            let instructions: String?
         }
 
         enum ToolChoice: Encodable {
@@ -141,12 +142,17 @@ nonisolated enum LiveTutorClientEvent {
 
     /// Asks for nothing but a call to the named tool, as text, tagged with the review it answers.
     static func requestToolCall(named name: String, reviewID: String) throws -> String {
-        try encode(TargetedResponse(response: .init(output_modalities: ["text"], tool_choice: .function(name), metadata: ["review": reviewID])))
+        try encode(TargetedResponse(response: .init(output_modalities: ["text"], tool_choice: .function(name), metadata: ["review": reviewID], instructions: nil)))
     }
 
     /// Asks the tutor to speak, with tools off, tagged with the review it answers.
     static func requestSpeech(reviewID: String) throws -> String {
-        try encode(TargetedResponse(response: .init(output_modalities: ["audio"], tool_choice: .none, metadata: ["review": reviewID])))
+        try encode(TargetedResponse(response: .init(output_modalities: ["audio"], tool_choice: .none, metadata: ["review": reviewID], instructions: nil)))
+    }
+
+    static func requestDemoTipSpeech(tip: String, reviewID: String) throws -> String {
+        let instructions = "Read the following coaching tip aloud exactly as written, with no introduction or extra words. Do not assess the learner or call a tool. Tip: \(tip)"
+        return try encode(TargetedResponse(response: .init(output_modalities: ["audio"], tool_choice: .none, metadata: ["review": reviewID], instructions: instructions)))
     }
 
     static func toolResult(callID: String, output: String) throws -> String {

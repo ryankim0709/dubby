@@ -25,6 +25,7 @@ private struct PendingTake {
     let measurement: TakeMeasurement
     let envelope: [Float]
     let timing: TakeTiming
+    let coachTip: String
 }
 
 /// The real dubbing studio: hear each original line, then record yours along with the muted video.
@@ -32,7 +33,7 @@ struct DubSessionView: View {
     let setup: DubSetup
     let requiredKeptLines: Int
     let onFinish: ([Int: RecordedTake]) -> Void
-    /// Listens to each take and suggests keeping it or trying again; nil when the build has no backend.
+    @State private var coachTipIndex = 0
     @State private var coach: TakeCoach?
     @State private var player: SegmentPlayer
     @State private var recorder = TakeRecorder()
@@ -59,6 +60,13 @@ struct DubSessionView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private static let logger = Logger(subsystem: "com.ryankim.Dubbing", category: "studio")
+    /// Demo prompts rotate locally so taking another turn never waits for a provider.
+    private static let coachTips: [String] = [
+        "Try saying this softer.",
+        "Slow down a little and let each word land.",
+        "Put a little more emphasis on the last word.",
+        "Take a breath and say it like you're talking to a friend.",
+    ]
 
     init(setup: DubSetup, account: AccountModel, initialTakes: [Int: RecordedTake], requiredKeptLines: Int, onFinish: @escaping ([Int: RecordedTake]) -> Void) {
         self.setup = setup
@@ -69,16 +77,14 @@ struct DubSessionView: View {
         _coach = State(initialValue: Self.makeCoach(setup: setup, account: account))
     }
 
-    /// The coach needs the backend, which a build without COACH_BACKEND_URL doesn't have.
     private static func makeCoach(setup: DubSetup, account: AccountModel) -> TakeCoach? {
-        let backend: CoachBackendClient
         do {
-            backend = try CoachBackendClient.configured(in: .main, tokens: AccountTokenProvider(account: account))
+            let backend = try CoachBackendClient.configured(in: .main, tokens: AccountTokenProvider(account: account))
+            return TakeCoach(backend: backend, setup: setup)
         } catch {
             logger.info("The studio has no take coach. reason=\(error.localizedDescription, privacy: .public)")
             return nil
         }
-        return TakeCoach(backend: backend, setup: setup)
     }
 
     private var lines: [ScriptLine] { setup.script.lines(spokenBy: setup.characterID) }
@@ -318,6 +324,7 @@ struct DubSessionView: View {
     }
 
     private var lineFraction: Double {
+        if activity == .recording, recordingPhase != .capturing { return 0 }
         guard activity != .idle, line.duration > 0 else { return shownTake == nil ? 0 : 1 }
         return min(max((player.currentSeconds - lineStart) / line.duration, 0), 1)
     }
@@ -425,9 +432,7 @@ struct DubSessionView: View {
                     .dubFont(13, weight: .medium)
                     .foregroundStyle(Palette.textSecondary)
                     .frame(width: 64, alignment: .leading)
-                // While recording, only the learner's row moves.
-                WaveformView(levels: line.envelope, playedFraction: activity == .recording ? 0 : lineFraction)
-                    .opacity(0.6)
+                WaveformView(levels: line.envelope, playedFraction: lineFraction)
                     .frame(height: 40)
             }
             HStack(spacing: 10) {
@@ -496,7 +501,10 @@ struct DubSessionView: View {
             lineText: line.text,
             timing: pending.timing,
             measurement: pending.measurement,
-            coach: coach?.review.flatMap { $0.takeID == pending.id ? $0.state : nil },
+            coach: .suggested(TakeCoach.Suggestion(
+                suggestion: pending.timing.suggestsRetry || pending.measurement.level == .quiet ? .retry : .keep,
+                tip: pending.coachTip
+            )),
             isCoachSpeaking: coach?.isSpeaking ?? false,
             avatarVideo: coach?.avatar?.videoTrack,
             avatarNotice: coach?.avatar?.notice,
@@ -657,11 +665,14 @@ struct DubSessionView: View {
             // The learner hears their take over the scene first; the coach pops up only once it has played.
             activity = .playingTake
             try await playBack(take, from: start)
-            let recorded = PendingTake(id: UUID(), lineID: target.id, take: take, measurement: measurement, envelope: envelope, timing: timing)
+            let recorded = PendingTake(
+                id: UUID(), lineID: target.id, take: take, measurement: measurement,
+                envelope: envelope, timing: timing, coachTip: Self.coachTips[coachTipIndex]
+            )
+            coachTipIndex = (coachTipIndex + 1) % Self.coachTips.count
             pending = recorded
-            // Fixture audio from UI tests isn't anyone's voice, so it never goes to a provider.
             if !take.inputSource.isSynthetic {
-                coach?.listen(to: recorded.id, take: take, note: "The line: “\(target.text)”. \(timing.note)")
+                coach?.sayDemoTip(recorded.coachTip, takeID: recorded.id)
             }
         }
     }
