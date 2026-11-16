@@ -38,7 +38,7 @@ nonisolated struct SocialScript: Codable, Hashable, Sendable {
     }
 
     func setup(video: URL, characterId: Int, protectedSpans: [TimeSpan]) throws -> DubSetup {
-        guard duration.isFinite, (2...120).contains(duration), speakers.contains(where: { $0.id == characterId }),
+        guard duration.isFinite, duration > 0, speakers.contains(where: { $0.id == characterId }),
               SpokenLanguage.all.contains(where: { $0.identifier == locale }),
               Set(speakers.map(\.id)).count == speakers.count, speakers.allSatisfy({ $0.id >= 0 && !$0.name.isEmpty }),
               Set(lines.map(\.id)).count == lines.count, !lines.isEmpty,
@@ -77,6 +77,7 @@ nonisolated struct CoDubRoom: Decodable, Identifiable, Sendable {
     let code: String
     let script: SocialScript
     let status: CoDubStatus
+    let joinOnly: Bool
     let sourceAssetId: String
     let resultAssetId: String?
     let guestLinesRecorded: Int?
@@ -147,6 +148,13 @@ struct SocialDubSource: Identifiable {
     let setup: DubSetup
     let takes: [Int: RecordedTake]
     var id: URL { video }
+
+    func joinScript(guestCharacterId: Int) throws -> SocialScript {
+        guard guestCharacterId != setup.characterID, !setup.script.lines(spokenBy: guestCharacterId).isEmpty else {
+            throw SocialError.rejected("Choose another character for your friend to record.")
+        }
+        return SocialScript(title: setup.clip.title, duration: setup.section.duration, locale: setup.locale, speakers: setup.script.speakers.map { .init(id: $0.id, name: $0.name) }, lines: setup.script.lines.map { .init(id: $0.id, speakerId: $0.speakerID, text: $0.text, start: $0.start, end: $0.end) }, protectedSpans: [], ownerCharacterId: setup.characterID, guestCharacterId: guestCharacterId, ownerLinesRecorded: 0)
+    }
 
     func invitationScript(guestCharacterId: Int) throws -> SocialScript {
         let ownerLines = setup.script.lines(spokenBy: setup.characterID)

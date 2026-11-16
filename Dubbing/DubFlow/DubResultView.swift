@@ -130,7 +130,7 @@ struct DubResultView: View {
                 VStack(spacing: 8) {
                     if completionRoom == nil {
                         if let guest = setup.script.speakers.first(where: { $0.id != setup.characterID }) {
-                            Text("Invite a friend to record \(guest.name). Sharing uploads your saved scene and script to Dubby.")
+                            Text("Invite a friend to join this scene and record \(guest.name). Only an invitation link is sent.")
                                 .dubFont(14, weight: .regular).foregroundStyle(Palette.textSecondary)
                             CoDubInvitationButton(source: SocialDubSource(video: video, setup: setup, takes: takes), account: account, guestCharacterId: guest.id, recipientId: nil, title: "Invite a friend", isWorking: $isInviting)
                                 .accessibilityIdentifier("shareWithDubbyFriends")

@@ -95,7 +95,7 @@ struct SocialSharingView: View {
                     }.buttonStyle(.plain).disabled(isWorking)
                     Divider().overlay(Palette.hairline)
                 }
-                Text("Share uploads your saved video and script, then opens Messages so you can choose who plays \(source.setup.script.speaker(withID: guestCharacterId)?.name ?? "the other character"). Both performers approve before the combined dub appears in friends' feeds.")
+                Text("Share opens Messages with an invitation to join this scene and play \(source.setup.script.speaker(withID: guestCharacterId)?.name ?? "the other character"). Both performers approve before the combined dub appears in friends' feeds.")
                     .dubFont(14, weight: .regular).foregroundStyle(Palette.textSecondary)
                 CoDubInvitationButton(source: source, account: account, guestCharacterId: guestCharacterId, recipientId: recipientId, title: "Share", isWorking: $isInviting)
                     .id("\(guestCharacterId)-\(recipientId ?? "messages")")

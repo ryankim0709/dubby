@@ -222,21 +222,21 @@ struct SocialRoomView: View {
         if room.status == .completed, let result = room.resultAssetId {
             SocialPlayback(assetId: result, title: "Your combined co-dub", account: account)
         } else if room.status == .invited || room.status == .accepted {
-            SocialPlayback(assetId: room.sourceAssetId, title: "\(room.owner.username)'s saved performance", account: account)
+            SocialPlayback(assetId: room.sourceAssetId, title: room.joinOnly ? "Scene to join" : "\(room.owner.username)'s saved performance", account: account)
         }
         performer(room.owner.username, role: room.script.roleName(room.script.ownerCharacterId), detail: "\(room.script.ownerLinesRecorded) \(room.script.ownerLinesRecorded == 1 ? "line" : "lines") recorded")
         performer(room.guest?.username ?? "Open role", role: room.script.roleName(room.script.guestCharacterId), detail: room.guestLinesRecorded.map { "\($0) \($0 == 1 ? "line" : "lines") recorded" } ?? room.status.title)
         switch room.status {
         case .invited, .accepted:
             if isOwner {
-                Text("Your lines are saved. Send the invitation to your friend; they'll record the other character in their own time.")
+                Text(room.joinOnly ? "Send this link so your friend can join the scene and record their role." : "Your lines are saved. Send the invitation to your friend; they'll record the other character in their own time.")
                     .dubFont(17, weight: .regular).foregroundStyle(Palette.textSecondary)
                 ShareLink(item: "dubby://invite/\(room.code)", message: Text("Play \(room.script.roleName(room.script.guestCharacterId)) in \(room.script.title) with me on Dubby.")) { Label("Share private invite", systemImage: "square.and.arrow.up") }
                     .buttonStyle(PrimaryButtonStyle(cornerRadius: Radius.control))
                 Text("Invite code: \(room.code)").dubFont(14, weight: .regular).textSelection(.enabled)
                 Button("Cancel invitation", role: .destructive) { perform { try await $0.closeInvite(id: room.id) } }.frame(minHeight: 44)
             } else if room.guest?.id == viewerId {
-                Text("Record \(guestLines) \(guestLines == 1 ? "line" : "lines") as \(room.script.roleName(room.script.guestCharacterId)). Your teammate's performance stays in the mix. Only you two can access it in Dubby until you both approve posting.")
+                Text(room.joinOnly ? "You joined the dub. Record \(room.script.roleName(room.script.guestCharacterId)) in this scene. Your recording will be saved to your Shelf." : "Record \(guestLines) \(guestLines == 1 ? "line" : "lines") as \(room.script.roleName(room.script.guestCharacterId)). Your teammate's performance stays in the mix. Only you two can access it in Dubby until you both approve posting.")
                     .dubFont(17, weight: .regular).foregroundStyle(Palette.textSecondary)
                 Button("Record \(room.script.roleName(room.script.guestCharacterId))") { prepareRole(room) }
                     .buttonStyle(PrimaryButtonStyle(cornerRadius: Radius.control)).disabled(isWorking)
@@ -281,7 +281,7 @@ struct SocialRoomView: View {
             if room.status == .invited { try await client.acceptInvite(id: room.id) }
             let video = try await client.download(assetId: room.sourceAssetId)
             let setup = try room.script.setup(video: video, characterId: room.script.guestCharacterId, protectedSpans: room.script.protectedSpans)
-            onDub(SocialDubLaunch(setup: setup, completionRoom: room))
+            onDub(SocialDubLaunch(setup: setup, completionRoom: room.joinOnly ? nil : room))
         }
     }
 

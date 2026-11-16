@@ -54,9 +54,9 @@ nonisolated struct SocialBackendClient: Sendable {
         let _: SocialOK = try await mutate("social:removeFriend", Arguments(personId: personId))
     }
 
-    func invite(assetId: String, script: SocialScript, recipientId: String?, clientId: String) async throws -> SocialInviteReceipt {
-        struct Arguments: Encodable { let assetId: String; let script: SocialScript; let recipientId: String?; let clientId: String }
-        return try await mutate("social:invite", Arguments(assetId: assetId, script: script, recipientId: recipientId, clientId: clientId))
+    func inviteToJoin(sceneSlug: String, sectionStart: Double, script: SocialScript, recipientId: String?, clientId: String) async throws -> SocialInviteReceipt {
+        struct Arguments: Encodable { let sceneSlug: String; let sectionStart: Double; let script: SocialScript; let recipientId: String?; let clientId: String }
+        return try await mutate("social:inviteToJoin", Arguments(sceneSlug: sceneSlug, sectionStart: sectionStart, script: script, recipientId: recipientId, clientId: clientId))
     }
 
     func redeem(code: String) async throws -> String {
@@ -105,8 +105,8 @@ nonisolated struct SocialBackendClient: Sendable {
         let duration = try await MediaPipeline.loadDuration(of: video)
         let attributes = try video.resourceValues(forKeys: [.fileSizeKey])
         guard let size = attributes.fileSize, size > 0, size <= 80 * 1024 * 1024,
-              duration.isFinite, duration >= 2, duration <= 120.1 else {
-            throw SocialError.rejected("Share a playable 2–120 second MP4 of at most 80 MB.")
+              duration.isFinite, duration >= 2, duration <= 30.1 else {
+            throw SocialError.rejected("Share a playable 2–30 second MP4 of at most 80 MB.")
         }
         for attempt in 1...3 {
             let ticket: UploadTicket = try await mutate("social:prepareUpload", EmptyArguments())

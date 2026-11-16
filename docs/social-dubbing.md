@@ -34,12 +34,11 @@ Inbox retains the existing Whop **Clubs** section alongside **Co-dubs**. Invitat
 
 1. Open **Friends** from Feed or **Inbox → Co-dubs** and send a request to a Dubby username. The recipient accepts
    in their own Friends screen. A request alone grants no access to friend-only posts.
-2. Finish a dub and choose **Invite a friend**. Dubby uploads the saved performance and script, then
-   opens the native Messages composer with an invitation to record the other character. Choose a
-   recipient and send it. Keeping at least one line is enough to invite someone; unrecorded lines
-   retain the original audio. **Share your scene** offers another role or an accepted Dubby friend,
-   with **Share** opening Messages. It also offers posting the solo performance to accepted friends.
-   Retrying or cancelling Messages reuses the prepared invitation rather than creating another one.
+2. Choose **Invite a friend** or **Share** to open Messages with a link to join the published
+   scene as the other character. This creates an invitation using the existing library scene;
+   it does not upload or attach the sender's video. The recipient claims the role after signing
+   in and can record it against the original scene. These join invitations save the recipient's
+   performance to their Shelf; they do not combine it with the sender's local recording.
 3. A named friend's invitation appears in **Inbox → Co-dubs**. A link recipient opens `dubby://invite/<code>` or
    pastes its code in **Inbox → Co-dubs** after signing in. Links require the installed app; they do not provide an
    App Store fallback or anonymous web player. An open link can be claimed by one learner. A link
@@ -62,7 +61,7 @@ message sending, general direct-message service or public feed in this implement
 ## Media and access boundaries
 
 Social video uploads are MP4 files of at most 80 MB. The native client checks playable duration
-(2–120 seconds, including whole published scenes); the backend checks storage ownership, claimed-file uniqueness, MIME type and bytes.
+(2–30 seconds for video posts; join invitations do not upload video); the backend checks storage ownership, claimed-file uniqueness, MIME type and bytes.
 The script has validated roles, unique line identities, finite scene-relative timing and protected
 first-performer intervals. The backend does not treat uploaded line counts as pronunciation grades.
 The UI shows recorded line counts and existing local measurements; it does not invent the scores or

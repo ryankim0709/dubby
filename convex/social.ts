@@ -10,7 +10,7 @@ const okV = v.object({ ok: v.boolean() });
 const personV = v.object({ id: v.id("users"), username: v.string() });
 const roomV = v.object({
   id: v.id("coDubs"), owner: personV, guest: v.union(personV, v.null()), code: v.string(), script: socialScriptV,
-  status: roomStateV, sourceAssetId: v.id("socialAssets"), resultAssetId: v.union(v.id("socialAssets"), v.null()),
+  joinOnly: v.boolean(), status: roomStateV, sourceAssetId: v.id("socialAssets"), resultAssetId: v.union(v.id("socialAssets"), v.null()),
   guestLinesRecorded: v.union(v.number(), v.null()), approvedByMe: v.boolean(), published: v.boolean(), createdAt: v.number(),
 });
 const postV = v.object({
@@ -58,7 +58,7 @@ async function memberRoom(ctx: QueryCtx, id: Id<"coDubs">, userId: Id<"users">):
 async function roomSummary(ctx: QueryCtx, room: Doc<"coDubs">, viewer: Id<"users">): Promise<Room> {
   return {
     id: room._id, owner: await person(ctx, room.ownerId), guest: room.recipientId === undefined ? null : await person(ctx, room.recipientId),
-    code: room.code, script: room.script, status: room.status, sourceAssetId: room.sourceAssetId, resultAssetId: room.resultAssetId ?? null,
+    code: room.code, script: room.script, joinOnly: room.joinOnly === true, status: room.status, sourceAssetId: room.sourceAssetId, resultAssetId: room.resultAssetId ?? null,
     guestLinesRecorded: room.guestLinesRecorded ?? null, approvedByMe: viewer === room.ownerId ? room.ownerApproved : room.guestApproved,
     published: room.ownerApproved && room.guestApproved, createdAt: room.createdAt,
   };
@@ -74,8 +74,8 @@ async function canReadPost(ctx: QueryCtx, post: Doc<"socialPosts">, viewer: Id<"
 }
 
 function validateScript(script: Infer<typeof socialScriptV>): void {
-  if (!Number.isFinite(script.duration) || script.duration < 2 || script.duration > 120 || script.title.trim().length === 0 || script.title.length > 200 || script.lines.length > 100 || script.speakers.length < 2 || script.speakers.length > 12) {
-    throw appError("INVALID_ARGUMENT", "A co-dub needs a titled 2–120 second scene with at least two characters");
+  if (!Number.isFinite(script.duration) || script.duration <= 0 || script.title.trim().length === 0 || script.title.length > 200 || script.lines.length > 100 || script.speakers.length < 2 || script.speakers.length > 12) {
+    throw appError("INVALID_ARGUMENT", "A co-dub needs a titled scene with valid timing and at least two characters");
   }
   const ids = new Set(script.speakers.map((speaker) => speaker.id));
   if (ids.size !== script.speakers.length || script.speakers.some((speaker) => !Number.isSafeInteger(speaker.id) || speaker.id < 0 || speaker.name.trim().length === 0 || speaker.name.length > 80) ||
@@ -84,7 +84,7 @@ function validateScript(script: Infer<typeof socialScriptV>): void {
   if (lineIds.size !== script.lines.length || script.lines.some((line) => !Number.isSafeInteger(line.id) || line.id < 0 || !ids.has(line.speakerId) || !Number.isFinite(line.start) || !Number.isFinite(line.end) || line.start < 0 || line.start >= line.end || line.end > script.duration || line.text.trim().length === 0 || line.text.length > 2000)) throw appError("INVALID_ARGUMENT", "The co-dub script contains an invalid line or timestamp");
   const guestLines = script.lines.filter((line) => line.speakerId === script.guestCharacterId);
   const ownerLines = script.lines.filter((line) => line.speakerId === script.ownerCharacterId);
-  if (guestLines.length === 0 || !Number.isSafeInteger(script.ownerLinesRecorded) || script.ownerLinesRecorded < 1 || script.ownerLinesRecorded > ownerLines.length || script.protectedSpans.length !== script.ownerLinesRecorded || new Set(script.protectedSpans.map((span) => span.start)).size !== script.ownerLinesRecorded || script.protectedSpans.some((span) => !Number.isFinite(span.start) || !Number.isFinite(span.end) || span.start < 0 || span.start >= span.end || span.end > script.duration || !ownerLines.some((line) => line.start === span.start) || guestLines.some((line) => line.start < span.end && line.end > span.start))) {
+  if (guestLines.length === 0 || !Number.isSafeInteger(script.ownerLinesRecorded) || script.ownerLinesRecorded < 0 || script.ownerLinesRecorded > ownerLines.length || script.protectedSpans.length !== script.ownerLinesRecorded || new Set(script.protectedSpans.map((span) => span.start)).size !== script.ownerLinesRecorded || script.protectedSpans.some((span) => !Number.isFinite(span.start) || !Number.isFinite(span.end) || span.start < 0 || span.start >= span.end || span.end > script.duration || !ownerLines.some((line) => line.start === span.start) || guestLines.some((line) => line.start < span.end && line.end > span.start))) {
     throw appError("INVALID_ARGUMENT", "The invited role must have lines that don't overlap your kept performance. Choose another role or scene.");
   }
   if (!/^[a-z]{2,3}-[A-Z]{2}$/.test(script.locale)) throw appError("INVALID_ARGUMENT", "The scene needs a supported speech locale");
@@ -197,9 +197,32 @@ export const invite = mutation({
     if (existing !== null) return { id: existing._id, code: existing.code };
     await ownedAsset(ctx, args.assetId, user._id);
     validateScript(args.script);
+    if (args.script.ownerLinesRecorded < 1) throw appError("INVALID_ARGUMENT", "The invitation needs a kept performance");
     if (args.recipientId !== undefined && !(await areFriends(ctx, user._id, args.recipientId))) throw appError("INVALID_ARGUMENT", "Choose an accepted friend, or create a private invite link");
     const code = crypto.randomUUID();
     const id = await ctx.db.insert("coDubs", { ownerId: user._id, recipientId: args.recipientId, code, clientId: args.clientId, sourceAssetId: args.assetId, script: args.script, status: "invited", ownerApproved: false, guestApproved: false, createdAt: Date.now(), updatedAt: Date.now() });
+    return { id, code };
+  },
+});
+
+export const inviteToJoin = mutation({
+  args: { sceneSlug: v.string(), sectionStart: v.number(), script: socialScriptV, recipientId: v.optional(v.id("users")), clientId: v.string() },
+  returns: v.object({ id: v.id("coDubs"), code: v.string() }),
+  handler: async (ctx, args) => {
+    const user = await requireUser(ctx);
+    await person(ctx, user._id);
+    if (args.clientId.length < 1 || args.clientId.length > 100) throw appError("INVALID_ARGUMENT", "The invitation needs an operation identifier");
+    const existing = await ctx.db.query("coDubs").withIndex("by_owner_client", (q) => q.eq("ownerId", user._id).eq("clientId", args.clientId)).unique();
+    if (existing !== null) return { id: existing._id, code: existing.code };
+    const scene = await ctx.db.query("scenes").withIndex("by_slug", (q) => q.eq("slug", args.sceneSlug)).unique();
+    if (scene === null || !scene.published || scene.videoId === undefined) throw appError("NOT_FOUND", "This scene isn't available for your friend to join");
+    if (!Number.isFinite(args.sectionStart) || args.sectionStart < 0 || args.sectionStart + args.script.duration > scene.durationSeconds + 0.1) throw appError("INVALID_ARGUMENT", "The invitation's section is outside the scene");
+    if (args.recipientId !== undefined && !(await areFriends(ctx, user._id, args.recipientId))) throw appError("INVALID_ARGUMENT", "Choose an accepted friend or send an open invitation");
+    const script = { ...args.script, duration: scene.durationSeconds, protectedSpans: [], ownerLinesRecorded: 0, lines: args.script.lines.map((line) => ({ ...line, start: line.start + args.sectionStart, end: line.end + args.sectionStart })) };
+    validateScript(script);
+    const sourceAssetId = await ctx.db.insert("socialAssets", { ownerId: user._id, storageId: scene.videoId, createdAt: Date.now() });
+    const code = crypto.randomUUID();
+    const id = await ctx.db.insert("coDubs", { ownerId: user._id, recipientId: args.recipientId, code, clientId: args.clientId, sourceAssetId, script, joinOnly: true, status: "invited", ownerApproved: false, guestApproved: false, createdAt: Date.now(), updatedAt: Date.now() });
     return { id, code };
   },
 });

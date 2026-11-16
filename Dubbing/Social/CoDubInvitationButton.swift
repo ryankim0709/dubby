@@ -8,7 +8,7 @@ private struct CoDubMessageDraft: Identifiable {
     init(code: String, roleName: String, title: String) throws {
         let link = try CoDubLink.url(code: code)
         id = code
-        body = "Dub this scene with me! Play \(roleName) in \(title) and record the other half of our dub. My recording is already in the scene. Open this invitation in Dubby to join:\n\n\(link.absoluteString)"
+        body = "Dub this scene with me! Play \(roleName) in \(title) and record the other half of our dub. Open this invitation in Dubby to join the scene and record your role:\n\n\(link.absoluteString)"
     }
 }
 
@@ -31,7 +31,6 @@ struct CoDubInvitationButton: View {
     let recipientId: String?
     let title: String
     @Binding var isWorking: Bool
-    @State private var assetId: String?
     @State private var clientId = UUID().uuidString
     @State private var invitation: CoDubMessageDraft?
     @State private var presentedMessage: CoDubMessageDraft?
@@ -47,6 +46,7 @@ struct CoDubInvitationButton: View {
             .accessibilityIdentifier("sendCoDubInvite")
             if let issue {
                 Text(issue).dubFont(14, weight: .regular).foregroundStyle(Palette.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
                     .accessibilityIdentifier("coDubMessageError")
             }
         }
@@ -73,12 +73,9 @@ struct CoDubInvitationButton: View {
         Task {
             defer { isWorking = false }
             do {
-                let script = try source.invitationScript(guestCharacterId: guestCharacterId)
+                let script = try source.joinScript(guestCharacterId: guestCharacterId)
                 let client = try SocialBackendClient.configured(account: account)
-                let uploaded: String
-                if let assetId { uploaded = assetId }
-                else { uploaded = try await client.upload(video: source.video); assetId = uploaded }
-                let receipt = try await client.invite(assetId: uploaded, script: script, recipientId: recipientId, clientId: clientId)
+                let receipt = try await client.inviteToJoin(sceneSlug: source.setup.clip.url.deletingPathExtension().lastPathComponent, sectionStart: source.setup.section.start, script: script, recipientId: recipientId, clientId: clientId)
                 let draft = try CoDubMessageDraft(code: receipt.code, roleName: script.roleName(guestCharacterId), title: script.title)
                 invitation = draft
                 presentedMessage = draft
