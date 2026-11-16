@@ -34,6 +34,7 @@ struct CoDubInvitationButton: View {
     /// Shown as a tile in a row of actions, with any problem in an alert instead of below the button.
     var isTile = false
     @State private var clientId = UUID().uuidString
+    @State private var assetId: String?
     @State private var invitation: CoDubMessageDraft?
     @State private var presentedMessage: CoDubMessageDraft?
     @State private var issue: String?
@@ -89,9 +90,12 @@ struct CoDubInvitationButton: View {
         Task {
             defer { isWorking = false }
             do {
-                let script = try source.joinScript(guestCharacterId: guestCharacterId)
+                let script = try source.invitationScript(guestCharacterId: guestCharacterId)
                 let client = try SocialBackendClient.configured(account: account)
-                let receipt = try await client.inviteToJoin(sceneSlug: source.setup.clip.url.deletingPathExtension().lastPathComponent, sectionStart: source.setup.section.start, script: script, recipientId: recipientId, clientId: clientId)
+                let uploaded: String
+                if let assetId { uploaded = assetId }
+                else { uploaded = try await client.upload(video: source.video); assetId = uploaded }
+                let receipt = try await client.invite(assetId: uploaded, script: script, recipientId: recipientId, clientId: clientId)
                 let draft = try CoDubMessageDraft(code: receipt.code, roleName: script.roleName(guestCharacterId), title: script.title)
                 invitation = draft
                 presentedMessage = draft

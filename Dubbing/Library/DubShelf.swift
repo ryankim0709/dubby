@@ -23,6 +23,16 @@ nonisolated struct SavedCoDub: Codable, Hashable, Sendable {
     var cast: String {
         "@\(ownerUsername) as \(ownerCharacterName)\n@\(guestUsername) as \(guestCharacterName)"
     }
+
+    func credit(for username: String?) -> String {
+        if username == ownerUsername {
+            return "Dubbed with @\(guestUsername)\nas \(ownerCharacterName)"
+        }
+        if username == guestUsername {
+            return "Dubbed with @\(ownerUsername)\nas \(guestCharacterName)"
+        }
+        return cast
+    }
 }
 
 nonisolated enum ShelfDub: Identifiable, Sendable {
@@ -43,10 +53,10 @@ nonisolated enum ShelfDub: Identifiable, Sendable {
         }
     }
 
-    var cast: String {
+    func credit(for username: String?) -> String {
         switch self {
-        case .saved(let dub): dub.coDub?.cast ?? "as \(dub.characterName)"
-        case .combined(_, let coDub): coDub.cast
+        case .saved(let dub): dub.coDub?.credit(for: username) ?? "as \(dub.characterName)"
+        case .combined(_, let coDub): coDub.credit(for: username)
         }
     }
 

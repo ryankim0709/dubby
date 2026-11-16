@@ -269,7 +269,7 @@ private struct ShelfDubCard: View {
                         .displayFont(20)
                         .lineLimit(3)
                         .minimumScaleFactor(0.8)
-                    Text(dub.cast)
+                    Text(dub.credit(for: account.username))
                         .dubFont(11, weight: .semibold)
                         .lineLimit(dub.isCoDub ? 4 : 2)
                         .fixedSize(horizontal: false, vertical: true)
@@ -297,7 +297,7 @@ private struct ShelfDubCard: View {
             .shadow(color: .black.opacity(0.6), radius: 6, x: 0, y: 5)
             .contentShape(Rectangle())
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("\(dub.title), \(dub.cast), \(dub.linesDubbed) of \(dub.totalLines) lines, \(dub.isPublished ? "shared with friends" : "private")")
+            .accessibilityLabel("\(dub.title), \(dub.credit(for: account.username)), \(dub.linesDubbed) of \(dub.totalLines) lines, \(dub.isPublished ? "shared with friends" : "private")")
     }
 
     @ViewBuilder
@@ -358,7 +358,7 @@ private struct SavedDubPlayer: View {
                         Text(dub.sceneTitle)
                             .dubFont(18, weight: .semibold)
                             .foregroundStyle(Palette.textPrimary)
-                        Text(dub.coDub?.cast ?? "as \(dub.characterName)")
+                        Text(dub.coDub?.credit(for: dub.ownerUsername) ?? "as \(dub.characterName)")
                             .dubFont(14, weight: .regular)
                             .foregroundStyle(Palette.textSecondary)
                     }
