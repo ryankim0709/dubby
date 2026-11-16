@@ -5,7 +5,6 @@ import SwiftUI
 private enum SocialSharePhase {
     case editing
     case uploading
-    case invited(SocialInviteReceipt)
     case posted
 }
 
@@ -13,26 +12,24 @@ struct SocialSharingView: View {
     let source: SocialDubSource
     let account: AccountModel
     let onClose: () -> Void
-    let onKeepRecording: () -> Void
     @State private var state: LoadState<SocialSnapshot> = .loading
     @State private var guestCharacterId: Int
     @State private var recipientId: String?
     @State private var phase: SocialSharePhase = .editing
     @State private var issue: String?
     @State private var assetId: String?
-    @State private var clientId = UUID().uuidString
+    @State private var isInviting = false
     @State private var isAccountPresented = false
     @State private var refresh = UUID()
 
-    init(source: SocialDubSource, account: AccountModel, onClose: @escaping () -> Void, onKeepRecording: @escaping () -> Void) {
+    init(source: SocialDubSource, account: AccountModel, onClose: @escaping () -> Void) {
         self.source = source
         self.account = account
         self.onClose = onClose
-        self.onKeepRecording = onKeepRecording
         _guestCharacterId = State(initialValue: source.setup.script.speakers.first { $0.id != source.setup.characterID }?.id ?? source.setup.characterID)
     }
 
-    private var isWorking: Bool { if case .uploading = phase { return true }; return false }
+    private var isWorking: Bool { if case .uploading = phase { return true }; return isInviting }
 
     var body: some View {
         NavigationStack {
@@ -41,17 +38,6 @@ struct SocialSharingView: View {
                     SocialContent(account: account, state: state, onAccount: { isAccountPresented = true }, onRetry: { refresh = UUID() }) { snapshot in
                         switch phase {
                         case .editing, .uploading: editor(snapshot)
-                        case .invited(let receipt):
-                            Text("Your scene partner is up next.").dubFont(32, weight: .bold)
-                            Text("Your performance is saved in the invitation. Your friend can take the other role whenever they're ready.")
-                                .dubFont(17, weight: .regular).foregroundStyle(Palette.textSecondary)
-                            ShareLink(item: "dubby://invite/\(receipt.code)", message: Text("Play \(source.setup.script.speaker(withID: guestCharacterId)?.name ?? "the other character") in \(source.setup.clip.title) with me on Dubby.")) {
-                                Label("Share private invitation", systemImage: "square.and.arrow.up")
-                            }.buttonStyle(PrimaryButtonStyle(cornerRadius: Radius.control))
-                            Text("Invite code: \(receipt.code)").dubFont(14, weight: .regular).textSelection(.enabled)
-                            Text("The invitation is in your Inbox. Only you and the invited performer can watch it in Dubby.")
-                                .dubFont(14, weight: .regular).foregroundStyle(Palette.textSecondary)
-                            Button("Done", action: onClose).buttonStyle(SecondaryButtonStyle())
                         case .posted:
                             EmptyStateView(systemImage: "checkmark.circle", title: "Shared with your friends", message: "Your dub is now in the friends feed. You can stop sharing it from the post's menu.")
                             Button("Done", action: onClose).buttonStyle(PrimaryButtonStyle(cornerRadius: Radius.control))
@@ -82,17 +68,17 @@ struct SocialSharingView: View {
                     Text(source.setup.clip.title).displayFont(32).padding(16).shadow(color: .black, radius: 2, x: 0, y: 1)
                 }
                 .clipShape(RoundedRectangle(cornerRadius: Radius.poster))
-            if source.setup.script.speakers.count > 1 && source.isRoleComplete {
+            if source.setup.script.speakers.count > 1 {
                 Picker("Your friend's role", selection: $guestCharacterId) {
                     ForEach(source.setup.script.speakers.filter { $0.id != source.setup.characterID }) { role in Text(role.name).tag(role.id) }
                 }
                 .pickerStyle(.menu).disabled(isWorking)
                 Button { recipientId = nil } label: {
                     AdaptiveStack(rowAlignment: .center, spacing: 12) {
-                        Image(systemName: "link").dynamicTypeSize(...DynamicTypeSize.xxxLarge).frame(width: 46, height: 46).background(Palette.surfaceRaised, in: Circle())
+                        Image(systemName: "message").dynamicTypeSize(...DynamicTypeSize.xxxLarge).frame(width: 46, height: 46).background(Palette.surfaceRaised, in: Circle())
                         VStack(alignment: .leading, spacing: 4) {
-                            Text("Create a private invite link").dubFont(17, weight: .semibold)
-                            Text("One friend can claim the open role after signing in.").dubFont(14, weight: .regular).foregroundStyle(Palette.textSecondary)
+                            Text("Choose someone in Messages").dubFont(17, weight: .semibold)
+                            Text("Your friend opens the invitation to record the other role in Dubby.").dubFont(14, weight: .regular).foregroundStyle(Palette.textSecondary)
                         }
                         Spacer()
                         Image(systemName: recipientId == nil ? "checkmark.circle.fill" : "circle")
@@ -109,18 +95,11 @@ struct SocialSharingView: View {
                     }.buttonStyle(.plain).disabled(isWorking)
                     Divider().overlay(Palette.hairline)
                 }
-                Text("Sending uploads this finished video and its script to Dubby for your scene partner. Both performers approve before the combined dub appears in friends' feeds.")
+                Text("Share uploads your saved video and script, then opens Messages so you can choose who plays \(source.setup.script.speaker(withID: guestCharacterId)?.name ?? "the other character"). Both performers approve before the combined dub appears in friends' feeds.")
                     .dubFont(14, weight: .regular).foregroundStyle(Palette.textSecondary)
-                Button(isWorking ? "Uploading your scene…" : recipientId.flatMap { id in snapshot.friends.first { $0.id == id }.map { "Send invite to @\($0.username)" } } ?? "Create private invitation") {
-                    sendInvitation()
-                }
-                .buttonStyle(PrimaryButtonStyle(cornerRadius: Radius.control)).disabled(isWorking)
-                .accessibilityIdentifier("sendCoDubInvite")
-            } else if source.setup.script.speakers.count > 1 {
-                Text("Keep every line of your character before inviting a friend. Your kept takes are still in the studio.")
-                    .dubFont(17, weight: .regular).foregroundStyle(Palette.textSecondary)
-                Button("Record remaining lines", action: onKeepRecording)
-                    .buttonStyle(PrimaryButtonStyle(cornerRadius: Radius.control))
+                CoDubInvitationButton(source: source, account: account, guestCharacterId: guestCharacterId, recipientId: recipientId, title: "Share", isWorking: $isInviting)
+                    .id("\(guestCharacterId)-\(recipientId ?? "messages")")
+                    .disabled(isWorking)
             } else {
                 Text("This scene has one character. Choose a scene with another role to co-dub with a friend.")
                     .dubFont(17, weight: .regular).foregroundStyle(Palette.textSecondary)
@@ -141,24 +120,6 @@ struct SocialSharingView: View {
         let id = try await client.upload(video: source.video)
         assetId = id
         return id
-    }
-
-    private func sendInvitation() {
-        issue = nil
-        Task {
-            do {
-                let script = try source.invitationScript(guestCharacterId: guestCharacterId)
-                phase = .uploading
-                let client = try SocialBackendClient.configured(account: account)
-                let id = try await uploadedVideo(using: client)
-                let receipt = try await client.invite(assetId: id, script: script, recipientId: recipientId, clientId: clientId)
-                _ = try CoDubLink.url(code: receipt.code)
-                phase = .invited(receipt)
-            } catch {
-                phase = .editing
-                issue = error.localizedDescription
-            }
-        }
     }
 
     private func postSolo() {
