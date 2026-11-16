@@ -1,5 +1,6 @@
 import AVKit
 import os
+import Photos
 import SwiftUI
 
 private enum ExportPhase: Equatable {
@@ -46,15 +47,12 @@ struct DubResultView: View {
     let onDone: () -> Void
     @State private var phase: ExportPhase = .filteringDialogue
     @State private var savedDubID: UUID?
-    @State private var tutor: LiveTutorSession?
-    @State private var tutorUnavailable: String?
     @State private var attempt = 0
     @State private var exportTask: Task<Void, Never>?
     @State private var saveFailed = false
-    @State private var clubDraft: ClubMediaDraft?
-    @State private var socialSource: SocialDubSource?
     @State private var isCoDubUploading = false
     @State private var isInviting = false
+    @State private var photoSave: PhotoSave = .idle
 
     private static let logger = Logger(subsystem: "com.ryankim.Dubbing", category: "export")
     private let history = LocalDubHistory(folder: DubLibrary.defaultFolder)
@@ -62,8 +60,6 @@ struct DubResultView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                header
-                    .padding(.top, 8)
                 switch phase {
                 case .filteringDialogue, .mixing, .measuring:
                     VStack(spacing: 12) {
@@ -89,8 +85,8 @@ struct DubResultView: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 60)
                     .accessibilityElement(children: .combine)
-                case .finished(let video, let trimmed, let measurements):
-                    finished(video: video, trimmed: trimmed, measurements: measurements)
+                case .finished(let video, _, _):
+                    finished(video: video)
                 case .cancelled:
                     VStack(alignment: .leading, spacing: 12) {
                         Label("Export cancelled", systemImage: "xmark.circle")
@@ -118,44 +114,36 @@ struct DubResultView: View {
                 }
             }
             .padding(.horizontal, 16)
+            .padding(.top, 24)
             .padding(.bottom, 16)
             .containerIdentifier("exportScreen")
         }
         .scrollIndicators(.hidden)
         .screenBackground()
         .toolbar(.hidden, for: .navigationBar)
-        // Pinned so sharing and finishing stay reachable beside the measurements.
+        // Pinned so the actions and Done stay reachable however long the screen gets.
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if case .finished(let video, _, _) = phase {
-                VStack(spacing: 8) {
-                    if completionRoom == nil {
-                        if let guest = setup.script.speakers.first(where: { $0.id != setup.characterID }) {
-                            Text("Invite a friend to join this scene and record \(guest.name). Only an invitation link is sent.")
-                                .dubFont(14, weight: .regular).foregroundStyle(Palette.textSecondary)
-                            CoDubInvitationButton(source: SocialDubSource(video: video, setup: setup, takes: takes), account: account, guestCharacterId: guest.id, recipientId: nil, title: "Invite a friend", isWorking: $isInviting)
+                VStack(spacing: 12) {
+                    HStack(spacing: 10) {
+                        Button(action: { saveToPhotos(video) }) {
+                            Label(photoSave.title, systemImage: photoSave.systemImage)
+                        }
+                        .buttonStyle(TileButtonStyle())
+                        .disabled(photoSave == .saving || photoSave == .saved)
+                        .accessibilityIdentifier("saveVideo")
+                        if completionRoom == nil, let guest = setup.script.speakers.first(where: { $0.id != setup.characterID }) {
+                            CoDubInvitationButton(source: SocialDubSource(video: video, setup: setup, takes: takes), account: account, guestCharacterId: guest.id, recipientId: nil, title: "Invite a friend", isWorking: $isInviting, isTile: true)
                                 .accessibilityIdentifier("shareWithDubbyFriends")
                         }
-                        Button("Share your scene", systemImage: "person.2") {
-                            socialSource = SocialDubSource(video: video, setup: setup, takes: takes)
+                        ShareLink(item: video) {
+                            Label("Share dub", systemImage: "square.and.arrow.up")
                         }
-                        .buttonStyle(SecondaryButtonStyle())
-                        .disabled(isInviting)
-                        .accessibilityIdentifier("shareSceneOptions")
-                    }
-                    ShareLink(item: video) {
-                        Label("Share dub", systemImage: "square.and.arrow.up")
-                    }
-                    .buttonStyle(SecondaryButtonStyle())
-                    .accessibilityIdentifier("shareDub")
-                    if setup.curated?.scene.id == "tears-of-steel-bridge" {
-                        Button("Share to club") {
-                            clubDraft = ClubMediaDraft(url: video, kind: .video, title: setup.clip.title, replyToMessageId: nil)
-                        }
-                        .buttonStyle(SecondaryButtonStyle())
-                        .accessibilityIdentifier("shareResultToClub")
+                        .buttonStyle(TileButtonStyle())
+                        .accessibilityIdentifier("shareDub")
                     }
                     Button("Done", action: onDone)
-                        .buttonStyle(SecondaryButtonStyle())
+                        .buttonStyle(PrimaryButtonStyle(cornerRadius: Radius.control))
                         .accessibilityIdentifier("doneDub")
                         .disabled(isCoDubUploading || isInviting)
                 }
@@ -175,36 +163,10 @@ struct DubResultView: View {
         }
         .onDisappear { exportTask?.cancel() }
         .interactiveDismissDisabled(isInviting)
-        .sheet(item: $socialSource) { source in
-            SocialSharingView(source: source, account: account, onClose: { socialSource = nil })
-        }
-        .sheet(item: $clubDraft) { draft in ClubComposer(account: account, draft: draft, onShared: {}) }
-        .fullScreenCover(isPresented: Binding(get: { tutor != nil }, set: { if !$0 { tutor = nil } })) {
-            if let tutor {
-                LiveTutorView(session: tutor)
-            }
-        }
-    }
-
-    private var header: some View {
-        HStack(spacing: 12) {
-            Button {
-                exportTask?.cancel()
-                onDone()
-            } label: {
-                Image(systemName: "arrow.left")
-                    .dubFont(16, weight: .medium)
-                    .foregroundStyle(Palette.textPrimary)
-                    .frame(minWidth: 44, minHeight: 44)
-                    .contentShape(Rectangle())
-            }
-            .accessibilityLabel("Back")
-            .accessibilityIdentifier("exportBack")
-            .disabled(isCoDubUploading || isInviting)
-            Text("Your dub")
-                .dubFont(16, weight: .semibold)
-                .foregroundStyle(Palette.textPrimary)
-            Spacer()
+        .alert("Couldn't save the video", isPresented: Binding(get: { photoSave.failure != nil }, set: { if !$0 { photoSave = .idle } })) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(photoSave.failure ?? "")
         }
     }
 
@@ -218,53 +180,19 @@ struct DubResultView: View {
         }
     }
 
-    private func finished(video: URL, trimmed: [TakePlacement], measurements: [TakeMeasurement]) -> some View {
-        VStack(alignment: .leading, spacing: 16) {
+    private func finished(video: URL) -> some View {
+        VStack(alignment: .leading, spacing: 20) {
             Text("That’s a wrap")
                 .dubFont(34, weight: .bold)
                 .foregroundStyle(Palette.textPrimary)
                 .accessibilityAddTraits(.isHeader)
-            Text("\(setup.clip.title) · you as \(setup.script.speaker(withID: setup.characterID)?.name ?? "your character")")
-                .dubFont(15, weight: .regular)
-                .foregroundStyle(Palette.textSecondary)
             ResultPlayer(url: video)
                 .aspectRatio(16 / 9, contentMode: .fit)
                 .clipShape(RoundedRectangle(cornerRadius: 16))
             if let completionRoom {
                 CompleteCoDubView(room: completionRoom, video: video, linesRecorded: takes.count, account: account, isWorking: $isCoDubUploading)
             }
-            Text("\(takes.count) of \(setup.script.lines(spokenBy: setup.characterID).count) lines in your voice, saved to your Shelf.")
-                .dubFont(14, weight: .regular)
-                .foregroundStyle(Palette.textSecondary)
-            if setup.curated == nil { Label(
-                "Under your lines the original dialogue is filtered out rather than separated, so music and effects there sound thinner.",
-                systemImage: "waveform.badge.minus"
-            )
-            .dubFont(12, weight: .regular)
-            .foregroundStyle(Palette.textSecondary)
-            }
-            if !trimmed.isEmpty {
-                Label(
-                    String(
-                        format: "%d %@ ran into the next line and %@ cut by %.1f s in total.",
-                        trimmed.count,
-                        trimmed.count == 1 ? "take" : "takes",
-                        trimmed.count == 1 ? "was" : "were",
-                        trimmed.reduce(0) { $0 + $1.trimmedSeconds }
-                    ),
-                    systemImage: "scissors"
-                )
-                .dubFont(12, weight: .regular)
-                .foregroundStyle(Palette.streak)
-                .accessibilityIdentifier("dubTrimNotice")
-            }
-            DubScoreCard(state: scoringState, onRetry: retryScoring, onPractise: startTutor)
-            if let tutorUnavailable {
-                Text(tutorUnavailable)
-                    .dubFont(14, weight: .regular)
-                    .foregroundStyle(Palette.streak)
-            }
-            TakeSummaryView(measurements: measurements)
+            WrapScore(state: scoringState, onRetry: retryScoring)
         }
     }
 
@@ -278,15 +206,26 @@ struct DubResultView: View {
         scoring?.retry(dubID: savedDubID)
     }
 
-    /// The tutor reads the same dub the scoring model submitted, keyed by its lowercased id.
-    private func startTutor() {
-        guard let savedDubID else { return }
-        do {
-            let backend = try CoachBackendClient.configured(in: .main, tokens: AccountTokenProvider(account: account))
-            tutorUnavailable = nil
-            tutor = LiveTutorSession(clientDubID: savedDubID.uuidString.lowercased(), backend: backend)
-        } catch {
-            tutorUnavailable = error.localizedDescription
+    private func saveToPhotos(_ video: URL) {
+        photoSave = .saving
+        Task {
+            guard await PHPhotoLibrary.requestAuthorization(for: .addOnly) == .authorized else {
+                photoSave = .failed("Allow Dubby to add to your photos in Settings, then try again.")
+                return
+            }
+            do {
+                try await Self.addToPhotos(video)
+                photoSave = .saved
+            } catch {
+                photoSave = .failed(error.localizedDescription)
+            }
+        }
+    }
+
+    /// Photos runs the change block on its own queue, so it must not inherit the view's main-actor isolation.
+    nonisolated private static func addToPhotos(_ video: URL) async throws {
+        try await PHPhotoLibrary.shared().performChanges {
+            PHAssetCreationRequest.creationRequestForAssetFromVideo(atFileURL: video)
         }
     }
 
@@ -433,5 +372,95 @@ private struct ResultPlayer: View {
                     isReady = false
                 }
             }
+    }
+}
+
+private enum PhotoSave: Equatable {
+    case idle
+    case saving
+    case saved
+    case failed(String)
+
+    var title: String {
+        switch self {
+        case .idle, .failed: "Save video"
+        case .saving: "Saving…"
+        case .saved: "Saved"
+        }
+    }
+
+    var systemImage: String {
+        self == .saved ? "checkmark" : "arrow.down.to.line"
+    }
+
+    var failure: String? {
+        if case .failed(let message) = self { message } else { nil }
+    }
+}
+
+/// The dub score and one sentence on what it means, or where scoring has got to.
+private struct WrapScore: View {
+    let state: DubScoringModel.State?
+    let onRetry: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            switch state {
+            case nil, .uploading, .scoring:
+                HStack(spacing: 10) {
+                    ProgressView()
+                        .tint(Palette.accentText)
+                    Text("Scoring your dub…")
+                        .dubFont(15, weight: .regular)
+                        .foregroundStyle(Palette.textSecondary)
+                }
+            case .complete(let sheet):
+                if let score = sheet.dubScore {
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text("\(Int(score))")
+                            .dubFont(56, weight: .bold)
+                            .foregroundStyle(Palette.textPrimary)
+                            .monospacedDigit()
+                        Text("out of 100")
+                            .dubFont(15, weight: .regular)
+                            .foregroundStyle(Palette.textSecondary)
+                    }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityIdentifier("dubScore")
+                    Text(DubScoreVerdict.sentence(for: score))
+                        .dubFont(17, weight: .medium)
+                        .foregroundStyle(Palette.textPrimary)
+                } else {
+                    Text("None of your lines could be scored. Try recording a little louder.")
+                        .dubFont(15, weight: .regular)
+                        .foregroundStyle(Palette.textSecondary)
+                }
+            case .failed(let message):
+                Text(message)
+                    .dubFont(15, weight: .regular)
+                    .foregroundStyle(Palette.textSecondary)
+                Button("Try scoring again", action: onRetry)
+                    .buttonStyle(SecondaryButtonStyle())
+                    .accessibilityIdentifier("retryScoring")
+            case .notScored(let reason):
+                Text(reason)
+                    .dubFont(15, weight: .regular)
+                    .foregroundStyle(Palette.textSecondary)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityIdentifier("dubScoreCard")
+    }
+}
+
+/// One sentence on what a dub score means.
+nonisolated enum DubScoreVerdict {
+    static func sentence(for score: Double) -> String {
+        switch score {
+        case 90...: "Screen-ready. You nailed this scene."
+        case 75..<90: "Strong dub. A few lines away from perfect."
+        case 55..<75: "Solid start. Tighten your timing to score higher."
+        default: "There's room for improvement. Give the scene another go."
+        }
     }
 }

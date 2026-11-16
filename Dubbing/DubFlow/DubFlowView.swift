@@ -23,14 +23,17 @@ struct DubFlowView: View {
     let completionRoom: CoDubRoom?
     let onRetry: () -> Void
     let onClose: () -> Void
+    /// The learner tapped Done on a finished dub.
+    let onFinish: () -> Void
     @State private var path: [DubFlowStep]
 
-    init(launch: DubFlowLaunch, clips: LoadState<[LibraryClip]>, account: AccountModel, scoring: DubScoringModel?, onRetry: @escaping () -> Void, onClose: @escaping () -> Void) {
+    init(launch: DubFlowLaunch, clips: LoadState<[LibraryClip]>, account: AccountModel, scoring: DubScoringModel?, onRetry: @escaping () -> Void, onClose: @escaping () -> Void, onFinish: @escaping () -> Void) {
         self.clips = clips
         self.account = account
         self.scoring = scoring
         self.onRetry = onRetry
         self.onClose = onClose
+        self.onFinish = onFinish
         switch launch {
         case .chooseScene:
             completionRoom = nil
@@ -56,7 +59,7 @@ struct DubFlowView: View {
                     case .studio(let setup):
                         DubSessionView(setup: setup, account: account, initialTakes: [:], requiredKeptLines: completionRoom == nil ? 1 : setup.script.lines(spokenBy: setup.characterID).count) { path.append(.result(setup, $0)) }
                     case .result(let setup, let takes):
-                        DubResultView(setup: setup, takes: takes, account: account, scoring: scoring, completionRoom: completionRoom, onDone: onClose)
+                        DubResultView(setup: setup, takes: takes, account: account, scoring: scoring, completionRoom: completionRoom, onDone: onFinish)
                     }
                 }
         }

@@ -31,6 +31,8 @@ struct CoDubInvitationButton: View {
     let recipientId: String?
     let title: String
     @Binding var isWorking: Bool
+    /// Shown as a tile in a row of actions, with any problem in an alert instead of below the button.
+    var isTile = false
     @State private var clientId = UUID().uuidString
     @State private var invitation: CoDubMessageDraft?
     @State private var presentedMessage: CoDubMessageDraft?
@@ -39,19 +41,33 @@ struct CoDubInvitationButton: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Button(action: share) {
-                Label(isWorking ? "Preparing invitation…" : title, systemImage: "message")
-            }
-            .buttonStyle(PrimaryButtonStyle(cornerRadius: Radius.control))
-            .disabled(isWorking)
-            .accessibilityIdentifier("sendCoDubInvite")
-            if let issue {
-                Text(issue).dubFont(14, weight: .regular).foregroundStyle(Palette.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .accessibilityIdentifier("coDubMessageError")
+            if isTile {
+                Button(action: share) {
+                    Label(isWorking ? "Preparing…" : title, systemImage: "message")
+                }
+                .buttonStyle(TileButtonStyle())
+                .disabled(isWorking)
+                .accessibilityIdentifier("sendCoDubInvite")
+            } else {
+                Button(action: share) {
+                    Label(isWorking ? "Preparing invitation…" : title, systemImage: "message")
+                }
+                .buttonStyle(PrimaryButtonStyle(cornerRadius: Radius.control))
+                .disabled(isWorking)
+                .accessibilityIdentifier("sendCoDubInvite")
+                if let issue {
+                    Text(issue).dubFont(14, weight: .regular).foregroundStyle(Palette.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("coDubMessageError")
+                }
             }
             Text("Inviting uploads your saved performance privately so your friend can add their character's voice.")
                 .dubFont(14, weight: .regular).foregroundStyle(Palette.textSecondary)
+        }
+        .alert("Couldn't invite", isPresented: Binding(get: { isTile && issue != nil }, set: { if !$0 { issue = nil } })) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(issue ?? "")
         }
         .sheet(item: $presentedMessage) { draft in
             CoDubMessageComposer(messageBody: draft.body) { result in

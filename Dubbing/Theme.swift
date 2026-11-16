@@ -174,6 +174,34 @@ struct SecondaryButtonStyle: ButtonStyle {
     }
 }
 
+/// A square-ish action tile with its icon above its title, for a row of equal actions.
+struct TileButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .labelStyle(TileLabelStyle())
+            .dubFont(13, weight: .semibold)
+            .foregroundStyle(Palette.textPrimary)
+            .frame(maxWidth: .infinity, minHeight: 72)
+            .background(Palette.surfaceRaised, in: RoundedRectangle(cornerRadius: Radius.control))
+            .opacity(configuration.isPressed ? 0.75 : 1)
+    }
+}
+
+private struct TileLabelStyle: LabelStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        VStack(spacing: 6) {
+            configuration.icon
+                .dubFont(20, weight: .medium)
+                // A shared icon height keeps the titles of a tile row on one baseline.
+                .frame(height: 26)
+            configuration.title
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+        }
+        .padding(.horizontal, 6)
+    }
+}
+
 struct MetaPill: View {
     let text: String
     let systemImage: String?
