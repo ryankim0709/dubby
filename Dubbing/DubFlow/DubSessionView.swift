@@ -116,11 +116,6 @@ struct DubSessionView: View {
                     }
                     lineCard
                     comparison
-                    // A new take gets the interactive pop-up in the controls instead, so only one hologram shows.
-                    if pendingForLine == nil, let measurement = shownMeasurement {
-                        TakeCoachPanel(characterName: characterName, measurement: measurement)
-                            .id(shownTake?.url)
-                    }
                     if microphone == .denied {
                         IssueCard(
                             title: "Microphone is off",
@@ -179,7 +174,7 @@ struct DubSessionView: View {
         .safeAreaInset(edge: .bottom, spacing: 0) {
             controls
                 .padding(.horizontal, 16)
-                .padding(.vertical, 12)
+                .padding(.vertical, 8)
                 .background(Palette.background)
         }
         .overlay {
@@ -421,7 +416,8 @@ struct DubSessionView: View {
                     .dubFont(13, weight: .medium)
                     .foregroundStyle(Palette.textSecondary)
                     .frame(width: 64, alignment: .leading)
-                WaveformView(levels: line.envelope, playedFraction: lineFraction)
+                // While recording, only the learner's row moves.
+                WaveformView(levels: line.envelope, playedFraction: activity == .recording ? 0 : lineFraction)
                     .opacity(0.6)
                     .frame(height: 40)
             }
@@ -430,11 +426,14 @@ struct DubSessionView: View {
                     .dubFont(13, weight: .medium)
                     .foregroundStyle(Palette.textPrimary)
                     .frame(width: 64, alignment: .leading)
-                if let shownEnvelope {
+                if activity == .recording {
+                    LiveTakeWaveform(recorder: recorder)
+                        .frame(height: 40)
+                } else if let shownEnvelope {
                     WaveformView(levels: shownEnvelope, playedFraction: activity == .playingTake ? lineFraction : 1)
                         .frame(height: 40)
                 } else {
-                    Text(activity == .recording ? "Recording your take…" : "Record to see your take here")
+                    Text("Record to see your take here")
                         .dubFont(13, weight: .regular)
                         .foregroundStyle(Palette.placeholder)
                         .frame(maxWidth: .infinity, minHeight: 40)
@@ -508,7 +507,7 @@ struct DubSessionView: View {
     }
 
     private var recordingControls: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: 6) {
             HStack(spacing: 12) {
                 Button {
                     move(by: -1)
@@ -534,15 +533,9 @@ struct DubSessionView: View {
             }
             .foregroundStyle(Palette.textPrimary)
             Text(recordHint)
-                .dubFont(14, weight: .regular)
-                .foregroundStyle(Palette.textPrimary)
+                .dubFont(12, weight: .regular)
+                .foregroundStyle(Palette.textSecondary)
                 .multilineTextAlignment(.center)
-            if coach != nil && takes.isEmpty && pending == nil {
-                Text("After each take, your coach listens to it using OpenAI.")
-                    .dubFont(12, weight: .regular)
-                    .foregroundStyle(Palette.textSecondary)
-                    .multilineTextAlignment(.center)
-            }
         }
     }
 
@@ -554,13 +547,11 @@ struct DubSessionView: View {
                 record()
             }
         } label: {
-            Image(systemName: activity == .recording ? "stop.fill" : "mic")
-                .dubFont(30, weight: .medium)
+            Image(systemName: activity == .recording ? "stop.fill" : "mic.fill")
+                .dubFont(20, weight: .semibold)
                 .foregroundStyle(Palette.textPrimary)
-                .frame(width: 78, height: 78)
+                .frame(width: 56, height: 56)
                 .background(Palette.record, in: Circle())
-                .padding(5)
-                .overlay { Circle().strokeBorder(Palette.record.opacity(0.4), lineWidth: 2) }
         }
         .disabled(activity == .playingOriginal || activity == .playingTake || microphone == .denied)
         .accessibilityLabel(activity == .recording ? "Stop recording" : "Record this line")
@@ -575,7 +566,7 @@ struct DubSessionView: View {
         case .playingTake: "Playing your take over the scene"
         case .idle where microphone == .denied: "Turn the microphone on in Settings to record"
         case .idle where pendingForLine != nil: "Keep this take, or record it again"
-        case .idle: takes[line.id] == nil ? "Tap to record. You'll hear your cue first." : "Tap to record again. Your kept take stays until you keep a new one."
+        case .idle: "Tap to record"
         }
     }
 
@@ -636,6 +627,9 @@ struct DubSessionView: View {
                 discardFile(at: replaced.take.url)
             }
             let envelope = try await MediaPipeline.takeEnvelope(at: take.url)
+            // The learner hears their take over the scene first; the coach pops up only once it has played.
+            activity = .playingTake
+            try await playBack(take, from: start)
             let recorded = PendingTake(id: UUID(), lineID: target.id, take: take, measurement: measurement, envelope: envelope, timing: timing)
             pending = recorded
             // Fixture audio from UI tests isn't anyone's voice, so it never goes to a provider.
@@ -648,11 +642,17 @@ struct DubSessionView: View {
     private func playTake(_ take: RecordedTake) {
         let start = lineStart
         run(.playingTake) {
-            try StudioAudioSession.activate()
-            await player.seek(to: start)
-            try takePlayer.start(url: take.url)
-            _ = await player.play(until: start + take.duration, volume: 0)
+            try await playBack(take, from: start)
         }
+    }
+
+    /// Plays a take with the scene's video, muted, from the line's start.
+    private func playBack(_ take: RecordedTake, from start: Double) async throws {
+        try StudioAudioSession.activate()
+        await player.seek(to: start)
+        try takePlayer.start(url: take.url)
+        _ = await player.play(until: start + take.duration, volume: 0)
+        takePlayer.stop()
     }
 
     /// Removes a take file that will never be used. A failure is logged because there is nothing the user can do about it.
@@ -709,5 +709,25 @@ extension MediaPipeline {
     @concurrent
     static func takeEnvelope(at url: URL) async throws -> [Float] {
         ScriptBuilder.envelope(samples: try readMonoAudio(from: url).samples, barCount: 48)
+    }
+}
+
+/// The microphone's loudness as it records, scrolling in from the right.
+private struct LiveTakeWaveform: View {
+    let recorder: TakeRecorder
+    @State private var levels = [Float](repeating: 0, count: 48)
+
+    var body: some View {
+        WaveformView(levels: levels, playedFraction: 1)
+            .task {
+                while !Task.isCancelled {
+                    levels = Array(levels.dropFirst()) + [recorder.currentLevel()]
+                    do {
+                        try await Task.sleep(for: .milliseconds(50))
+                    } catch {
+                        return
+                    }
+                }
+            }
     }
 }

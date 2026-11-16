@@ -3,7 +3,7 @@ import SwiftUI
 /// The coach that pops up after a take: the character as a hologram, the measured timing, and what to try next.
 /// The phone's tip shows at once; when the live coach has listened, its own tip and suggestion replace it.
 /// The suggested action is ringed, and the buttons never move, so the learner accepts or declines it with one tap.
-/// Kept takes show the studio's measurement-only `TakeCoachPanel` instead.
+/// It shows once per take, after the take has played back over the scene.
 struct TakeCoachPopup: View {
     static let charactersPerSecond = 40.0
 
@@ -48,7 +48,8 @@ struct TakeCoachPopup: View {
 
     private func revealedCount(at date: Date) -> Int {
         guard !reduceMotion else { return message.count }
-        return min(message.count, Int(date.timeIntervalSince(revealStart) * Self.charactersPerSecond))
+        // A timeline frame can be dated just before a reset `revealStart`, which would make the count negative.
+        return min(message.count, max(0, Int(date.timeIntervalSince(revealStart) * Self.charactersPerSecond)))
     }
 
     private func panel(revealed: Int, isTalking: Bool) -> some View {

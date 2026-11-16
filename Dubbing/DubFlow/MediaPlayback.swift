@@ -85,6 +85,7 @@ final class TakeRecorder {
                 AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue,
             ]
             let recorder = try AVAudioRecorder(url: url, settings: settings)
+            recorder.isMeteringEnabled = true
             guard recorder.record() else { throw DubFlowError.recordingFailed(url.lastPathComponent) }
             self.recorder = recorder
         case .fixture(let name):
@@ -93,6 +94,14 @@ final class TakeRecorder {
             }
             fixture = try FixtureFeed(source: source, output: url)
         }
+    }
+
+    /// The microphone's loudness right now, from 0 to 1, for the live waveform. A fixture take, or no take, reads 0.
+    func currentLevel() -> Float {
+        guard let recorder else { return 0 }
+        recorder.updateMeters()
+        // Map -50 dB (silence) through 0 dB (full scale) onto 0...1.
+        return max(0, min(1, (recorder.averagePower(forChannel: 0) + 50) / 50))
     }
 
     /// Stops recording and returns the recorded length in seconds. A fixture that failed to write is logged and

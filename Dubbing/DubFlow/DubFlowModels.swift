@@ -67,6 +67,18 @@ nonisolated struct TranscriptionRequest: Hashable, Sendable {
     let language: SpokenLanguage
 }
 
+extension TranscriptionRequest {
+    /// Dubs the whole scene, in the scene's own language.
+    nonisolated init(wholeSceneOf clip: ImportedClip) {
+        let code = clip.locale.flatMap { Locale(identifier: $0).language.languageCode?.identifier }
+        self.init(
+            clip: clip,
+            section: ClipSection(start: 0, end: clip.durationSeconds),
+            language: SpokenLanguage.all.first { Locale(identifier: $0.identifier).language.languageCode?.identifier == code } ?? SpokenLanguage.all[0]
+        )
+    }
+}
+
 /// A transcribed word, timed in seconds from the start of the section audio.
 nonisolated struct TranscribedWord: Hashable, Decodable, Sendable {
     let text: String
@@ -255,7 +267,6 @@ nonisolated enum DubTiming {
 }
 
 enum DubFlowStep: Hashable {
-    case section(ImportedClip)
     case script(TranscriptionRequest)
     case studio(DubSetup)
     case result(DubSetup, [Int: RecordedTake])

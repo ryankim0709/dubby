@@ -43,8 +43,16 @@ private enum AnalysisPhase: Equatable {
 struct ScriptReviewView: View {
     let request: TranscriptionRequest
     let onStart: (DubSetup) -> Void
-    @State private var phase: AnalysisPhase = .extractingAudio
+    @State private var phase: AnalysisPhase
     @State private var attempt = 0
+
+    init(request: TranscriptionRequest, onStart: @escaping (DubSetup) -> Void) {
+        self.request = request
+        self.onStart = onStart
+        // A scene with a bundled script opens on role choice at once, without a loading screen.
+        let baked = PublishedSceneScript.bundled(for: request.clip.url.deletingPathExtension().lastPathComponent)
+        _phase = State(initialValue: baked.map { .ready(.cast($0.script, $0.cast)) } ?? .extractingAudio)
+    }
 
     var body: some View {
         Group {
@@ -132,6 +140,7 @@ struct ScriptReviewView: View {
     }
 
     private func analyze() async {
+        if case .ready = phase { return }
         do {
             phase = .extractingAudio
             // A library scene's cast can take the backend a minute the first time, so it's fetched alongside transcription.

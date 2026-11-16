@@ -15,7 +15,7 @@ enum DubFlowLaunch: Identifiable {
     }
 }
 
-/// The create-a-dub flow: pick a scene, frame a section, review the script, dub, and export.
+/// The create-a-dub flow: pick a scene, choose a role, dub, and export.
 struct DubFlowView: View {
     let clips: LoadState<[LibraryClip]>
     let account: AccountModel
@@ -37,7 +37,7 @@ struct DubFlowView: View {
             _path = State(initialValue: [])
         case .scene(let clip):
             completionRoom = nil
-            _path = State(initialValue: [.section(ImportedClip(clip: clip))])
+            _path = State(initialValue: [.script(TranscriptionRequest(wholeSceneOf: ImportedClip(clip: clip)))])
         case .social(let launch):
             completionRoom = launch.completionRoom
             _path = State(initialValue: [.studio(launch.setup)])
@@ -46,11 +46,9 @@ struct DubFlowView: View {
 
     var body: some View {
         NavigationStack(path: $path) {
-            ScenePickerView(clips: clips, onPick: { path.append(.section(ImportedClip(clip: $0))) }, onRetry: onRetry, onClose: onClose)
+            ScenePickerView(clips: clips, onPick: { path.append(.script(TranscriptionRequest(wholeSceneOf: ImportedClip(clip: $0)))) }, onRetry: onRetry, onClose: onClose)
                 .navigationDestination(for: DubFlowStep.self) { step in
                     switch step {
-                    case .section(let clip):
-                        SectionPickerView(clip: clip) { path.append(.script($0)) }
                     case .script(let request):
                         ScriptReviewView(request: request) { path.append(.studio($0)) }
                     case .studio(let setup):
@@ -89,7 +87,7 @@ private struct ScenePickerView: View {
                     .accessibilityLabel("Close")
                 }
                 .padding(.top, 8)
-                Text("Choose a scene. Next you'll frame up to 30 seconds and pick a character.")
+                Text("Choose a scene, then pick who you'll play.")
                     .dubFont(14, weight: .regular)
                     .foregroundStyle(Palette.textSecondary)
                 LoadStateContent(state: clips, failureIdentifier: "scenePickerLoadFailed", retry: onRetry) { clips in

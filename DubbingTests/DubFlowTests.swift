@@ -37,13 +37,6 @@ struct ScriptBuilderTests {
         let spans = ScriptBuilder.suppressionSpans(placements: placements, padding: 0.1, sectionDuration: 7.5)
         #expect(spans == [TimeSpan(start: 0.9, end: 2.5), TimeSpan(start: 5.9, end: 7.5)])
     }
-
-    @Test func dragsKeepTheSectionWithinLimits() {
-        let origin = TimeSpan(start: 10, end: 20)
-        #expect(SectionEditing.adjusted(origin: origin, handle: .end, delta: 30, clipDuration: 60) == TimeSpan(start: 10, end: 40))
-        #expect(SectionEditing.adjusted(origin: origin, handle: .start, delta: 15, clipDuration: 60) == TimeSpan(start: 18, end: 20))
-        #expect(SectionEditing.adjusted(origin: origin, handle: .move, delta: 45, clipDuration: 50) == TimeSpan(start: 40, end: 50))
-    }
 }
 
 struct VoicePrintTests {
