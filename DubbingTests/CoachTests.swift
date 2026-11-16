@@ -41,6 +41,14 @@ struct CoachTests {
         try LiveAvatarAudio.validate(chunks: Array(repeating: Data(count: 48_000), count: 60))
     }
 
+    @Test func aWholeReplyIsCutIntoSecondLongChunksThatKeepEveryByte() throws {
+        let pcm = Data((0..<(2 * 48_000 + 1_000)).map { UInt8(truncatingIfNeeded: $0) })
+        let chunks = LiveAvatarAudio.chunks(of: pcm[10...])
+        #expect(chunks.map(\.count) == [48_000, 48_000, 990])
+        #expect(chunks.reduce(Data(), +) == pcm[10...])
+        try LiveAvatarAudio.validate(chunks: chunks)
+    }
+
     @Test func chunksAreSentNoMoreThanTheLeadAheadOfPlayback() {
         let offsets = (0..<6).map { LiveAvatarAudio.sendOffset(ofChunk: $0) }
         #expect(offsets == [.seconds(0), .seconds(0), .seconds(0), .seconds(1), .seconds(2), .seconds(3)])
