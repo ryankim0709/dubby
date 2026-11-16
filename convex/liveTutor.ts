@@ -19,7 +19,7 @@ export const scoreSheetRef = makeFunctionReference<"query", { clientDubId: strin
 // commits; gpt-live-transcribe doesn't support VAD, and gpt-4o-mini-transcribe shuts down on 2027-02-26.
 const defaultRealtimeModel = "gpt-realtime-2.1";
 const transcriptionModel = "gpt-transcribe";
-const tutorVoice = "marin";
+export const tutorVoice = "marin";
 /** Only long enough for the app to open its socket; the session itself outlives the secret. */
 const clientSecretTtlSeconds = 120;
 /** A focused session: a handful of lines, not the whole scene. */
@@ -152,9 +152,11 @@ export type TakeCoachScene = { sceneTitle: string; characterName: string; locale
 /** The app reads the coach's choice from this call's arguments rather than from what it says. */
 export const takeCoachToolName = "suggest_next_step";
 
-export function takeCoachInstructions(scene: TakeCoachScene): string {
+/** `persona` is the coach character's own, when the scene's speaker is one of the coaches. */
+export function takeCoachInstructions(scene: TakeCoachScene, persona: string | undefined): string {
   return [
     `You are ${scene.characterName} from the scene "${scene.sceneTitle}", coaching a learner who is dubbing your lines in ${scene.locale} inside Dubby, a language-learning app. Stay in character, but never claim to be a real actor.`,
+    ...(persona === undefined ? [] : [persona]),
     "",
     "Each turn the learner sends one take of one line: the line as written, how its timing measured on their phone, and the recording.",
     `When asked for a suggestion, listen to the recording, compare it with the line, and call ${takeCoachToolName}:`,
@@ -167,7 +169,7 @@ export function takeCoachInstructions(scene: TakeCoachScene): string {
 }
 
 /** Mints a client secret for one studio visit's take coach: no turn detection, and the suggestion tool. */
-export async function createTakeCoachSecret(client: OpenAI, model: string, instructions: string): Promise<LiveTutorSecret> {
+export async function createTakeCoachSecret(client: OpenAI, model: string, instructions: string, voice: string): Promise<LiveTutorSecret> {
   const created = await client.realtime.clientSecrets.create({
     expires_after: { anchor: "created_at", seconds: clientSecretTtlSeconds },
     session: {
@@ -177,7 +179,7 @@ export async function createTakeCoachSecret(client: OpenAI, model: string, instr
       output_modalities: ["audio"],
       audio: {
         input: { format: { type: "audio/pcm", rate: pcmRateHz }, turn_detection: null },
-        output: { format: { type: "audio/pcm", rate: pcmRateHz }, voice: tutorVoice },
+        output: { format: { type: "audio/pcm", rate: pcmRateHz }, voice },
       },
       tools: [
         {

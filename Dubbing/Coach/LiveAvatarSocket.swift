@@ -21,6 +21,14 @@ nonisolated enum LiveAvatarAudio {
         guard chunks.reduce(0, { $0 + $1.count }) <= maximumBytes else { throw CoachError.invalidResponse(operation: operation, reason: "the audio was longer than \(maximumBytes / bytesPerSecond) seconds") }
     }
 
+    /// Cuts a reply's PCM into the socket's one-second chunks.
+    static func chunks(of pcm: Data) -> [Data] {
+        stride(from: 0, to: pcm.count, by: chunkBytes).map { offset in
+            let start = pcm.startIndex + offset
+            return pcm.subdata(in: start..<min(start + chunkBytes, pcm.endIndex))
+        }
+    }
+
     /// When, after the first chunk is sent, a chunk should go out: each second of audio waits
     /// until it is within `leadSeconds` of being played.
     static func sendOffset(ofChunk index: Int) -> Duration {

@@ -51,6 +51,7 @@ import type * as lib_transcription from "../lib/transcription.js";
 import type * as lib_validators from "../lib/validators.js";
 import type * as lib_whop from "../lib/whop.js";
 import type * as liveAvatar from "../liveAvatar.js";
+import type * as liveTutor from "../liveTutor.js";
 import type * as media from "../media.js";
 import type * as passwordAuth from "../passwordAuth.js";
 import type * as projects from "../projects.js";
@@ -125,6 +126,7 @@ declare const fullApi: ApiFromModules<{
   "lib/validators": typeof lib_validators;
   "lib/whop": typeof lib_whop;
   liveAvatar: typeof liveAvatar;
+  liveTutor: typeof liveTutor;
   media: typeof media;
   passwordAuth: typeof passwordAuth;
   projects: typeof projects;
